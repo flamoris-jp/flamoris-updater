@@ -7,7 +7,8 @@ Updated: 2026-10-08.
 **Latest application adoption checkpoint:** independent entry-updater source and
 seven application Owner integrations passed the review/fix loop and CI. See
 [adoption review](docs/ADOPTION_REVIEW.md) for exact evidence. Application source
-PRs await human review/merge; release publication and live adoption are pending.
+PRs were merged after explicit user approval; release publication and live adoption
+are pending. The integration record below identifies all eight merged PRs.
 The implementation-only sections below preserve the earlier v1 checkpoint.
 
 **Updater-owned v1 source implementation complete; publication and live adoption pending.** The reviewed design was merged in PR #4; implementation and review corrections are tracked in PR #5. This source includes executable Core/contracts, coordinator, Native/Docker adapters, standalone migration support, protected recovery/coordinator self-update, CLI/MCP and a dedicated Updater Web UI. No Studio integration is required.
@@ -109,3 +110,31 @@ handling, signing/trust, release publication, enrollment and real-host rollout
 remain operational work. The entry CLI accepts already current schemas; unknown
 outcomes retain claims and require reconciliation instead of replay or automatic
 data rollback. No live writes, enrollment or application merges occurred.
+
+### Main integration after explicit merge authorization
+
+All eight PRs were merged by squash after successful CI at their reviewed heads
+and an explicit user instruction on 2026-10-08. Earlier review-ready checkpoints
+above are historical. Their fixed SDK/library source revisions remain unchanged
+and readable after merge; no branch cleanup, new release tag or live change was
+performed.
+
+| Repository | Merged PR | Main integration commit | Successful reviewed-head CI |
+| --- | --- | --- | --- |
+| flamoris-updater | [#6](https://github.com/flamoris-jp/flamoris-updater/pull/6) | `5af6d6acee827817515b16a13384f6a3d433d672` | 37769070260 |
+| flamoris-generation-controller | [#9](https://github.com/flamoris-jp/flamoris-generation-controller/pull/9) | `5ab80f60d1de6fcf53ffedc0c0dec1cd8cd3da60` | 37769076548 |
+| flamoris-intelligence-mcp | [#14](https://github.com/flamoris-jp/flamoris-intelligence-mcp/pull/14) | `d6d23e028e88ead8efb6b8349f2819d612619d0c` | 37769104360 |
+| flamoris-ai-agent | [#45](https://github.com/flamoris-jp/flamoris-ai-agent/pull/45) | `e6988272c79ba8454f7bf4761dad209577cd3ac4` | 37769085303 |
+| flamoris-generation-mcp | [#74](https://github.com/flamoris-jp/flamoris-generation-mcp/pull/74) | `484029e52a21895b9f33a3c69053b5109dfd9c7d` | 37769091122 |
+| flamoris-studio | [#69](https://github.com/flamoris-jp/flamoris-studio/pull/69) | `5729cc927d5c4311c4b9a45c5aa450cc80c4eb0f` | 37769318514 |
+| flamoris-mcp-hub | [#41](https://github.com/flamoris-jp/flamoris-mcp-hub/pull/41) | `43c604cd14e129a09ee4e63fd04433c92867753e` | 37769324654 |
+| flamoris-gpu-node-manager | [#13](https://github.com/flamoris-jp/flamoris-gpu-node-manager/pull/13) | `b6871b67ef9086dabc624da4c08632c49200bb72` | 37769331234 |
+
+Before real-host entry, prepare signed immutable candidates, protected deployment
+profiles and trust, independent Owners/helper/entry CLI and verified backup/restore.
+Stop legacy services and all external writers under the approved maintenance
+procedure, run the reviewed source/plan/apply transition, validate the entry
+versions, then enroll their verified transition evidence in the ordinary Updater
+coordinator. The six AI-side packages enter at 1.0.0 and GPU Node Manager at 1.2.0.
+Controller travels inside its one hosting Generation artifact. This merge does
+not assert current live versions/schemas or authorize a real-host change.
