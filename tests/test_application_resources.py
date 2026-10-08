@@ -1,4 +1,3 @@
-Attempting to perform the InitializeDefaultDrives operation on the 'FileSystem' provider failed.
 import os
 import stat
 
@@ -101,4 +100,3 @@ def test_protected_reader_refuses_credentials_readable_by_other_users(tmp_path):
     secret.chmod(0o644)
     with pytest.raises(UpdateError):
         protected_read(secret, private=True)
-
