@@ -2,7 +2,7 @@
 
 > Subsequent application adoption source is tracked in PR #6 and
 > [ADOPTION_REVIEW.md](ADOPTION_REVIEW.md). Earlier A1 status below is historical;
-> final application CI is blocked by private SDK access, and live rollout remains pending.
+> application source review/CI is complete, and live rollout remains pending.
 
 **Source inspection: 2026-10-08. No live infrastructure inspection or change.**
 

@@ -4,6 +4,12 @@ Updated: 2026-10-08.
 
 ## Current state
 
+**Latest application adoption checkpoint:** independent entry-updater source and
+seven application Owner integrations passed the review/fix loop and CI. See
+[adoption review](docs/ADOPTION_REVIEW.md) for exact evidence. Application source
+PRs await human review/merge; release publication and live adoption are pending.
+The implementation-only sections below preserve the earlier v1 checkpoint.
+
 **Updater-owned v1 source implementation complete; publication and live adoption pending.** The reviewed design was merged in PR #4; implementation and review corrections are tracked in PR #5. This source includes executable Core/contracts, coordinator, Native/Docker adapters, standalone migration support, protected recovery/coordinator self-update, CLI/MCP and a dedicated Updater Web UI. No Studio integration is required.
 
 | Area | Evidence | Release/live state |
@@ -69,7 +75,7 @@ matched SDK/dependency pins and application CI are being prepared.
 No publication, trust provisioning, live writes or enrollment has occurred.
 
 
-### Source handoff and dependency-access blocker
+### Historical source handoff and dependency-access blocker
 
 SDK revision d9f010a92ff6e8a1e7a3b7fad8817850bdfb72cd passed final Updater
 CI run 37765729268 (verify, real isolated restore, amd64 and arm64 bundles).
@@ -85,3 +91,21 @@ CI/review remains blocked pending authenticated dependency access or an explicit
 publication decision. Read [adoption review](docs/ADOPTION_REVIEW.md) for exact
 counts, runs, corrected findings and source/operational limits. All PRs remain
 draft; releases, profiles/trust, enrollment and live rollout are unperformed.
+
+### Public SDK and final source review
+
+The operator made Updater public, resolving the SDK archive 404. All seven
+application CI runs now succeed, including Agent/Studio disposable PostgreSQL,
+installed package checks and actual application containers. Agent container CI
+exposed duplicate cryptography wheels; the source-only Intelligence wheel build
+now uses --no-deps and the final image runs pip check. Corrected Agent revision
+d7b7b26318c246c7a202f966438775d63fe6410c passed both jobs in run 37768251469.
+The SDK source pin remains d9f010a92ff6e8a1e7a3b7fad8817850bdfb72cd.
+
+Source review/fix and automated integration verification are complete. Eight PRs
+are prepared for human review. GPU's agreed entry remains 1.2.0; the six AI-side
+applications target 1.0.0. Private profiles, retained unsupported-resource
+handling, signing/trust, release publication, enrollment and real-host rollout
+remain operational work. The entry CLI accepts already current schemas; unknown
+outcomes retain claims and require reconciliation instead of replay or automatic
+data rollback. No live writes, enrollment or application merges occurred.
