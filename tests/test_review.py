@@ -684,3 +684,32 @@ def test_docker_activation_preserves_the_approved_restart_policy():
 
     create = calls[0]
     assert create[create.index("--restart") + 1] == "unless-stopped"
+
+
+def test_docker_binding_rejects_unbounded_on_failure_restart_policy():
+    from pydantic import ValidationError
+
+    from flamoris_updater_adapters.config import DockerBinding
+
+    tls = {"ca_file": "/ca", "cert_file": "/cert", "key_file": "/key"}
+    with pytest.raises(ValidationError):
+        DockerBinding.model_validate(
+            {
+                "kind": "docker",
+                "deployment_id": "synthetic",
+                "owner": {"url": "https://owner.invalid", "tls": tls},
+                "container_name": "synthetic",
+                "registry_origin": "https://registry.invalid",
+                "repository": "synthetic",
+                "registry_tls": tls,
+                "docker_config_directory": "/docker-config",
+                "daemon_socket": "/docker.sock",
+                "daemon_data_directory": "/docker-data",
+                "network": "synthetic",
+                "runtime_user": "1000:1000",
+                "memory_bytes": 1024,
+                "pids_limit": 32,
+                "restart_policy": "on-failure",
+                "mounts": [],
+            }
+        )
