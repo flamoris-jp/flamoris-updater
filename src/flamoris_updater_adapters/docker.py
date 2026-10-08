@@ -427,6 +427,7 @@ class DockerDriver:
             or normalize_ports(host.get("PortBindings")) != normalize_ports(ports)
             or host.get("Memory") != self.binding.memory_bytes
             or host.get("PidsLimit") != self.binding.pids_limit
+            or host.get("RestartPolicy", {}).get("Name") != self.binding.restart_policy
             or host.get("CapDrop") != ["ALL"]
             or host.get("CapAdd")
             or host.get("SecurityOpt") not in [["no-new-privileges"], ["no-new-privileges:true"]]
@@ -466,6 +467,8 @@ class DockerDriver:
             str(self.binding.pids_limit),
             "--memory",
             str(self.binding.memory_bytes),
+            "--restart",
+            self.binding.restart_policy,
             "--network",
             self.binding.network,
             "--label",
