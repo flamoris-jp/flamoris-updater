@@ -1,121 +1,102 @@
-# FLAMORIS Repository Template
+# FLAMORIS Updater
 
-Standard repository template for FLAMORIS projects.
+MCP-enabled installation, update, migration orchestration, and release management for FLAMORIS, built on a reusable core.
 
-Use this repository as the starting point for new FLAMORIS repositories. After creating a repository from this template, replace the placeholders in this README with project-specific information and add only the language, runtime, build, and deployment files the project actually needs.
+**Status: development — documentation bootstrap; runtime not implemented.**
 
-## Project
+## What it is / 何者か
 
-**Name:** `<PROJECT_NAME>`
+FLAMORIS Updater manages application releases and deployment transitions. A reusable Update Core and a FLAMORIS-specific wrapper live in **this single repository**; a separate core or native repository is not required.
 
-**Description:** `<PROJECT_DESCRIPTION>`
+FLAMORISアプリの導入・更新・移行の実行管理・リリース情報を扱います。汎用CoreとFLAMORIS専用ラッパーは、同じリポジトリ内で分離します。
 
-**Status:** `<planned | development | stable | meta>`
+## What it owns / 主な責任範囲
 
-For repositories in `flamoris-jp`, keep this wording aligned with the organization `development_status` custom property. State implemented behavior separately from planned work. Do not leave a repository looking like a future design after its runtime or product slice has already shipped.
+- Installed-release inventory, release discovery, API compatibility and dependency checks.
+- Update plans, application/group coordination, bounded host operations and durable execution history.
+- Backup/restore verification, application-owned migration execution and post-update acceptance.
+- Release notes and an external MCP surface for planning, execution and progress.
 
-## 🧭 Repository identity / このRepositoryは何者？
+These are accepted design goals, **not available tools or commands**.
 
-Replace the placeholders below with short, project-specific statements. Keep them near the top so a human or AI assistant can understand the repository before digging through Issues or source code.
+## Neighboring responsibilities / 責任分界
 
-### What it is / 何者か
+| Owner | Responsibility |
+| --- | --- |
+| Updater | Release/deployment orchestration and update history |
+| Each application | Configuration, database and persistent-data schemas, migration handlers and domain validation |
+| Server Manager | Live server information, service state and diagnostic/log access |
+| GPU Node Manager | Runtime/GPU lifecycle and exclusion |
+| Human + AI | Failure investigation, recovery decisions and exceptional repair |
+| Studio | Planned user-facing update and release-note UI |
 
-`<ONE_OR_TWO_SENTENCE_PROJECT_IDENTITY>`
+Updater does not provide general diagnostic tooling or arbitrary shell execution. Its adapters coordinate with existing lifecycle owners.
 
-### What it owns / 主な責任範囲
+## Current status / 現在の状態
 
-- `<PRIMARY_RESPONSIBILITY_OR_AUTHORITY>`
-- `<SECONDARY_RESPONSIBILITY_IF_NEEDED>`
+This repository contains the project documentation and contributor guidance. There is no executable updater, published release, installer, migration implementation, MCP server or deployment configuration yet.
 
-### What it does not own / 持たない責任
+初期セットアップは文書のみです。実機への変更は行っていません。基本方針は合意済みですが、Manifestの正式schema、実装言語、複数ホストの失敗処理、自己更新の詳細は今後の設計対象です。
 
-- `<IMPORTANT_NEIGHBORING_RESPONSIBILITY_OWNED_ELSEWHERE>`
+See [PROGRESS.md](PROGRESS.md) for completed work and [roadmap](docs/ROADMAP.md) for the next phases.
 
-Delete this subsection only when there is genuinely no likely ownership confusion.
+## Management entry versions / 管理開始バージョン
 
-### Current status / 現在の状態
+| Target | Agreed baseline | First Updater-managed release |
+| --- | --- | --- |
+| Currently installed AI-side applications | v0.1 | v1.0 |
+| GPU Node Manager | v1.1 | v1.2 |
+| FLAMORIS Updater | New project | v1.0 |
 
-`<WHAT_IS_IMPLEMENTED_NOW_AND_WHAT_IS_STILL_PLANNED_OR_UNACCEPTED>`
+These are agreed transition targets, not a claim about current live deployments. Each application independently migrates and validates its environment to the entry version **before** Updater enrollment. GPU Node Manager is not downgraded to v1.0.
 
-Do not describe planned behavior as shipped, or implemented behavior as merely future design.
+Application release versions and configuration/database/data schema versions are independent.
 
-### Where it fits / FLAMORISのどこに属する？
+## Architecture
 
-Start from the [FLAMORIS organization map](https://github.com/flamoris-jp/.github).
+| Planned area | Role |
+| --- | --- |
+| `core/` | Portable manifest verification, planning, migration contracts, journal, locking and recovery coordination |
+| `flamoris/` | FLAMORIS application catalog, deployment profiles, dependency and operating policies |
+| `adapters/` | Bounded Docker/Native deployment and external MCP interfaces |
+| `docs/` | Accepted design direction and explicitly pending detailed contracts |
 
-When relevant, also link the appropriate family map:
-
-- 🎨 Windows / Desktop: [FLAMORIS Desktop Ecosystem](https://github.com/flamoris-jp/flamoris-commons/blob/main/docs/desktop-ecosystem.md)
-- 🤖 AI / MCP services: [FLAMORIS AI Ecosystem](https://github.com/flamoris-jp/flamoris-ai/blob/main/docs/ai-ecosystem.md)
-
-The shared repository documentation policy lives in [FLAMORIS Commons](https://github.com/flamoris-jp/flamoris-commons/blob/main/docs/repository-policy.md).
-
-## 🏷️ GitHub metadata checklist / GitHub表示設定
-
-After creating a repository from this template, configure the GitHub repository metadata as well as the files.
-
-- **Description:** one concise sentence describing the repository's current role.
-- **Topics:** include `flamoris`, then add a small set of useful project/domain/technology topics. Prefer roughly 4–7 intentional topics over filling every slot.
-- **Development status:** set the organization `development_status` custom property and keep it aligned with this README.
-- **Visibility:** choose intentionally; do not expose deployment secrets, private topology, credentials, or private assets by making a repository public.
-
-Do not use obsolete or speculative Topics to advertise responsibilities the repository does not actually own.
-
-> GitHub repository metadata is not repository file content. When creating from a template, verify these settings explicitly rather than assuming every template setting was inherited. 🐾
+Only the documentation area exists today. This is a logical layout, not a finalized package structure. Core must not depend on the FLAMORIS wrapper, host identities, MCP transport or product UI.
 
 ## Getting started
 
-Document the real setup, build, test, and run commands for this repository here.
+Read [AGENTS.md](AGENTS.md), [design](docs/DESIGN.md), [contract requirements](docs/CONTRACTS.md) and [CONTRIBUTING.md](CONTRIBUTING.md).
 
-Do not copy commands from another FLAMORIS project unless they have been verified against the current implementation.
+For a workstation with GitHub CLI available:
 
-## Repository principles
+```bash
+gh auth status
+gh repo clone flamoris-jp/flamoris-updater
+cd flamoris-updater
+```
 
-- Keep the repository focused on one clear responsibility.
-- Treat current code, tests, documentation, and repository configuration as the source of truth.
-- Keep public documentation portable: describe product/runtime contracts without publishing private hostnames, credentials, deployment topology, or machine-specific paths.
-- Prefer explicit boundaries over speculative abstractions.
-- Keep secrets, credentials, tokens, and private data out of source control and logs.
-- Add tests where practical and document externally visible behavior.
-- Inspect existing FLAMORIS shared packages before introducing duplicate infrastructure.
-- AI-assisted development is welcome; submitted changes still require human review and responsibility.
+If GitHub CLI is not authenticated, run `gh auth login` first. Use `gh auth setup-git` when Git authentication is needed for subsequent pulls/pushes. Run clone as the authenticated user; do not clone under `sudo` or directly into `/opt`.
+
+There are no build, test or run commands for a runtime yet. Documentation review currently checks local links, consistency with the agreed boundaries and absence of secrets/private topology.
+
+## Documentation and ecosystem
+
+- [Documentation index](docs/README.md)
+- [FLAMORIS organization map](https://github.com/flamoris-jp/.github)
+- [FLAMORIS AI ecosystem](https://github.com/flamoris-jp/flamoris-ai/blob/main/docs/ai-ecosystem.md)
+- [Shared repository policy](https://github.com/flamoris-jp/flamoris-commons/blob/main/docs/repository-policy.md)
+- [Security reporting](SECURITY.md)
+
+Public documentation describes portable contracts. Live inventory and private deployment details belong in restricted operational records.
 
 ## FLAMORIS
 
-FLAMORIS is open-source software for creative work and AI-native production.
+FLAMORIS builds creative tools for humans and AI. Commercial use of Apache-2.0 licensed code is welcome without permission. Software is provided as-is, with no guaranteed individual support.
 
-Use it however you like.
+困ったときはREADME、文書、Issue、テスト、ログ、ソースをあなたのAIと一緒に確認してください。制作環境を支える仕組みを、少しずつ育てています。
 
-Commercial use is welcome and does not require permission. If you'd like, we'd be happy to hear what you used FLAMORIS for. This is completely optional.
-
-FLAMORIS software is provided as-is. We do not provide individual support or guaranteed assistance.
-
-If you run into trouble, let your AI assistant read the repository, documentation, Issues, tests, logs, and source code and help you solve it.
-
-If FLAMORIS helps you or you find it interesting, your support helps fund development and keeps the project growing. 🌱
-
-<sub>Mostly GPU bills.</sub>
-
----
-
-## FLAMORISについて
-
-FLAMORISは、クリエイティブ制作とAIネイティブな制作環境のためのオープンソースソフトウェアです。
-
-勝手に使ってください。改造しても、組み込んでも、面白いものや変なものを作ってもOKです。
-
-商用作品や製品で使う場合も許可は不要です。もしよければ「こんなのに使ったよ」と教えてもらえるとうれしいです。もちろん強制ではありません。
-
-FLAMORISのソフトウェアは現状のまま提供されます。個別サポートや動作保証はありません。
-
-困ったときは、README、ドキュメント、Issue、テスト、ログ、ソースコードをあなたのAIに読ませて、自己サポートしてもらってください。
-
-もしお役に立てたり、面白いと思っていただけたなら、開発費用をご支援いただけるとうれしいです。FLAMORISは元気になって育ちます。🌱
-
-<sub>主にGPU代とか。</sub>
+[Support FLAMORIS](https://github.com/sponsors/flamoris-jp) — mostly GPU bills.
 
 ## License
 
-Code in this repository is licensed under the [Apache License 2.0](LICENSE), unless otherwise noted.
-
-AI models, model weights, datasets, media, and other non-code assets may use separate licenses. State their applicable licenses alongside those assets.
+Code is licensed under [Apache License 2.0](LICENSE), unless otherwise noted. Models, weights, datasets, media and other creative assets may have separate licenses.

@@ -67,3 +67,21 @@ Do not add third-party code, models, model weights, datasets, fonts, media, or g
 FLAMORIS does not provide guaranteed individual support.
 
 Use the repository documentation, Issues, tests, logs, and source code as primary references when diagnosing problems.
+
+## FLAMORIS Updater boundaries
+
+- This bootstrap is documentation-only. Do not invent build/run commands, an implementation language, an executable Manifest schema or callable MCP tools.
+- Read docs/DESIGN.md, docs/CONTRACTS.md, docs/ROADMAP.md and PROGRESS.md before substantial work.
+- Keep reusable Core and the FLAMORIS wrapper in this repository. Core must not depend on FLAMORIS policy, deployment identities, MCP or Studio.
+- Updater owns release/deployment orchestration. Applications own data schemas, migrations and domain validators. Server Manager owns live server observations; GPU Node Manager owns runtime/GPU lifecycle.
+- Use Server Manager as the source of current infrastructure state. Do not infer live state from this roadmap or prior conversations.
+- Fixed entry versions: AI-side applications v1.0 (baseline v0.1), GPU Node Manager v1.2 (baseline v1.1), Updater v1.0. Pre-entry transitions are application-owned and independently executable; enrollment follows verification.
+- Release and config/DB/data schema versions are independent. Migration paths are explicit directed edges, not consecutive release numbers.
+- Persist step intent/outcomes and verify actual state. Unknown or partially applied outcomes stop; do not blindly retry or assume reverse migration is safe.
+- Backup success and verified restore are separate. Preserve irreplaceable data and independently readable history. Do not claim atomic multi-host/group rollback.
+- MCP exposes planning, authorized plan execution, progress, release notes and update history. Do not implement arbitrary shell or duplicate Server Manager diagnostics.
+- Plans must bind artifacts, targets and preconditions; host execution is least privilege and limited to approved operations.
+- CI builds signed/digested artifacts. Hosts normally do not build source. Never clone source directly into /opt; use the connected GitHub integration for private repository work, or authenticated gh on a workstation.
+- Public documentation remains portable. Do not copy private hostnames, topology, secrets or deployment-specific paths into product defaults.
+- Update PROGRESS.md as work advances. Distinguish documentation, implemented source, tests/CI, releases and live acceptance.
+- Scope of this bootstrap is repository setup. Runtime implementation, cross-repository migrations and real-host changes are later work.
