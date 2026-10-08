@@ -239,6 +239,10 @@ class PostgresResource:
         with conn.transaction():
             conn.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY")
             conn.execute("SET LOCAL search_path=pg_catalog")
+            conn.execute("SET LOCAL timezone='UTC'")
+            conn.execute("SET LOCAL datestyle='ISO, YMD'")
+            conn.execute("SET LOCAL intervalstyle='postgres'")
+            conn.execute("SET LOCAL extra_float_digits=3")
             rows = conn.execute(
                 "SELECT n.nspname,c.relname,c.relkind,pg_get_userbyid(c.relowner) "
                 "FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace "
@@ -260,8 +264,8 @@ class PostgresResource:
             memberships = conn.execute(
                 "SELECT pg_get_userbyid(roleid),pg_get_userbyid(member),admin_option, "
                 "COALESCE(to_jsonb(m)->>'inherit_option','true'), COALESCE(to_jsonb(m)->>'set_option','true') "
-                "FROM pg_auth_members m WHERE (%s::text[] IS NULL OR pg_get_userbyid(member)=ANY(%s)) ORDER BY 1,2 LIMIT 4097",
-                (role_names, role_names),
+                "FROM pg_auth_members m WHERE pg_get_userbyid(member)=ANY(%s) ORDER BY 1,2 LIMIT 4097",
+                ([row[0] for row in roles],),
             ).fetchall()
             if len(memberships) > 4096:
                 raise UpdateError("quota_exceeded")
@@ -353,7 +357,8 @@ class PostgresResource:
             memberships = [
                 list(row)
                 for row in conn.execute(
-                    "SELECT pg_get_userbyid(roleid),pg_get_userbyid(member),admin_option, COALESCE(to_jsonb(m)->>'inherit_option','true'), COALESCE(to_jsonb(m)->>'set_option','true') FROM pg_auth_members m ORDER BY 1,2 LIMIT 4097"
+                    "SELECT pg_get_userbyid(roleid),pg_get_userbyid(member),admin_option, COALESCE(to_jsonb(m)->>'inherit_option','true'), COALESCE(to_jsonb(m)->>'set_option','true') FROM pg_auth_members m WHERE pg_get_userbyid(member)=ANY(%s) ORDER BY 1,2 LIMIT 4097",
+                    ([row[0] for row in roles],),
                 ).fetchall()
             ]
             if len(memberships) > 4096:

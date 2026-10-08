@@ -59,9 +59,10 @@ def database(tmp_path):
             conn.execute("CREATE ROLE app_writer LOGIN")
             conn.execute("CREATE ROLE domain_reader NOLOGIN")
             conn.execute("GRANT domain_reader TO app_writer")
+            conn.execute("ALTER ROLE source_owner SET timezone='Asia/Tokyo'")
             conn.execute("CREATE SCHEMA domain")
             conn.execute(
-                "CREATE TABLE domain.history(id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY, body text NOT NULL)"
+                "CREATE TABLE domain.history(id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY, body text NOT NULL, created_at timestamptz DEFAULT '2026-10-08 01:02:03+09')"
             )
             conn.execute(
                 "INSERT INTO domain.history(body) VALUES ('keep conversation'),('keep personality')"
@@ -78,6 +79,10 @@ def database(tmp_path):
 def test_real_dump_restore_validates_rows_schema_roles_and_permissions(database, tmp_path):
     database.fence()
     original = database.fingerprint()
+    # Initdb's pg_monitor memberships are outside the saved application roles.
+    assert (
+        database.fingerprint(role_names=["source_owner", "app_writer", "domain_reader"]) == original
+    )
     snapshot = tmp_path / "snapshot"
     receipt = database.snapshot(snapshot)
     assert database.restore_verify(snapshot, receipt)
