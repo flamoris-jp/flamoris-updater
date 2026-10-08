@@ -28,9 +28,9 @@ These are accepted design goals, **not available tools or commands**.
 | Server Manager | Live server information, service state and diagnostic/log access |
 | GPU Node Manager | Runtime/GPU lifecycle and exclusion |
 | Human + AI | Failure investigation, recovery decisions and exceptional repair |
-| Studio | Planned user-facing update and release-note UI |
+| Updater Web | Dedicated operator UI for updates and release notes, owned by this repository |
 
-Updater does not provide general diagnostic tooling or arbitrary shell execution. Its adapters coordinate with existing lifecycle owners.
+Updater does not provide general diagnostic tooling or arbitrary shell execution. Its adapters coordinate with existing lifecycle owners. The planned [dedicated Web UI](docs/WEB_UI.md) lives in this repository and shares the coordinator with CLI/MCP. It is not embedded in flamoris-studio and does not depend on Studio authentication or databases.
 
 ## Current status / 現在の状態
 

@@ -16,7 +16,7 @@ Plans are created from cached/target-specific inspected state, then refreshed un
 
 Operator grant binds actor, delegated caller if any, plan digest, target/resource scope, allowed phases, policy revision and an admission deadline. Default new-Job admission window: 15 minutes; maximum 60 minutes by protected policy. Denial, expiry or policy/revocation changes reject admission.
 
-The external AI execution identity cannot create its own operator grant. Local operator CLI or a future Studio operator flow issues it. A preconfigured human-owned policy can authorize a bounded plan class; MCP execution still resolves one concrete authorized plan. No per-step confirmation is required for already admitted ordinary phases.
+The external AI execution identity cannot create its own operator grant. Local operator CLI or the dedicated Updater Web operator flow issues it. A preconfigured human-owned policy can authorize a bounded plan class; MCP execution still resolves one concrete authorized plan. No per-step confirmation is required for already admitted ordinary phases.
 
 A Job records the admitted grant and per-host operation receipts. Authorization expiry after valid admission does not strand an in-flight bounded step, but revocation prevents new phases. Stop at the next safe boundary; if data is already changed, retain gates and enter recovery. Finishing a destructive step is safer than interrupting it blindly.
 

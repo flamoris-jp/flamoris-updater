@@ -35,6 +35,12 @@ Reviewed current Updater main and the pinned source references in [adoption](ADO
 - Changes are Markdown only; existing license, Issue forms and other base files preserved.
 - No private hostnames/topology, secrets or live-status claims added.
 
+## Dedicated Web correction (2026-10-08)
+
+At the user's instruction, superseded the proposed Studio update-management projection with a dedicated Updater Web adapter. Updated active identity/architecture/API/adoption/roadmap/authorization guidance and added WEB_UI.md. Studio source inventory and application-adoption requirements remain valid; no cross-repository integration or implementation was added.
+
+Web owns independent authentication/session/CSRF, consumes the same coordinator and preserves CLI/controller-only self-update/restoration in v1. Reviewed shared Job identity, browser response-loss behavior, Studio downtime and Web unavailability during coordinator self-update. Additional Web cases are future acceptance criteria, not executed browser tests. Verified the revised documentation set: 19 Markdown files, 85 relative links and 4 illustrative JSON examples; no active Studio-integration plan remains.
+
 ## Limits and remaining evidence
 
 The architecture/contract draft is complete for this task. Application-specific handlers, exact schema/resource mappings, live inventory, DB writer/role scopes, trusted key provisioning, actual package compatibility and runtime/fault/live acceptance remain later work.

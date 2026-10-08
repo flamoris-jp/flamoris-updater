@@ -10,7 +10,7 @@ Basic direction and detailed draft 1 are documented. No runtime phase is complet
 | 3 | Application-owned standalone transitions | AI-side v0.1 → v1.0 and GPU Node Manager v1.1 → v1.2 validated independently |
 | 4 | Updater v1.0 Core/wrapper, Docker/Native execution and MCP | Deterministic planning, trusted artifacts, durable jobs and recovery evidence |
 | 5 | Live enrollment and update acceptance | Entry versions verified, restore and failure scenarios accepted |
-| 6 | Studio update management | Version/candidate, release-note, plan and result UI backed by accepted contracts |
+| 6 | Dedicated Updater Web management | Independent auth/session, version/candidate, release-note, plan and result UI over the same coordinator |
 
 Application transitions and Updater implementation are separate deliverables. Phase 3 can use the agreed contract without requiring a running Updater. Updater must not take responsibility for the legacy transition.
 
@@ -28,7 +28,7 @@ A later implementation task can:
 3. Split the proposed work packages into owning-repository Issues.
 4. Implement and validate the agreed scope, keeping source/release/live evidence separate.
 
-No cross-repository files or live resources are changed by this design deliverable.
+No cross-repository files or live resources are changed by this design deliverable. The Web UI is owned by Updater; no Studio integration work is planned. See [Web design](WEB_UI.md).
 
 ## Completion evidence
 

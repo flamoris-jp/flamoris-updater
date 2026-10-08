@@ -13,7 +13,8 @@ Updated: 2026-10-08.
 | Manifest, artifact/signature/catalog and notes | Draft 1 documented | [Manifest](docs/RELEASE_MANIFEST.md) |
 | Schema graph, runner and standalone entry | Draft 1 documented | [Migration](docs/MIGRATION_CONTRACT.md) |
 | Plans/authorization, Job/journal and group/self recovery | Draft 1 documented | [Execution/recovery](docs/EXECUTION_RECOVERY.md) |
-| MCP/operator API and future Studio projection | Draft 1 documented | [MCP](docs/MCP_API.md) |
+| MCP/operator API | Draft 1 documented | [MCP](docs/MCP_API.md) |
+| Dedicated Updater Web design | Documented; not implemented | [Web](docs/WEB_UI.md); independent of Studio |
 | Source inventory/adoption work | Pinned source inspection documented | [Adoption](docs/ADOPTION.md); live inventory pending |
 | Failure and acceptance scenarios | Documented for future work | [Acceptance](docs/ACCEPTANCE.md); not executed tests |
 | Contributor/security guidance | Updated for design-only state | [AGENTS](AGENTS.md), [CONTRIBUTING](CONTRIBUTING.md), [SECURITY](SECURITY.md) |
@@ -21,7 +22,7 @@ Updated: 2026-10-08.
 | Core/wrapper/executors/recovery/MCP | Not implemented | Explicit implementation hold |
 | CI-built signed artifacts and trust provisioning | Not implemented | Release-owner work |
 | Live enrollment/update/restore | Not performed | No live changes or infrastructure inspection |
-| Studio management UI | Not implemented | Later phase |
+| Dedicated Updater Web implementation | Not implemented | Later Updater-owned phase; no Studio integration |
 
 ## Fixed management-entry policy
 
@@ -39,6 +40,10 @@ Bootstrap: current template/shared policy reviewed; license and generic Issue fo
 Detailed design: pinned repository/package/ownership evidence inspected, contracts reviewed for crash/replay, schema-vector consistency, authorization, resource/writer fencing, group restoration and self-update continuity. Documentation/examples/links checked. See [review record](docs/REVIEW_DRAFT_1.md).
 
 No runtime tests, CI, release signing, provider calls, DB migrations or deployment acceptance are claimed.
+
+## Web ownership correction (2026-10-08)
+
+The user selected a dedicated Updater Web UI instead of embedding update management in flamoris-studio. Updated architecture/API/adoption/roadmap guidance: Web, CLI and MCP share one coordinator; Web owns its own authentication/session/CSRF. Studio remains only an application update target. Self-update/recovery-controller restrictions and the implementation hold are unchanged.
 
 ## Next checkpoint
 

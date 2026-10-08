@@ -10,7 +10,8 @@ Basic direction is accepted. Detailed draft 1 is a concrete design proposal; eve
 | [Release Manifest](RELEASE_MANIFEST.md) | Strict JSON, artifacts, signatures/catalog and release notes |
 | [Migration contract](MIGRATION_CONTRACT.md) | Schema-vector graph, runner, fences and standalone transition |
 | [Execution/recovery](EXECUTION_RECOVERY.md) | Plans, authorization, journals, multi-host failure and self-update |
-| [MCP API](MCP_API.md) | Proposed tool catalog, scopes, Jobs/errors and future Studio |
+| [MCP API](MCP_API.md) | Proposed tool catalog, scopes and Jobs/errors |
+| [Dedicated Web UI](WEB_UI.md) | Updater-owned operator screen and independent auth/session |
 | [Adoption](ADOPTION.md) | Pinned source inspection and owning-repository work |
 | [Acceptance](ACCEPTANCE.md) | Future failure/acceptance scenarios |
 | [Review record](REVIEW_DRAFT_1.md) | Draft findings, corrections and verification limits |
