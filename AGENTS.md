@@ -70,7 +70,7 @@ Use the repository documentation, Issues, tests, logs, and source code as primar
 
 ## FLAMORIS Updater boundaries
 
-- This bootstrap is documentation-only. Do not invent build/run commands, an implementation language, an executable Manifest schema or callable MCP tools.
+- The repository is documentation-only. docs/DETAILED_DESIGN.md and its linked specifications define draft 1 proposals, including Python 3.12 and package/interface choices; none are implemented. Do not invent build/run commands or describe proposed Manifest/MCP contracts as available.
 - Read docs/DESIGN.md, docs/CONTRACTS.md, docs/ROADMAP.md and PROGRESS.md before substantial work.
 - Keep reusable Core and the FLAMORIS wrapper in this repository. Core must not depend on FLAMORIS policy, deployment identities, MCP or Studio.
 - Updater owns release/deployment orchestration. Applications own data schemas, migrations and domain validators. Server Manager owns live server observations; GPU Node Manager owns runtime/GPU lifecycle.
@@ -84,4 +84,4 @@ Use the repository documentation, Issues, tests, logs, and source code as primar
 - CI builds signed/digested artifacts. Hosts normally do not build source. Never clone source directly into /opt; use the connected GitHub integration for private repository work, or authenticated gh on a workstation.
 - Public documentation remains portable. Do not copy private hostnames, topology, secrets or deployment-specific paths into product defaults.
 - Update PROGRESS.md as work advances. Distinguish documentation, implemented source, tests/CI, releases and live acceptance.
-- Scope of this bootstrap is repository setup. Runtime implementation, cross-repository migrations and real-host changes are later work.
+- Current authorization is design only. Runtime implementation, schema validators, CI/deployment units, cross-repository migrations and real-host changes require a later implementation task. Read detailed design, migration, execution/recovery and acceptance documents before making any such changes.

@@ -2,7 +2,7 @@
 
 MCP-enabled installation, update, migration orchestration, and release management for FLAMORIS, built on a reusable core.
 
-**Status: development — documentation bootstrap; runtime not implemented.**
+**Status: development — basic design and detailed draft; runtime not implemented.**
 
 ## What it is / 何者か
 
@@ -36,7 +36,7 @@ Updater does not provide general diagnostic tooling or arbitrary shell execution
 
 This repository contains the project documentation and contributor guidance. There is no executable updater, published release, installer, migration implementation, MCP server or deployment configuration yet.
 
-初期セットアップは文書のみです。実機への変更は行っていません。基本方針は合意済みですが、Manifestの正式schema、実装言語、複数ホストの失敗処理、自己更新の詳細は今後の設計対象です。
+基本方針と詳細設計案を文書化しています。Python 3.12、Native coordinator／host executor、署名付きManifest、永続Job、Migration契約、復旧、MCPの具体案は [詳細設計](docs/DETAILED_DESIGN.md) を参照してください。ソース・CI・実機設定は未実装で、実機棚卸しや各アプリ固有の移行／保守契約は別工程です。
 
 See [PROGRESS.md](PROGRESS.md) for completed work and [roadmap](docs/ROADMAP.md) for the next phases.
 
@@ -59,9 +59,9 @@ Application release versions and configuration/database/data schema versions are
 | `core/` | Portable manifest verification, planning, migration contracts, journal, locking and recovery coordination |
 | `flamoris/` | FLAMORIS application catalog, deployment profiles, dependency and operating policies |
 | `adapters/` | Bounded Docker/Native deployment and external MCP interfaces |
-| `docs/` | Accepted design direction and explicitly pending detailed contracts |
+| `docs/` | Accepted direction, detailed draft contracts and review/acceptance records |
 
-Only the documentation area exists today. This is a logical layout, not a finalized package structure. Core must not depend on the FLAMORIS wrapper, host identities, MCP transport or product UI.
+Only the documentation area exists today. Planned package boundaries and interfaces are specified in the detailed design; no package is implemented. Core must not depend on the FLAMORIS wrapper, host identities, MCP transport or product UI.
 
 ## Getting started
 

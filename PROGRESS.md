@@ -4,38 +4,42 @@ Updated: 2026-10-08.
 
 ## Current state
 
-**Documentation bootstrap.** There is no Updater runtime, published release, installation, MCP server or live acceptance.
+**Basic design + detailed design draft 1. Implementation explicitly held.** No executable Updater, Manifest validator, migration runner, published release, MCP server, CI/deployment setup or live acceptance exists.
 
 | Area | State | Evidence / next step |
 | --- | --- | --- |
-| Project identity and responsibility boundaries | Documented | [README](README.md) |
-| Accepted basic design | Documented | [Design](docs/DESIGN.md) |
-| Manifest, migration, enrollment and MCP requirements | Documented; detailed contracts pending | [Contracts](docs/CONTRACTS.md) |
-| Development and security guidance | Documented | [AGENTS](AGENTS.md), [CONTRIBUTING](CONTRIBUTING.md), [SECURITY](SECURITY.md) |
-| Deployment/application audit | Pending | Verify current source and live state |
-| Application entry transitions | Pending | Application-owned standalone migrations |
-| Core/wrapper and adapters | Not implemented | Language/API/persistence choices pending |
-| CI-built signed release artifacts | Not implemented | Trust and distribution design pending |
-| MCP update operations | Not implemented | Exact tool contracts pending |
-| Live enrollment/update/restore acceptance | Not performed | No live changes in bootstrap |
+| Project identity and accepted boundaries | Documented | [README](README.md), [basic design](docs/DESIGN.md) |
+| Platform/packages/Core ports | Draft 1 documented | [Detailed design](docs/DETAILED_DESIGN.md) |
+| Manifest, artifact/signature/catalog and notes | Draft 1 documented | [Manifest](docs/RELEASE_MANIFEST.md) |
+| Schema graph, runner and standalone entry | Draft 1 documented | [Migration](docs/MIGRATION_CONTRACT.md) |
+| Plans/authorization, Job/journal and group/self recovery | Draft 1 documented | [Execution/recovery](docs/EXECUTION_RECOVERY.md) |
+| MCP/operator API and future Studio projection | Draft 1 documented | [MCP](docs/MCP_API.md) |
+| Source inventory/adoption work | Pinned source inspection documented | [Adoption](docs/ADOPTION.md); live inventory pending |
+| Failure and acceptance scenarios | Documented for future work | [Acceptance](docs/ACCEPTANCE.md); not executed tests |
+| Contributor/security guidance | Updated for design-only state | [AGENTS](AGENTS.md), [CONTRIBUTING](CONTRIBUTING.md), [SECURITY](SECURITY.md) |
+| Application-specific maintenance/entry migrations | Not implemented by this task | Owning repositories and actual deployment evidence required |
+| Core/wrapper/executors/recovery/MCP | Not implemented | Explicit implementation hold |
+| CI-built signed artifacts and trust provisioning | Not implemented | Release-owner work |
+| Live enrollment/update/restore | Not performed | No live changes or infrastructure inspection |
 | Studio management UI | Not implemented | Later phase |
 
 ## Fixed management-entry policy
 
-- Installed AI-side applications: baseline v0.1; Updater entry v1.0.
-- GPU Node Manager: baseline v1.1; Updater entry v1.2.
+- Installed AI-side applications: agreed baseline v0.1; Updater entry v1.0.
+- GPU Node Manager: agreed baseline v1.1; Updater entry v1.2.
 - Updater: first managed release v1.0.
-- Pre-entry migrations remain independently executable responsibilities of the applications.
+- Pre-entry migrations are independently executable application responsibilities.
 
-These are agreed targets, not an observation of current deployed versions.
+Release labels, package/component versions and actual deployed identities are distinct. Source inspection does not overwrite these agreed entry targets or certify current live versions.
 
-## Bootstrap verification
+## Verification
 
-- Reviewed existing repository template and shared repository policy.
-- Preserved the existing Apache-2.0 license and generic Issue forms.
-- Checked documentation links, consistency and removal of README template placeholders.
-- No runtime test results or deployment acceptance are claimed.
+Bootstrap: current template/shared policy reviewed; license and generic Issue forms preserved; local links and portable status checked.
+
+Detailed design: pinned repository/package/ownership evidence inspected, contracts reviewed for crash/replay, schema-vector consistency, authorization, resource/writer fencing, group restoration and self-update continuity. Documentation/examples/links checked. See [review record](docs/REVIEW_DRAFT_1.md).
+
+No runtime tests, CI, release signing, provider calls, DB migrations or deployment acceptance are claimed.
 
 ## Next checkpoint
 
-Audit applications and dependencies, then formalize the contracts and split implementation into owning-repository Issues. See [roadmap](docs/ROADMAP.md).
+Implementation remains held at the user's instruction. The next design/adoption input is verified private deployment/resource/writer inventory and application maintenance contracts, followed by a separately authorized implementation task. Proposed work packages in [adoption](docs/ADOPTION.md) have not been turned into Issues or code.
