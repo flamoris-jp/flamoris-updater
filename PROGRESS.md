@@ -4,7 +4,7 @@ Updated: 2026-10-08.
 
 ## Current state
 
-**Basic design + detailed design draft 1. Implementation explicitly held.** No executable Updater, Manifest validator, migration runner, published release, MCP server, CI/deployment setup or live acceptance exists.
+**Implementation in progress (authorized 2026-10-08).** The reviewed design was merged in PR #4. Core/contracts, strict release parsing/signature/catalog handling, schema/dependency planning, SQLite journals, host operation admission and coordinator Jobs are being implemented. CLI/MCP/Web, complete host/recovery composition and distribution/CI are still in progress. No published release or live acceptance exists.
 
 | Area | State | Evidence / next step |
 | --- | --- | --- |
@@ -53,4 +53,4 @@ Added future fault/acceptance cases; none were executed as runtime tests. Source
 
 ## Next checkpoint
 
-Implementation remains held at the user's instruction. The next design/adoption input is verified private deployment/resource/writer inventory and application maintenance contracts, followed by a separately authorized implementation task. Proposed work packages in [adoption](docs/ADOPTION.md) have not been turned into Issues or code.
+The user authorized implementation, review/correction loops and completion. Implement Updater-owned U1–U7; application-specific A1/A2, private inventory/key/profile provisioning and D1 live rollout remain separate deliverables. Initial isolated execution tests: 31 passed, covering malformed contracts, direct/ambiguous/cyclic routes, duplicate plans/operations, lost effect responses, process death, restoration proof, cancellation and revocation. This is interim source evidence, not final validation or live acceptance.

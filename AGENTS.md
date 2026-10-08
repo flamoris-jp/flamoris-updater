@@ -70,7 +70,7 @@ Use the repository documentation, Issues, tests, logs, and source code as primar
 
 ## FLAMORIS Updater boundaries
 
-- The repository is documentation-only. docs/DETAILED_DESIGN.md and its linked specifications define draft 1 proposals, including Python 3.12 and package/interface choices; none are implemented. Do not invent build/run commands or describe proposed Manifest/MCP contracts as available.
+- Python 3.12 implementation is in progress under the 2026-10-08 implementation instruction. Inspect src/, tests/, pyproject.toml and PROGRESS.md; distinguish implemented modules from interfaces still under construction and live acceptance not performed.
 - Read docs/DESIGN.md, docs/CONTRACTS.md, docs/ROADMAP.md and PROGRESS.md before substantial work.
 - Keep reusable Core and the FLAMORIS wrapper in this repository. Core must not depend on FLAMORIS policy, deployment identities, MCP or Studio.
 - Operator Web UI belongs to Updater in this repository. Do not embed update management in flamoris-studio or add a dependency on its authentication, database or availability. Web, CLI and MCP adapt the same coordinator; user/session authorization belongs to the dedicated Web adapter.
@@ -86,4 +86,4 @@ Use the repository documentation, Issues, tests, logs, and source code as primar
 - CI builds signed/digested artifacts. Hosts normally do not build source. Never clone source directly into /opt; use the connected GitHub integration for private repository work, or authenticated gh on a workstation.
 - Public documentation remains portable. Do not copy private hostnames, topology, secrets or deployment-specific paths into product defaults.
 - Update PROGRESS.md as work advances. Distinguish documentation, implemented source, tests/CI, releases and live acceptance.
-- Current authorization is design only. Runtime implementation, schema validators, CI/deployment units, cross-repository migrations and real-host changes require a later implementation task. Read detailed design, migration, execution/recovery and acceptance documents before making any such changes.
+- Current authorization covers Updater implementation, tests/CI, review/correction and merge. Application-specific migrations in other repositories, trust/profile provisioning, release publication and real-host rollout remain separate adoption work. Read detailed design, migration, execution/recovery and acceptance documents before changes.
