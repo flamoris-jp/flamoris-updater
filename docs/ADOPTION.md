@@ -1,5 +1,9 @@
 # Adoption inventory and implementation boundaries
 
+> Subsequent application adoption source is tracked in PR #6 and
+> [ADOPTION_REVIEW.md](ADOPTION_REVIEW.md). Earlier A1 status below is historical;
+> final application CI is blocked by private SDK access, and live rollout remains pending.
+
 **Source inspection: 2026-10-08. No live infrastructure inspection or change.**
 
 This is a design input, not an assertion that repositories contain Updater-compatible releases. Live artifact identities, DB schemas, private deployment mappings and signing keys remain unverified. Use Server Manager when live state is required.

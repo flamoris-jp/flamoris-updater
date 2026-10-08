@@ -67,3 +67,21 @@ are exercised by CI. These corrections require final CI at their own revision.
 Seven application owner/retained-state tests are added in their owning repos;
 matched SDK/dependency pins and application CI are being prepared.
 No publication, trust provisioning, live writes or enrollment has occurred.
+
+
+### Source handoff and dependency-access blocker
+
+SDK revision d9f010a92ff6e8a1e7a3b7fad8817850bdfb72cd passed final Updater
+CI run 37765729268 (verify, real isolated restore, amd64 and arm64 bundles).
+All seven applications passed their local complete Python suites and built
+wheels from sdists; declared Owner entrypoints/modules are packaged.
+Adoption PRs: Agent #45, Studio #69, Intelligence #14, Generation MCP #74,
+Controller #9, Hub #41 and GPU Node Manager #13.
+
+Their CI attempts fail at SDK dependency retrieval: Updater is private and
+anonymous archive downloads return 404. Studio web CI succeeded independently.
+No repository visibility or credential setting was changed. Final application
+CI/review remains blocked pending authenticated dependency access or an explicit
+publication decision. Read [adoption review](docs/ADOPTION_REVIEW.md) for exact
+counts, runs, corrected findings and source/operational limits. All PRs remain
+draft; releases, profiles/trust, enrollment and live rollout are unperformed.
