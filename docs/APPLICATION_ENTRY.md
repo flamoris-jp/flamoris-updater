@@ -6,7 +6,7 @@ to a source distribution reporting 1.0.0; a tag is not installed package evidenc
 
 ## Source and operational status
 
-Application adoption source is under review. This implementation does not
+Application adoption source passed review/CI and is merged. This implementation does not
 publish releases, install trust keys/profiles, change production data, or update
 hosts. A signed candidate and private protected deployment configuration are
 required before executing any transition. The PostgreSQL sandbox has a real CI

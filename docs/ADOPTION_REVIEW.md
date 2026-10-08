@@ -3,8 +3,8 @@
 The source review/fix loop is complete and all eight repositories have successful
 CI evidence. The operator made flamoris-updater public, resolving the anonymous
 SDK download 404. A subsequent Agent container failure was corrected and both
-Agent jobs passed. The PRs are prepared for human review; source completion does
-not publish releases or certify real-host adoption.
+Agent jobs passed. All eight PRs were merged after explicit user authorization;
+source completion does not publish releases or certify real-host adoption.
 
 ## Evidence
 
@@ -61,7 +61,7 @@ fixtures do not certify private production databases, providers or overlays.
 ## Remaining boundaries
 
 Source CI, installed dependency integration and CI container acceptance succeeded.
-Human review/merge and operational acceptance remain separate. No auto-merge, release
+Source integration is complete; operational acceptance remains separate. No release
 publication, signing/trust provisioning, production migration, host update or
 enrollment occurred. Native candidates must retain the private deployment overlay
 and matched dependencies. Provider-owned retained paths and mixed-ownership trees
