@@ -250,7 +250,7 @@ class PostgresResource:
             hasher, total = hashlib.sha256(), 0
             roles = conn.execute(
                 "SELECT rolname,rolsuper,rolinherit,rolbypassrls FROM pg_roles "
-                "WHERE rolname NOT LIKE 'pg\\_%' ESCAPE '\\' "
+                "WHERE left(rolname,3)<>'pg_' "
                 "AND (%s::text[] IS NULL OR rolname=ANY(%s)) ORDER BY 1 LIMIT 2049",
                 (role_names, role_names),
             ).fetchall()
@@ -345,7 +345,7 @@ class PostgresResource:
             roles = [
                 list(row)
                 for row in conn.execute(
-                    "SELECT rolname,rolsuper,rolinherit,rolbypassrls FROM pg_roles WHERE rolname NOT LIKE 'pg\\_%' ESCAPE '\\' ORDER BY 1 LIMIT 2049"
+                    "SELECT rolname,rolsuper,rolinherit,rolbypassrls FROM pg_roles WHERE left(rolname,3)<>'pg_' ORDER BY 1 LIMIT 2049"
                 ).fetchall()
             ]
             if len(roles) > 2048:
