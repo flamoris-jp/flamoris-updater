@@ -1,4 +1,3 @@
-Attempting to perform the InitializeDefaultDrives operation on the 'FileSystem' provider failed.
 """Application-owned file resources: bounded snapshots and isolated verification."""
 
 import hashlib
@@ -242,4 +241,3 @@ class TreeResource:
             if self.inventory(isolated) != index["members"]:
                 raise UpdateError("backup_unverified")
         return True
-
