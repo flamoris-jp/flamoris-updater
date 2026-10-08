@@ -489,6 +489,10 @@ class HostExecutor:
                 for x in snapshots
                 if open_packet(x, self.receipt_keys, self.domain, "receipt")["result"]["operation"]
                 == "snapshot"
+                and open_packet(x, self.receipt_keys, self.domain, "receipt")["result"][
+                    "deployment_id"
+                ]
+                == profile.id
             ]
             if result.snapshot_digest not in expected:
                 raise UpdateError("backup_unverified")

@@ -11,7 +11,7 @@ Date: 2026-10-08. Scope: Updater-owned v1 source, deterministic tests, packaging
 | Signed plan omits backup, stopping or validation | Host independently validates complete safety phase coverage and transitive global barriers before any effects; adversarial signed-plan tests |
 | Shared consumers migrate an owner's DB or disagree on schemas | Physical owner/writer registry, shared target/observed-vector consistency, only owner migration/snapshot resources, consumers stop first and providers start first; shared-resource test |
 | Apparent idle owner is insufficient evidence | Fresh nonce/time inspection, profile/physical namespace binding, durable maintenance epochs, explicit operation proofs and predecessor receipts; execution and identity-drift tests |
-| Backup creation is mistaken for recoverability | Separate isolated restore verification/proofs before migration, exact snapshot equality and original-parent snapshot checks; execution/recovery tests |
+| Backup creation is mistaken for recoverability | Separate isolated restore verification/proofs before migration, same-owner snapshot equality and original-parent snapshot checks; execution/recovery tests |
 | Recovery releases blockers before global acceptance | Frozen parent, protected local transfer, global ownership CAS, final inventory/local resolution before one global transaction; linked recovery tests |
 | Controller crashes after all child effects but before final acceptance | Resume only final publication with current authority/inventory checks, no new epoch or repeated owner effect; crash-at-finalizing regression |
 | Normal cancellation changes a protected restoration Job | Protected recover action rejected by ordinary cancel admission |

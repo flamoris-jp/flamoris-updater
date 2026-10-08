@@ -541,3 +541,41 @@ def test_self_intent_atomically_gates_normal_admission_before_stop(environment, 
     rc.j.flush_export = export
     result = rc.self_update("operator", ids[1], "atomic-gate", preview["plan_digest"])
     assert result["state"] == "unknown" and driver.calls == ["prepare"]
+
+
+def test_restore_verification_cannot_substitute_another_owners_snapshot(environment):
+    e = environment
+    original = e.backend.perform
+
+    def perform(p, m, r):
+        result = original(p, m, r)
+        if r.operation == "restore_verify":
+            foreign = result.model_copy(
+                update={
+                    "operation": "snapshot",
+                    "deployment_id": "other-owner",
+                    "operation_id": "foreign-snapshot",
+                    "snapshot_digest": digest(b"foreign-snapshot"),
+                }
+            )
+            packet = e.host.signer.packet({"result": foreign.model_dump()})
+            with e.host.journal.transaction() as db:
+                db.execute(
+                    "INSERT INTO operations VALUES(?,?,?,?,?,?)",
+                    (
+                        "foreign-snapshot",
+                        r.job_id,
+                        digest(b"foreign-binding"),
+                        dumps({}),
+                        "verified",
+                        dumps(packet),
+                    ),
+                )
+            return result.model_copy(update={"snapshot_digest": foreign.snapshot_digest})
+        return result
+
+    e.backend.perform = perform
+    job = e.start()
+    e.coordinator.run_job(job["job_id"])
+    assert e.coordinator.job("operator", job["job_id"])["state"] == "unknown"
+    assert "apply_step" not in e.backend.calls

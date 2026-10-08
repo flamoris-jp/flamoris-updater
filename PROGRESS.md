@@ -21,7 +21,7 @@ Updated: 2026-10-08.
 
 ## Verification
 
-Final automated suite: **101 tests** (strict parsing/planning, real isolated migration transactions, crash/replay, authorization, Web/MCP, artifacts and protected recovery). Lint/format, package build, exported schemas, local documentation links and Native bundle staging/CLI startup are checked. GitHub CI verifies both architectures; the final PR records its exact commit and check conclusions.
+Final automated suite: **102 tests** (strict parsing/planning, real isolated migration transactions, crash/replay, authorization, Web/MCP, artifacts and protected recovery). Lint/format, package build, exported schemas, local documentation links and Native bundle staging/CLI startup are checked. GitHub CI verifies both architectures; the final PR records its exact commit and check conclusions.
 
 [Implementation review](docs/IMPLEMENTATION_REVIEW.md) records two review/fix rounds, corrected counterexamples and test limits. Earlier [draft review](docs/REVIEW_DRAFT_1.md) and [design loop](docs/REVIEW_LOOP_2026-10-08.md) remain historical documentation evidence. They preceded the later implementation authorization.
 
