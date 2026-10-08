@@ -37,6 +37,11 @@
 | Self rollback with newer application operations | Never overwrite journal; reconcile and preserve tombstones |
 | Missing release history vs missing target notes | Mark cumulative notes incomplete vs reject target metadata |
 | Basic health vs billable/domain validation | Distinct evidence; no unauthorized paid/provider call |
+| Dedicated Web while Studio is stopped | Operator screen works through Updater; no Studio auth/DB dependency |
+| Web/CLI/MCP observe the same admitted update | One coordinator/Job history; scopes enforced on every adapter |
+| Web authorization or mutation lacks session/CSRF/scope | Reject before grant or effect admission |
+| Browser refresh/lost start response | Query/reuse existing request identity; no duplicate Job |
+| Web disconnected during Updater self-update | CLI/controller handoff continues; reconnect reads persisted evidence |
 
 ## Review and release gates
 

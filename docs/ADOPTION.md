@@ -8,7 +8,7 @@ This is a design input, not an assertion that repositories contain Updater-compa
 
 | Repository | Pinned source checked | Design implication |
 | --- | --- | --- |
-| [Studio](https://github.com/flamoris-jp/flamoris-studio/blob/d03028df892f7b1dc658534d22abaffcc34a5134/pyproject.toml) | d03028d | Python >=3.12; own DB/Alembic, user sessions and update UI authority |
+| [Studio](https://github.com/flamoris-jp/flamoris-studio/blob/d03028df892f7b1dc658534d22abaffcc34a5134/pyproject.toml) | d03028d | Python >=3.12; owns its application DB/Alembic and creative user sessions; an update target, not the Updater UI owner |
 | [Agent](https://github.com/flamoris-jp/flamoris-ai-agent/blob/d5dd2e0a922e08e3054a71defb7f79b40d754a28/pyproject.toml) | d5dd2e0 | Python >=3.11; own SQL migration history and conversation data |
 | [Controller](https://github.com/flamoris-jp/flamoris-generation-controller/blob/2e85caac885a84a851d92a7864e7b94c4f95ad86/docs/MIGRATION.md) | 2e85caa | Importable shared authority hosted with Generation; recipes/assets/unknown reservations must be preserved |
 | [Hub](https://github.com/flamoris-jp/flamoris-mcp-hub/blob/e74f2cfa45e5ea57ec0996c6d7a6e83c5c4b4aee/pyproject.toml) | e74f2cf | Python >=3.11; external routing/catalog, not application schema owner |
@@ -26,7 +26,7 @@ The agreed GPU Node Manager baseline remains v1.1 and management entry remains v
 
 | Owner | Required contract/adoption work |
 | --- | --- |
-| Studio | Preserve user/session/history data and Alembic lineage; maintenance admission gate; runtime/migration roles; own UI later |
+| Studio | Preserve user/session/history data and Alembic lineage; maintenance admission gate; runtime/migration roles; no Updater UI integration |
 | Agent | Preserve SQL history, principal/session/personality/continuation data; drain inference; fence retention/admin writers; scoped backup/restore |
 | Generation + Controller | One deployment owner; preserve recipes, ComfyWorkFlow definitions, inputs/assets, copies and unknown reservations; explicit maintenance fence |
 | Intelligence service | Signed deployable release and embedded-provider inventory; drain inference/unknown work; provider-safe health profile |
@@ -62,6 +62,6 @@ These are scoped backlog proposals, not created Issues or implementation authori
 | A1 Standalone entry migrations | Each application | Migration contract + live inventory | Preserved data/roles/history and enrollment receipts; independently executable |
 | A2 Release packaging/signing | Each application + release owners | U1 trust profile | CI-built immutable release, components, notes and matching signed Manifest |
 | D1 Initial Updater install/enrollment | Deployment owners | A1/A2 + U1–U6 | Verified current entry versions; private receipts and recovery bundle |
-| S1 Studio management | Studio | Stable coordinator/operator contract | Safe summaries, CSRF/auth scope and same Job authority |
+| U7 Dedicated Updater Web | Updater adapters | Stable coordinator/operator contract | Independent auth/session/CSRF, safe summaries and same Job authority; no Studio dependency |
 
 No live acceptance, trusted signing keys or release-ready status is implied by this backlog.

@@ -8,7 +8,7 @@ Keep reusable Update Core and the FLAMORIS wrapper in `flamoris-updater`. No sep
 
 Core owns portable mechanisms: trusted release verification, dependency and migration-path planning, durable journals, locking, bounded execution coordination and recovery records. It must not embed FLAMORIS service names, machine names, private topology, deployment paths or UI rules.
 
-The wrapper owns the FLAMORIS catalog, deployment profiles, management-entry policy, dependency groups and operating policy. Docker/Native host adapters implement declared lifecycle operations. External MCP and a future UI adapt the same domain authority.
+The wrapper owns the FLAMORIS catalog, deployment profiles, management-entry policy, dependency groups and operating policy. Docker/Native host adapters implement declared lifecycle operations. External MCP and the planned dedicated Updater Web UI adapt the same domain authority.
 
 Each application owns its configuration, DB and persistent-data formats, migrations and validators. Core can share migration machinery without owning application-specific transformations.
 
@@ -112,7 +112,7 @@ Each application publishes human-readable notes and machine-readable changes wit
 
 Withdrawn intermediate releases must not be installed just to obtain their notes or migration numbering. Release-note availability and missing history must be explicit.
 
-Studio's future management UI shows installed versions, candidates, plans, release notes and execution outcomes. UI work follows the underlying contracts.
+Updater's dedicated Web management UI shows installed versions, candidates, plans, release notes and execution outcomes. It lives in this repository and shares the coordinator with CLI/MCP; it is not embedded in flamoris-studio and does not use Studio auth or DB. UI work follows the underlying contracts. See [Web design](WEB_UI.md).
 
 ## 11. Detailed design and remaining evidence
 

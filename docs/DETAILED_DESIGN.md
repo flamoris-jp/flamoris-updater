@@ -16,14 +16,14 @@ The accepted boundaries in [DESIGN.md](DESIGN.md) remain fixed. This draft choos
 | Persistence | SQLite on local persistent filesystems per coordinator/host; no shared network-filesystem journal |
 | Release format | Strict JSON Manifest v1, exact-byte signed envelope, SHA-256 artifact identities |
 | Signing | Ed25519 release signatures with locally pinned application-scoped trust keys |
-| Interfaces | Internal authenticated JSON HTTPS; external Streamable HTTP MCP facade; local operator CLI |
+| Interfaces | Internal authenticated JSON HTTPS; external Streamable HTTP MCP facade; local operator CLI; dedicated Updater Web UI |
 | Updates | Durable asynchronous Jobs; one active mutating Job per host in v1 |
 | Groups | Prepared on all hosts, then ordered activation behind admission gates; no distributed transaction |
 | Recovery | Preserve known previous artifacts; unknown state requires verified reconciliation |
 | Self-update | Independent native recovery controller and stable storage format |
 | Bootstrap | Application-owned standalone migrations, then evidence-based enrollment |
 
-No `pyproject.toml`, schema validator, CLI, host agent, CI workflow or deployment unit is added by this design.
+No `pyproject.toml`, schema validator, CLI, host agent, CI workflow or deployment unit is added by this design. The [dedicated Updater Web UI](WEB_UI.md) belongs to this repository, independent of Studio, and is also unimplemented.
 
 Python matches the existing service stack; [source inventory](ADOPTION.md) records the checked revisions. The .NET MCP Core/Logging libraries cannot be directly adopted as Python packages. Reuse their boundary principles and the Python MCP SDK patterns already present in the service family; do not create a .NET bridge just to import those packages.
 
@@ -35,7 +35,7 @@ Linux is the first platform. Core contracts remain portable, but Windows/macOS e
 | --- | --- | --- |
 | `flamoris_update_core` | Models, validation, dependency/schema planning, Job state, authorization checks and journal ports | FLAMORIS IDs, hostnames, network listeners, subprocess implementation |
 | `flamoris_updater` | Catalog, entry-version policy, dependency groups and domain composition | Application data transformation or GPU state machine |
-| `flamoris_updater_adapters` | SQLite, release fetch/signature verification, HTTP/MCP, Docker/Native operations | Alternative execution authority |
+| `flamoris_updater_adapters` | SQLite, release fetch/signature verification, HTTP/MCP, Docker/Native operations and dedicated Web adapter | Alternative execution authority |
 | `flamoris_update_migration` | Shared application-embedded migration journal/protocol support | Application-specific handlers, dependency on coordinator service |
 | Host executor | Local policy enforcement, resource fences, bounded lifecycle calls, local step results | Caller-selected command, path, image mount or privilege |
 | Recovery controller | Minimal independent stop/inspect/restore/switch/verify operations | A second updater or an arbitrary shell service |
@@ -46,7 +46,7 @@ The coordinator is authoritative for plans and group progress. Host journals are
 
 ```mermaid
 flowchart TD
-  C["MCP / CLI / future Studio"] --> F["FLAMORIS policy facade"]
+  C["MCP / CLI / Updater Web"] --> F["FLAMORIS policy facade"]
   F --> U["Update Core and coordinator journal"]
   U --> H["Bounded host executor"]
   H --> A["Application migration and lifecycle owners"]

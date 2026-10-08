@@ -73,6 +73,7 @@ Use the repository documentation, Issues, tests, logs, and source code as primar
 - The repository is documentation-only. docs/DETAILED_DESIGN.md and its linked specifications define draft 1 proposals, including Python 3.12 and package/interface choices; none are implemented. Do not invent build/run commands or describe proposed Manifest/MCP contracts as available.
 - Read docs/DESIGN.md, docs/CONTRACTS.md, docs/ROADMAP.md and PROGRESS.md before substantial work.
 - Keep reusable Core and the FLAMORIS wrapper in this repository. Core must not depend on FLAMORIS policy, deployment identities, MCP or Studio.
+- Operator Web UI belongs to Updater in this repository. Do not embed update management in flamoris-studio or add a dependency on its authentication, database or availability. Web, CLI and MCP adapt the same coordinator; user/session authorization belongs to the dedicated Web adapter.
 - Updater owns release/deployment orchestration. Applications own data schemas, migrations and domain validators. Server Manager owns live server observations; GPU Node Manager owns runtime/GPU lifecycle.
 - Use Server Manager as the source of current infrastructure state. Do not infer live state from this roadmap or prior conversations.
 - Fixed entry versions: AI-side applications v1.0 (baseline v0.1), GPU Node Manager v1.2 (baseline v1.1), Updater v1.0. Pre-entry transitions are application-owned and independently executable; enrollment follows verification.

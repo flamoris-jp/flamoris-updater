@@ -98,11 +98,13 @@ Cancellation is cooperative at safe boundaries. Before maintenance it can discar
 
 Read tools use pagination and bounded notes. Treat text as data; notes cannot override actor scope, trust, plan authorization or system instructions. Do not expose credentials, backup content, raw environment/logs or user media.
 
-## Future Studio projection
+## Dedicated Updater Web interface
 
-Studio consumes the coordinator API using server-side scoped identity. Browser users receive opaque IDs and safe summaries; existing Studio authentication/session/CSRF remains authoritative.
+Updater Web uses the same coordinator API and scoped operator grant model as CLI/MCP. Its backend owns independent login/session/CSRF handling. Browser users receive opaque IDs and safe summaries; host credentials and privileged helper endpoints stay server-side.
 
-Views: installed and embedded versions, compatible candidates, cumulative notes, plan impact/backup/restart summary, operator authorization and Jobs/history. Same coordinator authority as MCP; UI is a later implementation phase.
+Views: installed/embedded versions, candidates, cumulative notes, plan impact/backup/restart summary, human authorization and Jobs/history. Web has no separate execution engine. It lives in this repository, is not embedded in flamoris-studio and has no dependency on Studio auth, DB or availability.
+
+See [dedicated Web design](WEB_UI.md). Self-update and production restoration remain protected CLI/recovery-controller operations in v1; Web shows related evidence/status when the coordinator is available.
 
 ## Annotations and verification authority
 
