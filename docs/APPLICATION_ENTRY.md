@@ -1,4 +1,3 @@
-Attempting to perform the InitializeDefaultDrives operation on the 'FileSystem' provider failed.
 # Application entry transition
 
 The six AI packages enter managed updating at 1.0.0. GPU Node Manager enters at
@@ -140,4 +139,3 @@ There is no automatic rollback/data restore or multi-host atomicity claim.
 Verified `standalone_transition` evidence permits the ordinary coordinator's
 read-only enrollment afterward. Normal updates use that coordinator; the entry
 CLI cannot re-enter an already enrolled installation.
-
