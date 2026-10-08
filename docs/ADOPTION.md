@@ -54,10 +54,10 @@ These are scoped backlog proposals, not created Issues or implementation authori
 | Work package | Owner | Depends on | Completion evidence |
 | --- | --- | --- | --- |
 | U1 Manifest/trust/catalog parser | Updater Core/adapters | Draft review | Strict validation, signatures, digest/platform selection and replay/revocation failures |
-| U2 Planner/schema graph/groups | Updater Core | U1 + verified resource contracts | Deterministic valid route, blocked ambiguity, dependency/mixed-version scenarios |
-| U3 Journal/authorization/jobs | Updater Core/adapters | U2 | Crash/duplicate/lost-response/fence persistence evidence |
+| U2 Planner/schema graph/groups | Updater Core | U1 + verified resource contracts | Exact provider bindings, incoming consumers, deterministic schema route, blocked ambiguity and mixed-version scenarios |
+| U3 Journal/authorization/jobs | Updater Core/adapters | U2 | One consumed plan, immutable operations, durable maintenance/finalization and linked-recovery ownership evidence |
 | U4 Native host executor and Docker/Native profiles | Updater adapters | U3 + application maintenance contracts | Typed local privileges, no caller-selected commands/mounts, staging/activation tests |
-| U5 Backup/recovery/self-update controller | Updater + backup/app owners | U3/U4 | Isolated restore drill, group failure, journal-preserving self rollback |
+| U5 Backup/recovery/self-update controller | Updater + backup/app owners | U3/U4 | Side-effect-isolated restore, group failure, epoch handoff and all-control-state-preserving self rollback |
 | U6 MCP/operator interfaces | Updater adapters | U3/U5 | Catalog/schema/scope parity, authorized Job start and safe cancellation |
 | A1 Standalone entry migrations | Each application | Migration contract + live inventory | Preserved data/roles/history and enrollment receipts; independently executable |
 | A2 Release packaging/signing | Each application + release owners | U1 trust profile | CI-built immutable release, components, notes and matching signed Manifest |
@@ -65,3 +65,9 @@ These are scoped backlog proposals, not created Issues or implementation authori
 | U7 Dedicated Updater Web | Updater adapters | Stable coordinator/operator contract | Independent auth/session/CSRF, safe summaries and same Job authority; no Studio dependency |
 
 No live acceptance, trusted signing keys or release-ready status is implied by this backlog.
+
+## Review-derived adoption gates
+
+Private profiles must resolve dependency providers/incoming consumers, physical resource aliases, one resource owner and all restart/timer paths enforcing durable maintenance epochs. Application startup must support controlled maintenance validation rather than automatically migrating or replaying jobs.
+
+Recovery-controller bootstrap provisions the normal coordinator epoch, outage-independent recovery CLI and supported executor handoff. Entry evidence is typed (transition, installation or supported adoption), and each is re-inspected before inventory commit. Missing contracts keep automatic updates blocked; this review adds no application implementation or live validation.

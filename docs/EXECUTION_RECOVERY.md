@@ -4,9 +4,9 @@
 
 ## Immutable plan
 
-A plan contains action (`update|install|enroll|recover|self_update`), targets/host IDs, exact Manifest/artifact/component digests, input inventory/schema/config revisions, policy/trust epochs and minimum catalog sequence, resource/writer/group mapping, route/step IDs, dependency checks, ordered phases, admission/drain/validation/recovery profiles, backup/restore requirements, maximum step durations and latest admission time.
+A plan contains action (`update|install|enroll|recover|verify_recovery|self_update|executor_maintenance`), targets/host IDs, exact Manifest/artifact/component digests, input inventory/schema/config revisions, policy/trust epochs and minimum catalog sequence, resource/writer/group mapping, route/step IDs, dependency checks, ordered phases, admission/drain/validation/recovery profiles, backup/restore requirements, maximum step durations and latest admission time.
 
-Serialize plan values with a specified deterministic JSON encoding: sorted object keys, UTF-8, no insignificant whitespace, integer-only numbers and no duplicate keys. Hash these immutable bytes as `plan_digest`; display summaries are not part of authorization.
+Persist one authoritative UTF-8 JSON byte string for each plan and compute `plan_digest` over those exact bytes. Reject duplicate keys, non-finite/fractional numbers and invalid Unicode. Hosts verify the sealed bytes/digest before decoding; they never reserialize a projection to derive authorization. Human display summaries and local JSON formatting are not authorization content. Plan identity, actions, targets, normalized operations and relevant preconditions are in the sealed payload.
 
 Plan ID never changes. Any change to targets, route, privileges, profile or artifact requires a new plan. Preparation receipts and backups are later execution evidence attached to the Job, not edits to the plan. The plan preauthorizes their exact resource scope and verification contract.
 
@@ -34,7 +34,9 @@ Secrets are referenced by protected opaque IDs/version markers, never by secret 
 | `migrating` | Execute declared application-owned steps sequentially |
 | `activating` | Switch stopped deployment to staged artifact in dependency order |
 | `validating` | Verify target schemas, lifecycle health and group invariants behind gates |
-| `succeeded` | Reopen admission safely, record acceptance and release logical fences |
+| `reopening` | Reopen gates under owner control and record any newly accepted work; resources still update-blocked |
+| `finalizing` | Reconcile gate/lifecycle receipts, release local blockers and commit coordinator acceptance |
+| `succeeded` | All required final receipts confirmed and coordinator inventory/blockers committed atomically |
 | `failed_safe` | Failure with verified unchanged/restored state and known safe lifecycle |
 | `cancelled_safe` | Cooperative cancellation with verified safe lifecycle and no unresolved effect |
 | `recovery_required` | Known partial effects or failed target/restore validation; resources remain blocked |
@@ -52,7 +54,9 @@ stateDiagram-v2
   backing_up --> migrating
   migrating --> activating
   activating --> validating
-  validating --> succeeded
+  validating --> reopening
+  reopening --> finalizing
+  finalizing --> succeeded
   preparing --> failed_safe
   prepared --> cancelled_safe
   quiescing --> recovery_required
@@ -60,6 +64,8 @@ stateDiagram-v2
   migrating --> recovery_required
   activating --> recovery_required
   validating --> recovery_required
+  reopening --> recovery_required
+  finalizing --> unknown
   migrating --> unknown
   activating --> unknown
   unknown --> recovery_required: Reconciled partial result
@@ -80,14 +86,16 @@ A timeout/heartbeat loss marks a host uncertain; no automatic lease expiry permi
 
 Request keys are scoped to authenticated principal/domain and action. Same key plus identical payload returns the existing plan/Job result; same key plus different payload returns `idempotency_conflict`.
 
-Before the first host effect, persist Job admission and the request-key mapping in one coordinator transaction. Each host persists its operation ID/plan digest/intent before its effect. A retried transport request asks `inspect_operation`; it never repeats `run_step` while intent has an unresolved outcome.
+Before the first host effect, persist Job admission, plan consumption and the request-key mapping in one coordinator transaction. Each plan can be consumed by at most one Job across every caller, grant, adapter and request key. Reuse of the consumed plan returns the existing Job only to an authorized reader; otherwise return `plan_consumed` without disclosing it. A second authorization/request key never permits a second execution of that plan, including after a terminal failure/cancellation. A retry/recovery needs a newly inspected plan.
+
+Each host durably binds operation ID to Job/plan, action/step, normalized payload digest, resource set, maintenance epoch and predecessor receipts before effects. The same operation ID with any different binding returns `operation_conflict`; exact repeats return the persisted state. A retried transport request asks `inspect_operation`; unresolved intent is never run again. Querying an outcome cannot authorize the next step.
 
 v1 retains mutation-key/operation tombstones without automatic deletion. If later retention is introduced it must preserve replay protection independently. Cursor pagination does not expose secret storage keys.
 
 ## Backup and restore verification
 
-1. Gate new application requests and drain known accepted work.
-2. Fence/stop every writer in the declared backup/restore domain.
+1. Establish the owner-issued durable maintenance epoch and gate every source of new work, including external/internal requests, timers and administrative writers.
+2. Drain already accepted work, preserve unresolved effects, then fence/stop every writer in the declared backup/restore domain. Verify that candidates and restarted timers will honor the same epoch.
 3. Record the protected pre-update schemas, mappings, ownership/ACLs and previous artifact identities.
 4. Snapshot config, DB and persistent data consistently. Keep writer fences through activation/validation.
 5. Restore the exact new snapshot into an isolated scratch target and run owner validators, schema/grant/content checks.
@@ -128,7 +136,7 @@ Manual scripts are produced as reviewable support artifacts outside the MCP exec
 
 Install a small recovery controller before enrolling Updater v1.0. It uses a stable local control protocol, pinned trusted versions, host journal format v1 and narrowly scoped privileged operations. It remains executable when coordinator/MCP dependencies fail.
 
-Self-update is a dedicated Job after all other mutations are idle. The stable controller holds coordinator ownership fencing, stages/verifies the new bundle, checkpoints journal/requests, stops the old coordinator, changes the active release pointer, starts the new version and checks read-only journal compatibility plus API readiness. The new coordinator starts maintenance-only until the controller commits handoff; it cannot admit application updates during validation.
+Self-update is a dedicated Job after all other mutations are idle. The stable controller holds coordinator ownership fencing, stages/verifies the new bundle, checkpoints journal/requests, stops the old coordinator, changes the active release pointer, starts the new version and checks read-only journal compatibility plus API readiness. The new coordinator starts maintenance-only until the controller commits handoff; it cannot admit application updates, issue grants/sessions or run startup migrations/background control-state writes during validation. The controller may record bounded handoff evidence in the stable journal.
 
 Restore the previous pointer only when storage compatibility is verified. In v1, Updater self-releases must read/write journal v1 without destructive storage migration. Upgrading storage/recovery-controller protocol is a separate human-run bootstrap operation, not a routine self-update branch.
 
@@ -146,7 +154,7 @@ Bound request bodies to 1 MiB, runner result to 256 KiB and diagnostic error sum
 
 Install explicitly proves every target resource absent using authoritative bindings; inaccessible/unknown/unmarked resources are not empty. Initialization runs behind the same fences, signed handlers and validation. Existing data rejects install and directs the operator to a standalone migration/enrollment path.
 
-Enroll verifies entry release or later supported release, signed artifact/component identities, actual schemas, local profiles, writer/backup contracts and standalone transition evidence. It only commits inventory; it does not rewrite config, migrate DB, restart services or downgrade GPU Node Manager.
+Enroll verifies entry release or later supported release, signed artifact/component identities, actual schemas, local profiles, writer/backup contracts and typed entry evidence described below. It only commits inventory; it does not rewrite config, migrate DB, restart services or downgrade GPU Node Manager.
 
 ## Proposed journal records
 
@@ -155,11 +163,11 @@ These are data-model requirements, not DDL or a created database.
 | Record | Key / invariant | Essential fields |
 | --- | --- | --- |
 | `inventory` | Deployment ID | Host/app/component identities, observation revision/time, artifact/config/schema refs, enrolled state |
-| `plans` | Plan ID; unique digest | Immutable canonical bytes, action, scope, preconditions, expiry |
+| `plans` | Plan ID; unique digest | Authoritative sealed JSON bytes, action, scope, preconditions, expiry |
 | `authorizations` | Grant ID | Plan digest, actor/delegation, roles/resources, policy epoch, admitted/revoked times |
 | `requests` | Unique principal/domain/action/key | Payload digest, admitted Job/plan ID and original outcome; permanent tombstone |
-| `jobs` | Job ID | Plan/grant IDs, current phase/state, recovery linkage, timestamps |
-| `operations` | Unique host/operation ID | Job/step/profile IDs, intent, observed result and uncertainty |
+| `jobs` | Job ID; unique consumed plan ID | Plan/grant IDs, current phase/state, recovery linkage, timestamps |
+| `operations` | Unique host/operation ID; immutable binding digest | Job/plan/action/step/profile, resources, maintenance epoch, predecessors, intent, result and uncertainty |
 | `events` | Journal instance ID + monotonic sequence | Record type/ID, previous event digest, sanitized evidence refs |
 | `resource_blocks` | Resource ID; one active owner | Job/operation, reason, fence receipt and verified release evidence |
 | `backup_receipts` | Receipt ID | Job/resources, snapshot identity, pre-update vector, isolated verification/restore conditions |
@@ -169,7 +177,7 @@ Host and coordinator journals share IDs but never duplicate authority. Compare e
 
 v1 uses SQLite full synchronous durable transactions, local storage, bounded WAL/checkpoint handling and protected DB/WAL/SHM files. A recovery inspector understands incomplete commits and validates journal schema/version. Filesystem capacity includes backup plus worst-case WAL/export/artifact staging, with an explicit reserve checked before admission.
 
-The persistent logical blocker is released in a transaction only after its referenced final validation is committed. Failure to release after successful validation is reconciled; it never authorizes a duplicate update.
+The finalizing decision and complete validation/gate receipts are durable before requesting local blocker release. Each local release is itself an immutable operation with a persisted result. Only after all releases are confirmed does one coordinator transaction update accepted inventory, clear global Job/resource reservations and mark succeeded. A lost release acknowledgement is queried; it does not recreate the blocker or repeat activation. Until that final transaction, the domain cannot admit another conflicting Job. Host/coordinator finalization is not one distributed transaction.
 
 ## Ordering, freshness and recovery verification
 
@@ -180,3 +188,57 @@ Authorization deadlines govern new Job admission. Host preparation/begin receipt
 A fresh catalog confirming the exact authorized target is new evidence, not a plan edit. Changed relevant policy/profile/schema/config mappings or revoked trust abort the next phase. Normal data writes before maintenance are handled by drain/snapshot; verified resource ownership and schema invariants must still match.
 
 Recovery verification returns validation evidence only. It does not itself restore data, reopen admission or remove blockers. The protected recovery controller checks all linked final evidence and lifecycle conditions before finalizing the old Job/resource blockers. Repaired schemas require a fresh plan; old authorizations never expand to unexpected new schemas.
+
+## Maintenance continuity, restart and step ordering
+
+An application-owned durable maintenance epoch is distinct from its process lock. It binds resource/group/Job ownership and remains effective when the old service/executor exits. Candidate startup, background timers and administrative paths must honor it before accepting writes or provider work. Hold business admission closed across restart.
+
+A candidate validation profile must define maintenance startup: disable automatic schema initialization/migration and automatic job/provider replay. Permitted validation writes are explicitly scoped, journaled and accounted for in restoration conditions; they are not user business writes. Uncontrolled startup writes or missing epoch enforcement reject the plan.
+
+Host execution enforces a declared step graph: confirmed local predecessor receipts, compatible fresh inspection, and required global barriers are prerequisites. A repeated request cannot skip backup or jump from prepare to activation. Coordinator-authenticated barrier receipts bind all group participant/predecessor results and their epochs to this Job. They do not expand host policy or replace local resource checks.
+
+Updating a host executor uses a dedicated protected handoff: no ordinary group may replace its active execution authority while that authority owns an unresolved operation. Stop/fence the previous executor, preserve its journal/epochs and let the stable recovery controller verify the replacement before resuming. Unsupported executor maintenance/handoff is a plan blocker.
+
+## Enrollment evidence and control-state compatibility
+
+Enrollment supports typed evidence sources: standalone_transition for a pre-entry upgrade, verified_installation for a fresh signed initialization, or verified_adoption for an already supported signed entry-or-later deployment. Adoption inspects/validates actual state without transformation; it cannot adopt an unsupported legacy release or bypass unknown operations. Every evidence source is revalidated against local bindings, current artifact/schema/config and journal continuity before inventory commit.
+
+Routine self-update compatibility covers all control state, not only the Job journal: application/operator identities, Web auth/session schemas, grants/revocations, plan consumption, request/operation tombstones, trust keys/catalog watermarks and maintenance epochs. Candidate verification uses the read-only compatibility view first. A self-release cannot destructively transform any of these v1 stores during routine handoff. Previous-version recovery preserves current control records; it never resurrects old grants/accounts/trust state from a snapshot.
+
+Revoked or withdrawn target identities cannot be activated. A previous artifact can be used for rollback only under the current explicitly approved recovery trust policy; if neither target nor previous artifact is eligible, keep maintenance and stop for operator recovery instead of selecting another unsigned/older release.
+
+## Action dispatch and recovery ownership
+
+Plan action is enforced after protected deployment-role resolution, not inferred from a tool name or caller label.
+
+| Action | Allowed effect path |
+| --- | --- |
+| update | Application preparation/maintenance/backup/migration/activation/finalization |
+| install | Explicit absence proof and signed initialization, then validation/reopening/finalization |
+| enroll | Reinspect typed entry evidence and commit inventory only |
+| verify_recovery | Scoped inspection/validation and evidence publication only; no resource writes, restoration or blocker release |
+| recover | Protected recovery-controller plan; supported restoration/repair and finalization for a linked parent |
+| self_update | Protected coordinator handoff; never generic application execution |
+| executor_maintenance | Protected host execution-authority handoff |
+
+Local profiles classify coordinator/executor/recovery-controller roles. An alias or a multi-target group cannot route them through ordinary update/install/enroll execution. Recovery-controller/protocol/storage replacement remains a separate manual bootstrap operation.
+
+A read-only verify_recovery child may inspect under its parent's persistent block, respecting the resource owner's stable-observation contract. It acquires no independent mutation right; an unsettled/running parent effect returns unknown. Its evidence does not finalize the parent.
+
+A mutating recovery child requires explicit protected authorization plus a frozen parent, all effect-producing processes/operations reconciled or positively fenced, and a supported consistency-group recovery plan. The controller first persists the ownership-handoff intent, then performs revision-checked transfers of the original host/resource reservations to the linked child. No two Jobs gain concurrent rights. Partial handoff remains blocked and is reconciled; no automatic release or fresh ordinary-Job admission is allowed.
+
+Parent operations keep immutable IDs/outcomes, and parent updates cannot resume after handoff. Recovery evidence links the resolution rather than changing a failed update into a claimed original success. Successful recovery commits accepted inventory/blocker resolution and the linked child's outcome together at coordinator finalization.
+
+## Coordinator epoch and interface availability
+
+The stable controller owns a monotonically increasing coordinator authority epoch. Hosts bind operation admission to their confirmed domain/epoch and reject old-epoch mutations. During self-update or disaster takeover, gate domain admission, settle existing host obligations, stop/fence the old coordinator, advance the epoch and confirm it on all managed hosts before committing a new active authority. A missing acknowledgement blocks handoff; investigate rather than starting a second coordinator.
+
+A previous executable selected for rollback starts under a new verified epoch; epochs/catalog/grant watermarks never roll back. Interrupted partial epoch propagation is reconciled by the controller while business update admission stays closed.
+
+Ordinary CLI, MCP and Web require the coordinator API for normal operations. The separate local recovery CLI/inspector in the stable controller bundle is the outage-independent path. Read-only inspection is available there; any mutation still requires its protected recovery authorization and owner fencing.
+
+## Safe failure and cancellation finalization
+
+failed_safe/cancelled_safe require verified safe resource/lifecycle state, all relevant local reservation-release receipts and a coordinator transaction clearing the corresponding global reservations while persisting the terminal outcome. Keep plan-consumption tombstones. An incomplete release/final commit remains blocked/unknown; do not label it safe to admit new work. Early preparation cancellation requires no business gate reopening if no gate was closed.
+
+Reconciliation resumes only the original action's recorded step graph and confirmed successor. Verified completed migration/activation can proceed to validation; unknown reopening/finalization reconciles gate/release receipts instead of replaying activation or claiming automatic success.

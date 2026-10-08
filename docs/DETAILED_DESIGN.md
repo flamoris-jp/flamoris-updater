@@ -84,8 +84,8 @@ Core depends on these ports, whose method names are design identifiers:
 | Inventory | inspect target deployment/component/resource identities |
 | Planner | check compatibility, schema routes and update groups |
 | Journal | durably record intents, results, request deduplication and recovery blockers |
-| Authorizer | bind exact plan to actor, targets, policy and admission window |
-| HostExecution | prepare, begin, run_step, inspect_operation, abort_preparation, release_after_validation |
+| Authorizer | bind exact plan/action to actor, targets, policy, coordinator epoch and admission window |
+| HostExecution | prepare, begin, run_step, inspect_operation, abort_preparation, release_after_validation; protected recovery/epoch handoff |
 | MigrationRunner | inspect, plan, apply_step, reconcile, validate |
 | Lifecycle | close_admission, drain, stop, activate, health, reopen_admission |
 | Backup | snapshot, restore_verify, restore, verify_restored_state |
@@ -101,7 +101,7 @@ Host records: prepared plans, operations, resource blockers, backup receipts, se
 
 Application records: schema observations, migration runs/steps and reconciliation results. Existing SQL/Alembic history is preserved and mapped, not replaced with a new fabricated number.
 
-SQLite constraints and transactions enforce one admission for a request key, unique local operation identity and resource ownership. Local advisory process locks protect journal access; persistent blockers survive process exit. Losing a process lock is not permission to clear a blocker.
+SQLite constraints and transactions enforce one admission per request key, one consumed plan per Job, an immutable local operation binding and resource ownership. Local advisory process locks protect journal access; persistent blockers survive process exit. Losing a process lock is not permission to clear a blocker.
 
 A host does not initiate a new mutation when the coordinator is unreachable. It may complete an already admitted bounded step and persist the outcome. Continuing later steps requires reconciliation with the same authoritative Job. A recovered coordinator reads host records before making any further decision.
 
@@ -137,7 +137,7 @@ Proposed internal paths under `/api/v1`:
 
 All responses carry protocol version, authenticated domain/host identity, request/operation IDs and journal revision. Unknown methods/fields fail closed. Every effect request binds exact plan/Job/step/resource IDs plus a coordinator-authenticated grant/admission receipt; the executor checks local scope/profile/identity independently.
 
-The coordinator is trusted to attest operator authorization within its restricted management domain; a compromised coordinator cannot ask the helper for undeclared paths/privileges. Host keys and operator-authority keys are distinct from release publisher keys. Provisioning these identities is part of private bootstrap.
+The coordinator is trusted to attest operator authorization within its restricted management domain; a compromised coordinator cannot ask the helper for undeclared paths/privileges. Host keys and operator-authority keys are distinct from release publisher keys. Exact typed operation bindings, confirmed predecessors and Job-specific group barriers are checked even for an authenticated coordinator. Provisioning these identities is part of private bootstrap.
 
 Local helper operations use the same typed operation IDs and root-owned profile lookups on a peer-authenticated socket. An operation may invoke indexed, publisher-trusted migration code only in the approved isolated runner scope.
 
@@ -151,3 +151,19 @@ Local helper operations use the same typed operation IDs and root-owned profile 
 - Updater自身の更新は独立した小さな復旧機構で扱い、履歴を古い状態へ巻き戻さない。
 
 これは詳細設計案であり、実装・実機反映はまだ行わない。
+
+## Reviewed execution invariants
+
+Every plan has one execution across callers/keys. Every local operation has one immutable payload/action/resource/epoch binding; each step checks confirmed predecessors and group barriers. Durable owner maintenance state survives process replacement, including candidate startup and timers.
+
+The coordinator does not declare success before gate reopening and local/global finalization receipts. Host-executor updates are a protected authority handoff, never an ordinary self-replacement during unresolved work. See [reviewed execution contract](EXECUTION_RECOVERY.md) and [review loop](REVIEW_LOOP_2026-10-08.md).
+
+## Dependency resolution and incoming consumers
+
+Manifest dependency application/interface IDs resolve through protected deployment profiles to the exact provider deployment/component binding. A matching interface on an unrelated instance cannot satisfy the requested application's dependency.
+
+The plan considers the full affected binding graph, including unchanged incoming consumers and shared resources outside the initially requested release list. Validate both intermediate and final compatibility of those participants. Required extra gates/restarts/group members are disclosed in the immutable plan and must be within actor/host policy and exact-plan authorization. No later implicit expansion is allowed.
+
+An unresolved provider/consumer binding or required unavailable maintenance contract blocks the plan. Unmanaged clients follow explicitly documented ingress/API compatibility contracts; do not claim their compatibility from another installed version or silently assume they are absent.
+
+Normal update APIs reject protected coordinator/executor/recovery-controller roles after profile resolution, including aliases. Operation admission binds the confirmed coordinator epoch. Only the independent protected controller performs supported handoffs.

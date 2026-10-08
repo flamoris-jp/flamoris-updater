@@ -45,6 +45,12 @@ No runtime tests, CI, release signing, provider calls, DB migrations or deployme
 
 The user selected a dedicated Updater Web UI instead of embedding update management in flamoris-studio. Updated architecture/API/adoption/roadmap guidance: Web, CLI and MCP share one coordinator; Web owns its own authentication/session/CSRF. Studio remains only an application update target. Self-update/recovery-controller restrictions and the implementation hold are unchanged.
 
+## Review/correction loop (2026-10-08)
+
+Completed two documentation review/correction rounds and a final consistency pass against the dedicated-Web design. Resolved 19 grouped contract findings: plan/operation replay, durable maintenance and completion, shared resources, release/staging/parser rules, isolated restoration, enrollment/control-state compatibility, recovery ownership, incoming dependencies and protected authority handoff. See [review loop](docs/REVIEW_LOOP_2026-10-08.md) for counterexamples, corrections and verification limits.
+
+Added future fault/acceptance cases; none were executed as runtime tests. Source, schemas, CI and hosts remain unchanged. The review identifies application/profile/bootstrap requirements without claiming they are implemented or live-verified.
+
 ## Next checkpoint
 
 Implementation remains held at the user's instruction. The next design/adoption input is verified private deployment/resource/writer inventory and application maintenance contracts, followed by a separately authorized implementation task. Proposed work packages in [adoption](docs/ADOPTION.md) have not been turned into Issues or code.

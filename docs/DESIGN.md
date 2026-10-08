@@ -34,7 +34,7 @@ The default update unit is one application. Use a coordinated group when depende
 
 Group coordination is not a claim of atomic DB or multi-host rollback. The plan must identify intermediate compatibility, ordering, stop conditions and recovery boundaries. Draft multi-host preparation, gated activation and partial-failure semantics are specified in [execution/recovery](EXECUTION_RECOVERY.md); no distributed rollback guarantee is introduced.
 
-Planning does not mutate application/deployment resources; immutable plans may be persisted in coordinator metadata. Execution uses a reviewed, authorized plan and revalidates its preconditions immediately before mutation.
+Planning does not mutate application/deployment resources; immutable plans may be persisted in coordinator metadata. Resolve exact provider deployments and unchanged incoming consumers, and authorize the full affected maintenance group. Execution uses a reviewed, authorized plan and revalidates its preconditions immediately before mutation.
 
 ## 4. Migration graph and execution history
 
@@ -92,7 +92,7 @@ Updater MCP focuses on inventory, release discovery/notes, update planning, star
 
 Server observation and general diagnostics remain with Server Manager. Updater reports its own update evidence and failed step. It does not add a read-only shell, a general log service or an independent diagnostic suite.
 
-Authorization binds the exact plan, artifacts, targets and relevant preconditions. Repeated start requests must not duplicate execution. Unknown outcomes require reconciliation rather than unconditional replay.
+Authorization binds the exact plan, artifacts, targets and relevant preconditions. Repeated start requests must not duplicate execution: each plan admits one Job across all callers/keys, and each local operation keeps an immutable action/resource/epoch binding. Unknown outcomes require reconciliation rather than unconditional replay.
 
 ## 9. Failure handling with human + AI
 
@@ -121,3 +121,9 @@ Updater's dedicated Web management UI shows installed versions, candidates, plan
 Remaining evidence and owning-application work: exact live inventory and artifact/version mappings, maintenance/drain contracts, DB-role and backup scopes, signing-key provisioning, host bindings, implementation verification and live acceptance. These are not inferred from source inspection. See [adoption](ADOPTION.md).
 
 The draft refines the accepted direction without changing responsibility or management-entry versions. The current task remains design-only.
+
+## 12. Review-loop refinements
+
+The [2026-10-08 review loop](REVIEW_LOOP_2026-10-08.md) clarifies plan consumption, step/action binding, restart-safe maintenance, shared-resource/dependency identities, finalization, isolated restore drills, catalog re-observation and protected recovery/self-update ownership.
+
+These are design-contract corrections only. Core/wrapper ownership, AI-side v1.0 / GPU Node Manager v1.2 / Updater v1.0 entry policy, dedicated Web ownership and the implementation hold remain unchanged.
