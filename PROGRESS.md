@@ -138,3 +138,17 @@ versions, then enroll their verified transition evidence in the ordinary Updater
 coordinator. The six AI-side packages enter at 1.0.0 and GPU Node Manager at 1.2.0.
 Controller travels inside its one hosting Generation artifact. This merge does
 not assert current live versions/schemas or authorize a real-host change.
+
+### Pre-deployment retained-resource correction
+
+The first private inventory review found normal setgid shared directories and
+application-owned retained trees that the merged entry contract did not yet
+represent. Source work now accepts setgid on directories only and preserves it
+through snapshot/restore verification; setuid, sticky directories, setgid files,
+links, hardlinks and special files remain refused. Controller and Studio updates
+expand their explicit Owner resource sets for provider inputs/definitions/recipes/
+state and thumbnails respectively. Linux verification at this checkpoint is
+**137 passed, 2 skipped** for Updater, including Ruff, format and documentation
+link checks. Matched dependency pins, PR review and CI at the new revisions are
+pending. No service, production data, trust, release, enrollment or host
+configuration was changed by this checkpoint.

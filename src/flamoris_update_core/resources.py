@@ -52,10 +52,17 @@ def protected_read(path: Path, *, private=False, limit=1024 * 1024):
 
 
 def _regular(info):
+    # A setgid directory is a normal shared-storage contract: newly-created
+    # members inherit the directory group.  Keep rejecting every executable
+    # privilege bit on files, setuid everywhere, and sticky directories.  The
+    # latter are intentionally outside the v1 application-resource profile.
+    privileged_mode = info.st_mode & (stat.S_ISUID | stat.S_ISVTX)
+    if stat.S_ISREG(info.st_mode):
+        privileged_mode |= info.st_mode & stat.S_ISGID
     if (
         not (stat.S_ISREG(info.st_mode) or stat.S_ISDIR(info.st_mode))
         or (stat.S_ISREG(info.st_mode) and info.st_nlink != 1)
-        or info.st_mode & 0o7000
+        or privileged_mode
     ):
         raise UpdateError("unsafe_storage", "Special files, links and privileged modes are refused")
 
@@ -221,6 +228,16 @@ class TreeResource:
                 target = isolated / item["path"]
                 if (item["uid"], item["gid"]) != (os.geteuid(), os.getegid()):
                     os.chown(target, item["uid"], item["gid"])
+            # chown may clear setgid. Reapply the recorded modes only after
+            # ownership has been restored, using the same pinned traversal as
+            # snapshots. This also verifies that no link substitution occurred.
+            for item in reversed(index["members"]):
+                fd = self._open(isolated, item["path"], os.O_RDONLY)
+                try:
+                    os.fchmod(fd, item["mode"])
+                    os.fsync(fd)
+                finally:
+                    os.close(fd)
             if self.inventory(isolated) != index["members"]:
                 raise UpdateError("backup_unverified")
         return True
