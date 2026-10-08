@@ -4,7 +4,7 @@ Start with [README](README.md), [AGENTS](AGENTS.md), [design](docs/DESIGN.md) an
 
 ## Current development stage
 
-This repository is documentation-only. Implementation language, package layout, build/test commands and CI are not yet selected. Do not add copied setup commands or describe planned tools as available.
+This repository is documentation-only. [Detailed design draft 1](docs/DETAILED_DESIGN.md) proposes Python 3.12, package boundaries and contracts. No runtime/build/test/CI commands exist yet. Do not implement from a roadmap alone or describe proposed tools as available.
 
 ## Change workflow
 

@@ -1,6 +1,6 @@
 # FLAMORIS Updater design
 
-**State:** accepted basic direction; implementation and detailed APIs pending.
+**State:** accepted basic direction; implementation pending. [Detailed draft 1](DETAILED_DESIGN.md) specifies proposed APIs, persistence, trust and failure semantics.
 
 ## 1. Repository and dependency boundaries
 
@@ -32,9 +32,9 @@ An application release, config schema, DB schema and persistent-data schema are 
 
 The default update unit is one application. Use a coordinated group when dependencies require it. Release Manifest declares provided API versions and required dependency compatibility ranges; Core checks the complete selected plan.
 
-Group coordination is not a claim of atomic DB or multi-host rollback. The plan must identify intermediate compatibility, ordering, stop conditions and recovery boundaries. Detailed multi-host failure semantics remain pending.
+Group coordination is not a claim of atomic DB or multi-host rollback. The plan must identify intermediate compatibility, ordering, stop conditions and recovery boundaries. Draft multi-host preparation, gated activation and partial-failure semantics are specified in [execution/recovery](EXECUTION_RECOVERY.md); no distributed rollback guarantee is introduced.
 
-Planning is read-only. Execution uses a reviewed, authorized plan and revalidates its preconditions immediately before mutation.
+Planning does not mutate application/deployment resources; immutable plans may be persisted in coordinator metadata. Execution uses a reviewed, authorized plan and revalidates its preconditions immediately before mutation.
 
 ## 4. Migration graph and execution history
 
@@ -58,7 +58,7 @@ A destructive update cannot proceed automatically when recovery cannot be verifi
 
 Retain durable update and migration evidence outside replaceable runtime artifacts. Records must remain readable when Updater is unavailable.
 
-Preserve a known executable previous Updater and provide a small independent recovery path for self-update failures. Exact self-update and recovery-command design is pending.
+Preserve a known executable previous Updater and provide a small independent recovery path for self-update failures. The proposed stable recovery controller and self-update handoff are specified in [execution/recovery](EXECUTION_RECOVERY.md).
 
 ## 6. Release distribution and trust
 
@@ -66,7 +66,7 @@ CI builds release artifacts. Hosts normally install prebuilt artifacts rather th
 
 Treat manifests and release notes as untrusted input. Verify against the configured trust policy before mutation, including binding the manifest to the artifact and its migration/validation content. A manifest cannot grant itself trust or permission to execute arbitrary commands.
 
-Signing mechanism, trust roots, rotation/revocation and release-source rules are detailed-design work. This repository bootstrap does not provide a signing pipeline.
+The [Manifest draft](RELEASE_MANIFEST.md) selects exact-byte Ed25519 signatures, application-scoped operator-pinned keys, catalog replay protection and rotation/revocation rules. Key provisioning and the CI signing pipeline are not implemented.
 
 ## 7. Configuration and persistence
 
@@ -114,15 +114,10 @@ Withdrawn intermediate releases must not be installed just to obtain their notes
 
 Studio's future management UI shows installed versions, candidates, plans, release notes and execution outcomes. UI work follows the underlying contracts.
 
-## 11. Remaining design decisions
+## 11. Detailed design and remaining evidence
 
-- Exact application inventory, deployment evidence and dependency groups.
-- Implementation language, package/API shape, persistence and lock mechanisms.
-- Versioned Manifest schema, artifact signatures and trust policy.
-- Migration-handler interface, step reconciliation and validation evidence.
-- Multi-host ordering, partial failure and restoration semantics.
-- Enrollment attestation and authorization lifetime.
-- Updater bootstrap, self-update and independent recovery mechanism.
-- MCP tool names/transport and Studio interface.
+[Detailed draft 1](DETAILED_DESIGN.md) chooses platform/language, package/API boundaries, Manifest/trust, migration runner, durable jobs/authorization, group failures, self-update recovery and MCP contracts.
 
-These decisions refine the accepted direction; they must not silently change ownership or management-entry versions.
+Remaining evidence and owning-application work: exact live inventory and artifact/version mappings, maintenance/drain contracts, DB-role and backup scopes, signing-key provisioning, host bindings, implementation verification and live acceptance. These are not inferred from source inspection. See [adoption](ADOPTION.md).
+
+The draft refines the accepted direction without changing responsibility or management-entry versions. The current task remains design-only.

@@ -2,7 +2,7 @@
 
 ## Supported state
 
-FLAMORIS Updater is in documentation bootstrap. There is no supported runtime release or security-maintenance version matrix yet. Define that matrix when releases become available.
+FLAMORIS Updater has basic design and a detailed design draft, with no implementation. There is no supported runtime release or security-maintenance version matrix yet. Define that matrix when releases become available.
 
 ## Reporting
 
