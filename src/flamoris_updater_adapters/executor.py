@@ -443,7 +443,7 @@ class HostExecutor:
             schemas.update(step.arguments["to"])
         elif step.operation in {"validate", "initialize", "restore", "verify_restored_state"}:
             schemas = manifest.schema_targets
-        if step.operation in {"prepare", "begin"} or (step.operation == "release" and read_only):
+        if step.operation == "prepare" or (step.operation in {"begin", "release"} and read_only):
             return OwnerResult(
                 contract_version=1,
                 operation=step.operation,
@@ -469,7 +469,11 @@ class HostExecutor:
             expected_schemas=schemas,
             maintenance_epochs=epochs,
             predecessor_receipts=step.predecessors,
-            arguments={**step.arguments, "read_only": read_only},
+            arguments={
+                **step.arguments,
+                "read_only": read_only,
+                "manifest_digest": plan.targets[profile.id],
+            },
         )
         result = self.backend.perform(profile, manifest, request)
         verified(request, result)

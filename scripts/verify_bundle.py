@@ -55,7 +55,7 @@ def main():
         # Module imports and static assets must be present inside the actual bundle.
         assert (stage / "site-packages/flamoris_updater_adapters/static/app.js").is_file()
         assert (stage / "site-packages/flamoris_updater_adapters/compatibility.py").is_file()
-    print("Verified indexed native bundle and all five installed entrypoints")
+    print("Verified indexed native bundle and all installed entrypoints")
 
 
 if __name__ == "__main__":

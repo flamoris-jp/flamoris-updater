@@ -139,10 +139,37 @@ class NativeDriver:
         self.store.activate(manifest.artifact, self.pointer)
         self.command(["/usr/bin/systemctl", "start", self.unit])
 
+    def verify_active(self, manifest, operation_id):
+        self.check_binding()
+        directory = self.store.root / manifest.artifact.digest.removeprefix("sha256:")
+        if not self.pointer.is_symlink() or self.pointer.resolve() != directory.resolve():
+            raise UpdateError("outcome_unknown")
+        self.store.verify(directory, manifest.artifact)
+        if (
+            self.command(
+                ["/usr/bin/systemctl", "show", self.unit, "--property=ActiveState", "--value"]
+            ).strip()
+            != b"active"
+        ):
+            raise UpdateError("outcome_unknown")
+
+    def source_state(self):
+        self.check_binding()
+        state = self.command(
+            ["/usr/bin/systemctl", "show", self.unit, "--property=ActiveState", "--value"]
+        ).strip()
+        if state not in {b"inactive", b"failed"} or not self.pointer.is_symlink():
+            raise UpdateError("legacy_not_quiescent")
+        return {
+            "unit_digest": self.unit_digest,
+            "pointer": str(self.pointer.resolve()),
+            "state": state.decode(),
+        }
+
 
 class ApplicationBackend:
-    def __init__(self, owners: dict[str, RemoteOwner], drivers: dict):
-        self.owners, self.drivers = owners, drivers
+    def __init__(self, owners: dict[str, RemoteOwner], drivers: dict, activation_signer=None):
+        self.owners, self.drivers, self.activation_signer = owners, drivers, activation_signer
 
     def inspect(self, profile):
         return self.owners[profile.id].inspect(profile)
@@ -153,7 +180,25 @@ class ApplicationBackend:
     def perform(self, profile, manifest, request):
         # Owner API covers data/maintenance; host profile covers executable lifecycle.
         if request.operation == "activate":
+            if self.activation_signer is None:
+                raise UpdateError("invalid_profile")
             self.drivers[profile.id].activate(manifest, request.operation_id)
+            self.drivers[profile.id].verify_active(manifest, request.operation_id)
+            activation = self.activation_signer.packet(
+                {
+                    "kind": "host_activation",
+                    "application_id": request.application_id,
+                    "deployment_id": request.deployment_id,
+                    "artifact_digest": request.artifact_digest,
+                    "manifest_digest": request.arguments["manifest_digest"],
+                    "operation_id": request.operation_id,
+                    "job_id": request.job_id,
+                    "plan_digest": request.plan_digest,
+                }
+            )
+            request = request.model_copy(
+                update={"arguments": {**request.arguments, "host_activation": activation}}
+            )
         result = self.owners[profile.id].perform(request)
         if request.operation == "stop" and result.outcome == "verified":
             from flamoris_update_core.contracts import verified

@@ -76,8 +76,20 @@ def credential_files(cfg):
     def visit(obj):
         if isinstance(obj, dict):
             for name, value in obj.items():
-                if name in {"ca_file", "cert_file", "key_file", "signer_private_file"} and value:
-                    files.append((value, name in {"key_file", "signer_private_file"}))
+                if (
+                    name
+                    in {
+                        "ca_file",
+                        "cert_file",
+                        "key_file",
+                        "signer_private_file",
+                        "environment_file",
+                    }
+                    and value
+                ):
+                    files.append(
+                        (value, name in {"key_file", "signer_private_file", "environment_file"})
+                    )
                 elif isinstance(value, (dict, list)):
                     visit(value)
         elif isinstance(obj, list):
@@ -199,14 +211,15 @@ def executor(path, root_only=True):
             )
             drivers[p.id] = DockerDriver(OCIStore(fetcher, binding, cfg.quota), binding, journal)
     store = releases(journal, cfg.release_keys, cfg.release_sources, clock)
+    signing = signer(cfg.host_id, cfg.signer_private_file)
     host = HostExecutor(
         cfg.host_id,
         cfg.domain_id,
         journal,
         profiles,
         store,
-        ApplicationBackend(owners, drivers),
-        signer(cfg.host_id, cfg.signer_private_file),
+        ApplicationBackend(owners, drivers, signing),
+        signing,
         pinned_keys(cfg.authorities),
         pinned_keys(cfg.receipt_keys),
         clock,
