@@ -152,3 +152,12 @@ state and thumbnails respectively. Linux verification at this checkpoint is
 link checks. Matched dependency pins, PR review and CI at the new revisions are
 pending. No service, production data, trust, release, enrollment or host
 configuration was changed by this checkpoint.
+
+### Pre-deployment Docker restart correction
+
+The live binding review found that replacement containers would otherwise lose
+their approved restart policy. Docker bindings now require an explicit
+`always` or `unless-stopped` policy; activation applies it
+and post-start attestation rejects drift. Linux verification is **140 passed, 2
+skipped**, with Ruff, format and documentation-link checks successful. PR review
+and CI at the new revision remain pending. No live service or host was changed.

@@ -165,6 +165,7 @@ class DockerBinding(Model):
     runtime_user: str
     memory_bytes: int = Field(gt=0)
     pids_limit: int = Field(gt=0, le=65536)
+    restart_policy: Literal["always", "unless-stopped"]
     mounts: list[MountBinding] = Field(max_length=128)
     environment_file: str | None = None
 
