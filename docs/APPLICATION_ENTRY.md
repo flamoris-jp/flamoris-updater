@@ -1,3 +1,4 @@
+Attempting to perform the InitializeDefaultDrives operation on the 'FileSystem' provider failed.
 # Application entry transition
 
 The six AI packages enter managed updating at 1.0.0. GPU Node Manager enters at
@@ -23,19 +24,20 @@ both distributions into the same environment: they share Core namespaces.
 | Application | Required resource classes | Current accepted schema identifiers |
 | --- | --- | --- |
 | Agent | configuration, database | agent-config-1; 005_model_continuations |
-| Studio | configuration, database | studio-config-1; 20261005_12 |
+| Studio | configuration, database, thumbnails | studio-config-1; 20261005_12; studio-thumbnails-1 |
 | Intelligence | configuration | intelligence-config-1 |
-| Controller / co-hosted Generation MCP | configuration, recipes, outputs | controller-config-1; native-recipes-1; generation-assets-1 |
+| Controller / co-hosted Generation MCP | configuration, definitions, inputs, recipes, outputs | controller-config-1; comfy-definitions-retained-1; provider-inputs-1; generation-recipes-1; generation-state-2 |
 | Hub | configuration | hub-catalog-1 |
 | GPU Node Manager | configuration, evidence | gpu-profiles-1; runtime-evidence-1 |
 
 The packaged Controller is updated with its hosting Generation MCP artifact.
 It is not another live process/JobStore. Bind it as an embedded component and
 preserve the one Controller authority. No competing owner may claim the same
-physical resource. Extra provider-owned retained input directories require
-their own writer fencing/backup contract; do not silently omit them from an
-installation profile. A profile outside this implemented resource contract is
-unsupported and must remain blocked pending its explicit extension.
+physical resource. The explicit Controller resources retain provider inputs,
+registered definitions, saved recipes, generated assets, managed inputs/uploads,
+job reservations and journals. Read-only shared models remain an external
+library and are not copied by the application Owner. Other provider-owned trees
+require their own writer fencing/backup contract; do not silently omit them.
 
 These transitions preserve existing schemas. They do not initialize databases,
 run Alembic upgrades, erase assets, rebuild persona, or reconcile unknown work.
@@ -70,8 +72,10 @@ closed, without starting DB/provider work, and records its package boot identity
 Owner inspections never masquerade as a service boot. Set the Owner's environment
 to the same protected application settings, including Intelligence configuration.
 
-Tree snapshots refuse symlinks, hardlinks, FIFOs, devices and privileged modes.
-They bound bytes and include at most 4096 members (directories included), then
+Tree snapshots refuse symlinks, hardlinks, FIFOs, devices, setuid, sticky
+directories and setgid regular files. A normal setgid directory is accepted and
+its group-inheritance mode is preserved through snapshot and restore verification.
+Snapshots bound bytes and include at most 4096 members (directories included), then
 verify an isolated copy's bytes, ownership and permissions. Model/cache trees
 using links are not included by assumption; bind preserved external resources
 through a reviewed profile rather than copying or normalizing them. The Owner
@@ -136,3 +140,4 @@ There is no automatic rollback/data restore or multi-host atomicity claim.
 Verified `standalone_transition` evidence permits the ordinary coordinator's
 read-only enrollment afterward. Normal updates use that coordinator; the entry
 CLI cannot re-enter an already enrolled installation.
+
