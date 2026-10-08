@@ -1,37 +1,18 @@
 # Roadmap
 
-Basic direction and detailed draft 1 are documented. No runtime phase is complete. The current instruction explicitly holds implementation.
+Updated 2026-10-08 after implementation authorization. Updater-owned v1 source work U1–U7 is implemented and covered by automated tests/CI. Publication, application adoption and real-host certification are separate gates.
 
-| Phase | Work | Acceptance gate |
+| Work package | Source state | Remaining operational gate |
 | --- | --- | --- |
-| 0 | Repository identity, accepted direction, contributor guidance | Reviewable documentation with no runtime/readiness claims |
-| 1 | Audit installed AI-side applications, persistence, configuration and dependencies | Pinned source inventory documented; exact live migration inventory/private evidence pending |
-| 2 | Core, Manifest, migration, enrollment, authorization and recovery contracts | Draft 1 documented; implementation verification and owning-app contracts pending |
-| 3 | Application-owned standalone transitions | AI-side v0.1 → v1.0 and GPU Node Manager v1.1 → v1.2 validated independently |
-| 4 | Updater v1.0 Core/wrapper, Docker/Native execution and MCP | Deterministic planning, trusted artifacts, durable jobs and recovery evidence |
-| 5 | Live enrollment and update acceptance | Entry versions verified, restore and failure scenarios accepted |
-| 6 | Dedicated Updater Web management | Independent auth/session, version/candidate, release-note, plan and result UI over the same coordinator |
+| U1 Manifest/trust/catalog | Strict models, exact signatures, replay/rotation, bounded notes and multi-platform root | Provision keys, catalogs and approved origins |
+| U2 Planner/schema/groups | Direct/full-vector routes, exact providers, shared owners/writers and ordered barriers | Verify live resource/dependency inventory |
+| U3 Journal/authorization/Jobs | Durable intent, one consumed plan, scoped grants, unknown blockers and final acceptance | Certify persistent storage/capacity/crash behavior |
+| U4 Native/Docker host execution | Bounded artifacts/processes, local profiles, mTLS/peer-checked helper | Audit real units/daemon/mounts and application owners |
+| U5 Recovery/self-update | Linked restore and evidence-only child; protected coordinator handoff preserving current control store | Test real backups/fences/epochs; helper/controller replacement uses separate bootstrap |
+| U6 MCP/CLI | Fourteen typed SDK tools, human grants, shared durable Jobs and stable inspector | Provision client identities/TLS and operator scopes |
+| U7 Dedicated Web | Included static UI, independent Argon2/session/CSRF, plan/grant/Job/history flow | Browser/accessibility and real TLS/operator acceptance |
+| A1 Application standalone entry migrations | Common runner provided; application-specific handlers outside this task | AI-side v0.1 → v1.0 and GPU Node Manager v1.1 → v1.2 independently accepted |
+| A2 Application/release packaging/signing | Updater bundle and manual isolated signing-candidate workflow provided | Release Environment/keys/tag, publication and fresh signed catalog |
+| D1 Initial install/enrollment | Procedure documented; no live change performed | Stable recovery install, audited profiles, entry receipts and full live acceptance |
 
-Application transitions and Updater implementation are separate deliverables. Phase 3 can use the agreed contract without requiring a running Updater. Updater must not take responsibility for the legacy transition.
-
-## Current design deliverable
-
-[Detailed design](DETAILED_DESIGN.md) and linked specifications describe the v1 interfaces, trust, migration, state machine, recovery and [acceptance scenarios](ACCEPTANCE.md). [Adoption](ADOPTION.md) records pinned source boundaries and proposed work packages.
-
-The [review/correction loop](REVIEW_LOOP_2026-10-08.md) refines these draft contracts and acceptance cases. Documentation review completion does not advance any runtime or live phase.
-
-## Implementation hold and future work
-
-Do not start runtime implementation, create runnable schemas/CI/deployment files, apply migrations or change hosts under this design-only instruction.
-
-A later implementation task can:
-1. Complete live deployment/resource/writer inventory through the appropriate owners.
-2. Freeze application maintenance, backup and pre-entry contracts against that inventory.
-3. Split the proposed work packages into owning-repository Issues.
-4. Implement and validate the agreed scope, keeping source/release/live evidence separate.
-
-No cross-repository files or live resources are changed by this design deliverable. The Web UI is owned by Updater; no Studio integration work is planned. See [Web design](WEB_UI.md).
-
-## Completion evidence
-
-Track documentation, implemented source, CI/tests, released artifacts and live acceptance separately in [PROGRESS.md](../PROGRESS.md). A merged PR is not proof of a deployed or accepted application.
+[Implementation review](IMPLEMENTATION_REVIEW.md) records fixes and automated evidence; [acceptance](ACCEPTANCE.md) retains the real deployment matrix. A merged implementation is not proof of a published or accepted deployment. Web stays in this repository; Studio integration is outside scope.

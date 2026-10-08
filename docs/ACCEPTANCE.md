@@ -1,6 +1,6 @@
 # Design acceptance matrix
 
-**Future tests and live acceptance criteria; no tests executed by this design task.**
+**Acceptance criteria with partial automated source coverage; live certification pending.** The original design task executed no runtime tests. The later implementation adds regression/protocol/artifact/recovery tests listed in [implementation review](IMPLEMENTATION_REVIEW.md) and [PROGRESS](../PROGRESS.md). Rows below remain requirements until their owning live acceptance is evidenced.
 
 | Case | Expected evidence / outcome |
 | --- | --- |
@@ -66,7 +66,7 @@
 
 ## Review and release gates
 
-Documentation review verifies ownership, entry versions, protocol consistency, example shape, relative links and explicit draft/unimplemented status.
+Documentation review verifies ownership, entry versions, protocol consistency, example shape, relative links and explicit source/release/live status.
 
 Implementation acceptance uses fake providers, isolated DB/resources and crash/duplicate/fault injection. Live enrollment requires actual deployment/artifact/schema/writer inventory and scoped restore/lifecycle validation.
 

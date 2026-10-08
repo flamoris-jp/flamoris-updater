@@ -1,8 +1,8 @@
 # Detailed design: draft 1
 
-Date: 2026-10-08. **Design proposal only. No runtime or deployment is implemented.**
+Date: 2026-10-08. **Reviewed v1 design; source implementation available, deployment acceptance pending.**
 
-The accepted boundaries in [DESIGN.md](DESIGN.md) remain fixed. This draft chooses concrete v1 defaults so implementation can be scoped later. An implementation instruction is still required.
+The accepted boundaries in [DESIGN.md](DESIGN.md) remain fixed. The later implementation instruction authorized Updater-owned source. [Running](RUNNING.md), exported schemas/models and [implementation review](IMPLEMENTATION_REVIEW.md) define exact supported behavior and remaining acceptance gates.
 
 ## Scope and selected defaults
 
@@ -23,7 +23,7 @@ The accepted boundaries in [DESIGN.md](DESIGN.md) remain fixed. This draft choos
 | Self-update | Independent native recovery controller and stable storage format |
 | Bootstrap | Application-owned standalone migrations, then evidence-based enrollment |
 
-No `pyproject.toml`, schema validator, CLI, host agent, CI workflow or deployment unit is added by this design. The [dedicated Updater Web UI](WEB_UI.md) belongs to this repository, independent of Studio, and is also unimplemented.
+The repository now includes packaging, strict validators, CLI/host/helper/controller, CI and the dedicated Web UI. Production service units/configuration require audited deployment bindings.
 
 Python matches the existing service stack; [source inventory](ADOPTION.md) records the checked revisions. The .NET MCP Core/Logging libraries cannot be directly adopted as Python packages. Reuse their boundary principles and the Python MCP SDK patterns already present in the service family; do not create a .NET bridge just to import those packages.
 
@@ -40,7 +40,7 @@ Linux is the first platform. Core contracts remain portable, but Windows/macOS e
 | Host executor | Local policy enforcement, resource fences, bounded lifecycle calls, local step results | Caller-selected command, path, image mount or privilege |
 | Recovery controller | Minimal independent stop/inspect/restore/switch/verify operations | A second updater or an arbitrary shell service |
 
-These are planned package names, not directories currently present. Each application can vendor its own handlers while consuming the common migration support from a pinned package built from this same repository. Exporting a package does not require another repository.
+These packages now exist under `src/`. Each application can vendor its own handlers while consuming the common migration support from a pinned package built from this same repository. Exporting a package does not require another repository.
 
 The coordinator is authoritative for plans and group progress. Host journals are authoritative for local effects. Application journals and actual schemas are authoritative for domain transformations. None can overwrite another authority's unknown state based on a timeout.
 

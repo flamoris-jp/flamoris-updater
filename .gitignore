@@ -24,4 +24,15 @@ tmp/
 temp/
 .cache/
 
-# Language- and runtime-specific ignores belong in each generated repository.
+# Python development and generated artifacts
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+build/
+dist/
+state/
+*.sqlite*
+*.pem

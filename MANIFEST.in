@@ -1,0 +1,5 @@
+include AGENTS.md CONTRIBUTING.md PROGRESS.md SECURITY.md requirements-runtime.lock
+recursive-include docs *.md
+recursive-include scripts *.py
+recursive-include release-notes *.md *.json
+recursive-include tests *.py

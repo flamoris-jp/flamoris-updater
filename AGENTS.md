@@ -70,7 +70,7 @@ Use the repository documentation, Issues, tests, logs, and source code as primar
 
 ## FLAMORIS Updater boundaries
 
-- The repository is documentation-only. docs/DETAILED_DESIGN.md and its linked specifications define draft 1 proposals, including Python 3.12 and package/interface choices; none are implemented. Do not invent build/run commands or describe proposed Manifest/MCP contracts as available.
+- Python 3.12 v1 source is implemented under the 2026-10-08 instruction. Inspect src/, tests/, pyproject.toml, docs/RUNNING.md and PROGRESS.md; distinguish source/CI evidence from publication and live acceptance not performed.
 - Read docs/DESIGN.md, docs/CONTRACTS.md, docs/ROADMAP.md and PROGRESS.md before substantial work.
 - Keep reusable Core and the FLAMORIS wrapper in this repository. Core must not depend on FLAMORIS policy, deployment identities, MCP or Studio.
 - Operator Web UI belongs to Updater in this repository. Do not embed update management in flamoris-studio or add a dependency on its authentication, database or availability. Web, CLI and MCP adapt the same coordinator; user/session authorization belongs to the dedicated Web adapter.
@@ -83,7 +83,7 @@ Use the repository documentation, Issues, tests, logs, and source code as primar
 - MCP exposes planning, authorized plan execution, progress, release notes and update history. Do not implement arbitrary shell or duplicate Server Manager diagnostics.
 - Plans must bind artifacts, targets and preconditions; host execution is least privilege and limited to approved operations.
 - Read docs/REVIEW_LOOP_2026-10-08.md before implementing these contracts. Enforce one consumed plan/Job, immutable operation bindings, durable owner maintenance/authority epochs, confirmed predecessor/barrier receipts and local/global finalization. Preserve blockers through linked recovery ownership transfer; normal adapters cannot update protected coordinator/executor roles under aliases.
-- CI builds signed/digested artifacts. Hosts normally do not build source. Never clone source directly into /opt; use the connected GitHub integration for private repository work, or authenticated gh on a workstation.
+- CI builds digested artifacts; the separate manual protected signing workflow prepares reviewable release candidates. Hosts normally do not build source. Never clone source directly into /opt; use the connected GitHub integration for private repository work, or authenticated gh on a workstation.
 - Public documentation remains portable. Do not copy private hostnames, topology, secrets or deployment-specific paths into product defaults.
 - Update PROGRESS.md as work advances. Distinguish documentation, implemented source, tests/CI, releases and live acceptance.
-- Current authorization is design only. Runtime implementation, schema validators, CI/deployment units, cross-repository migrations and real-host changes require a later implementation task. Read detailed design, migration, execution/recovery and acceptance documents before making any such changes.
+- Current authorization covers Updater implementation, tests/CI, review/correction and merge. Application-specific migrations in other repositories, trust/profile provisioning, release publication and real-host rollout remain separate adoption work. Read detailed design, migration, execution/recovery and acceptance documents before changes.

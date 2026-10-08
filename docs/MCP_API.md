@@ -1,6 +1,6 @@
 # MCP and operator interface v1
 
-**Draft 1.** Names and payloads below are proposed contracts, not callable tools.
+**Reviewed v1 contract with fourteen callable SDK tools at `/mcp`.** `inputs.TOOLS` and exported schemas are authoritative for current payloads; see [running](RUNNING.md). Mutating protected recovery uses the independent CLI.
 
 ## Surface and security
 

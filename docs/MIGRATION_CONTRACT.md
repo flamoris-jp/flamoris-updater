@@ -1,6 +1,6 @@
 # Application migration contract v1
 
-**Draft 1; documentation only.** Application-specific handlers are not implemented here.
+**Reviewed v1 contract; common runner implemented.** Application-specific handlers remain owning-repository work. Actual contracts/models and [running](RUNNING.md) define executable fields.
 
 ## Resource identity and schemas
 
@@ -89,3 +89,7 @@ Standalone tools and coordinator-driven runners honor the same application/resou
 Apply requests bind the exact handler/input/artifact/schema/resource/maintenance epoch and backup/predecessor receipts. Same operation ID with changed binding is rejected even if a caller labels the handler idempotent.
 
 A restoration drill is not ordinary candidate startup. The backup owner supplies a profile-confined scratch namespace, scratch credentials and read/validation-only invocation. Block production DB/resource mounts, production secret identities, provider/network side effects, timers, automatic migration and job replay. Production write credentials are never handed to the scratch validator. If the owner's schema/grant/content checks cannot run with these constraints, restoration verification is unsupported and the update is blocked.
+
+## Source clarification
+
+Every physical resource has one registered owner and all known writers. Shared observed/target schemas must agree; only the owner changes/snapshots/restores it. Consumer guards can reference borrowed schemas after the owner's planned transition. Fresh owner inspections echo a nonce/time and report actual physical binding digests. The common standalone runner uses installed allowlisted handlers and durable intent; an unknown committed SQLite transaction is never replayed. Production proof correctness and baseline transformations remain adoption gates.
