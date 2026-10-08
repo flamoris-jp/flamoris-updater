@@ -603,6 +603,7 @@ def test_application_environment_bytes_are_part_of_configuration_guard(tmp_path)
     [
         ("Memory", 0),
         ("PidsLimit", 0),
+        ("RestartPolicy", {"Name": "no"}),
         ("CapDrop", []),
         ("NetworkMode", "host"),
         ("Tmpfs", {}),
@@ -622,6 +623,7 @@ def test_activation_attestation_refuses_changed_container_policy(field, replacem
         network="isolated",
         memory_bytes=1024,
         pids_limit=32,
+        restart_policy="unless-stopped",
     )
     driver._validate_binding = lambda: None
     driver.preparation_id = lambda _: "prepared"
@@ -642,6 +644,7 @@ def test_activation_attestation_refuses_changed_container_policy(field, replacem
             "NetworkMode": "isolated",
             "Memory": 1024,
             "PidsLimit": 32,
+            "RestartPolicy": {"Name": "unless-stopped"},
             "CapDrop": ["ALL"],
             "SecurityOpt": ["no-new-privileges:true"],
             "Tmpfs": {"/tmp": "rw,noexec,nosuid,nodev,size=268435456,mode=1777"},
@@ -652,3 +655,32 @@ def test_activation_attestation_refuses_changed_container_policy(field, replacem
     inspection["HostConfig"][field] = replacement
     with pytest.raises(UpdateError):
         driver.verify_active(None, "operation")
+
+
+def test_docker_activation_preserves_the_approved_restart_policy():
+    from flamoris_updater_adapters.docker import DockerDriver
+
+    driver = DockerDriver.__new__(DockerDriver)
+    driver.binding = SimpleNamespace(
+        container_name="synthetic",
+        runtime_user="1000:1000",
+        mounts=[],
+        ports=[],
+        network="isolated",
+        memory_bytes=1024,
+        pids_limit=32,
+        restart_policy="unless-stopped",
+        environment_file=None,
+    )
+    driver._validate_binding = lambda: None
+    driver.preparation_id = lambda _: "prepared"
+    driver.journal = SimpleNamespace(get=lambda *_: {"config_digest": digest(b"config")})
+    driver._image = lambda _: "trusted-locator"
+    driver._exists = lambda: False
+    calls = []
+    driver._docker = lambda *args, **_: calls.append(args) or b""
+
+    driver.activate(SimpleNamespace(artifact=None), "operation")
+
+    create = calls[0]
+    assert create[create.index("--restart") + 1] == "unless-stopped"
