@@ -199,14 +199,15 @@ def executor(path, root_only=True):
             )
             drivers[p.id] = DockerDriver(OCIStore(fetcher, binding, cfg.quota), binding, journal)
     store = releases(journal, cfg.release_keys, cfg.release_sources, clock)
+    signing = signer(cfg.host_id, cfg.signer_private_file)
     host = HostExecutor(
         cfg.host_id,
         cfg.domain_id,
         journal,
         profiles,
         store,
-        ApplicationBackend(owners, drivers),
-        signer(cfg.host_id, cfg.signer_private_file),
+        ApplicationBackend(owners, drivers, signing),
+        signing,
         pinned_keys(cfg.authorities),
         pinned_keys(cfg.receipt_keys),
         clock,

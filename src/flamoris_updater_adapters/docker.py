@@ -213,7 +213,8 @@ class DockerDriver:
             not re.fullmatch(r"[a-z0-9]+(?:[._/-][a-z0-9]+)*", b.repository)
             or not re.fullmatch(r"[1-9][0-9]*:[0-9]+", b.runtime_user)
             or len(b.container_name) > 64
-            or b.network == "host"
+            or (b.network == "host" and (not b.allow_host_network or b.ports))
+            or len({(p.host_ip, p.host_port) for p in b.ports}) != len(b.ports)
         ):
             raise UpdateError("invalid_profile")
         directory = Path(b.docker_config_directory)
@@ -355,6 +356,54 @@ class DockerDriver:
             if obj["containers"][0]["State"]["Running"]:
                 raise UpdateError("outcome_unknown")
 
+    def source_state(self):
+        if not self._exists():
+            raise UpdateError("entry_required")
+        obj = loads(
+            b'{"containers":'
+            + self._docker("container", "inspect", self.binding.container_name)
+            + b"}"
+        )
+        if len(obj["containers"]) != 1 or obj["containers"][0]["State"]["Running"]:
+            raise UpdateError("legacy_not_quiescent")
+        # Bind the complete inspected configuration, but never disclose its
+        # environment values or credentials in a plan or public diagnostics.
+        from flamoris_update_core.wire import dumps
+
+        container = obj["containers"][0]
+        return {
+            "container_id": container["Id"],
+            "image_id": container["Image"],
+            "configuration_digest": digest(dumps(container["Config"])),
+            "host_digest": digest(dumps(container["HostConfig"])),
+            "mounts_digest": digest(dumps(container["Mounts"])),
+        }
+
+    def verify_active(self, manifest, operation_id):
+        self._validate_binding()
+        prepared = self.journal.get("docker_prepared", self.preparation_id(manifest))
+        if prepared is None:
+            raise UpdateError("untrusted_release")
+        locator = self._image(prepared)
+        obj = loads(
+            b'{"containers":'
+            + self._docker("container", "inspect", self.binding.container_name)
+            + b"}"
+        )
+        if len(obj["containers"]) != 1:
+            raise UpdateError("outcome_unknown")
+        c = obj["containers"][0]
+        if (
+            c["Image"] != prepared["config_digest"]
+            or c["Config"]["Image"] != locator
+            or not c["State"]["Running"]
+            or c["Config"].get("User") != self.binding.runtime_user
+            or c["Config"].get("Labels", {}).get("flamoris.updater.operation") != operation_id
+            or c["HostConfig"].get("ReadonlyRootfs") is not True
+            or c["HostConfig"].get("Privileged") is not False
+        ):
+            raise UpdateError("outcome_unknown")
+
     def activate(self, manifest, operation_id):
         self._validate_binding()
         prepared = self.journal.get("docker_prepared", self.preparation_id(manifest))
@@ -372,6 +421,8 @@ class DockerDriver:
             "--user",
             self.binding.runtime_user,
             "--read-only",
+            "--tmpfs",
+            "/tmp:rw,noexec,nosuid,nodev,size=268435456,mode=1777",
             "--no-healthcheck",
             "--cap-drop",
             "ALL",
@@ -386,6 +437,8 @@ class DockerDriver:
             "--label",
             "flamoris.updater.operation=" + operation_id,
         ]
+        for port in self.binding.ports:
+            argv.extend(["--publish", f"{port.host_ip}:{port.host_port}:{port.container_port}/tcp"])
         for mount in self.binding.mounts:
             argv.extend(
                 [

@@ -20,6 +20,7 @@ flamoris-updater-host = "flamoris_updater_adapters.host_api:main"
 flamoris-updater-helper = "flamoris_updater_adapters.helper:main"
 flamoris-updater-recovery = "flamoris_updater_adapters.recovery_cli:main"
 flamoris-update-migration = "flamoris_update_migration.runner:main"
+flamoris-updater-entry = "flamoris_updater_adapters.entry_cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

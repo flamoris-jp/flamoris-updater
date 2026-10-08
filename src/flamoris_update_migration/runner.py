@@ -7,8 +7,8 @@ from typing import Protocol
 
 from flamoris_update_core.contracts import PROOFS, OwnerRequest, OwnerResult
 from flamoris_update_core.errors import UpdateError
+from flamoris_update_core.journal import exclusive
 from flamoris_update_core.wire import decode, digest, dumps
-from flamoris_updater_adapters.journal import exclusive
 
 
 class Application(Protocol):

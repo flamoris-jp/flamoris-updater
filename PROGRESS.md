@@ -32,3 +32,20 @@ AI-side baseline v0.1 → managed v1.0; GPU Node Manager v1.1 → managed v1.2; 
 A1 application-specific transitions/maintenance owners, A2 release-owner trust/publication and D1 private inventory/profile provisioning/real rollout remain separate. Root helper/executor and recovery-controller self replacement require bootstrap maintenance; only the coordinator has the protected automated self route. No real host, application data, other repository, production keys or published release was changed by this implementation task.
 
 Read [running](docs/RUNNING.md), [roadmap](docs/ROADMAP.md), [adoption](docs/ADOPTION.md) and [acceptance](docs/ACCEPTANCE.md) before deployment. Source/CI completion is not live acceptance.
+
+## Application adoption work — 2026-10-08
+
+The subsequent user request authorizes implementation/review of seven application
+repositories and an independent entry updater. Read [application entry](docs/APPLICATION_ENTRY.md).
+Source now includes an MCP-independent SDK distribution, durable application
+admission, separate mTLS Owner endpoint, bounded tree snapshots/isolated copies,
+PostgreSQL dump/isolated restore and a standalone plan/apply/status CLI. The seven
+application-specific owner hooks remain in their owning repositories.
+
+Local checkpoint: 122 tests passed; 2 real PostgreSQL integration tests skipped
+because this work environment cannot run the required non-root PostgreSQL/user
+namespace setup. Those tests have a dedicated real isolated-restore CI job.
+This is an implementation checkpoint, not completed review/CI or restore evidence.
+Read-only live observations were used during adoption research; no live changes
+were made. Signed releases, private trust/profile provisioning, enrollment and
+host rollout remain unperformed. Adoption PRs and final review/CI are pending.

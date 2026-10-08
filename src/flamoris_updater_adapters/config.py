@@ -134,6 +134,20 @@ class MountBinding(Model):
     read_only: bool
 
 
+class PortBinding(Model):
+    host_ip: str
+    host_port: int = Field(gt=0, lt=65536)
+    container_port: int = Field(gt=0, lt=65536)
+
+    @model_validator(mode="after")
+    def address(self):
+        import ipaddress
+
+        if ipaddress.ip_address(self.host_ip).version != 4:
+            raise ValueError("Explicit IPv4 binding required")
+        return self
+
+
 class DockerBinding(Model):
     kind: Literal["docker"]
     deployment_id: ID
@@ -146,6 +160,8 @@ class DockerBinding(Model):
     daemon_socket: str
     daemon_data_directory: str
     network: ID
+    allow_host_network: bool = False
+    ports: list[PortBinding] = Field(default_factory=list, max_length=64)
     runtime_user: str
     memory_bytes: int = Field(gt=0)
     pids_limit: int = Field(gt=0, le=65536)

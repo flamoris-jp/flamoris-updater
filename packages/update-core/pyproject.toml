@@ -1,0 +1,24 @@
+[build-system]
+requires = ["hatchling>=1.27,<2"]
+build-backend = "hatchling.build"
+
+[project]
+name = "flamoris-update-core"
+version = "1.0.0"
+description = "MCP-independent update contracts and application admission"
+requires-python = ">=3.11"
+license = "Apache-2.0"
+dependencies = ["pydantic>=2.12,<3"]
+
+[project.optional-dependencies]
+owner = ["cryptography>=46,<51"]
+postgres = ["psycopg[binary]>=3.2,<4"]
+
+[tool.hatch.build.targets.wheel]
+bypass-selection = true
+
+[tool.hatch.build.hooks.custom]
+path = "build_hook.py"
+
+[tool.hatch.build.targets.sdist]
+include = ["pyproject.toml", "build_hook.py", "LICENSE"]
