@@ -149,3 +149,20 @@ def test_reopen_without_verified_activation_is_rejected(tmp_path):
     with pytest.raises(UpdateError):
         run(owner, target, "reopen_admission")
     assert owner.gate.state()["closed"]
+
+
+def test_configuration_revision_cannot_change_during_claim(tmp_path):
+    owner, target, _, _ = configured(tmp_path)
+    revision = {"value": digest(b"original")}
+    owner.inspect_domain = lambda *_: DomainState(
+        schemas={"database": "db-1"},
+        active_work=False,
+        unknown_work=False,
+        configuration_digest=revision["value"],
+    )
+    run(owner, target, "begin")
+    revision["value"] = digest(b"changed")
+    with pytest.raises(UpdateError):
+        run(owner, target, "close_admission")
+    assert owner.gate.state()["epoch"] == 0
+    assert owner.journal.get("application_claim", owner.profile.id)["job_id"] == "entry-job"

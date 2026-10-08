@@ -107,6 +107,22 @@ class ApplicationOwner:
             raise UpdateError("domain_invalid")
         return result
 
+    def configuration_revision(self, domain=None):
+        domain = self.domain() if domain is None else domain
+        return digest(
+            dumps(
+                {
+                    "profile": self.revision,
+                    "application": domain.configuration_digest,
+                    "credentials": {
+                        key: digest(protected_read(Path(resource.binding.dsn_file), private=True))
+                        for key, resource in self.resources.items()
+                        if isinstance(resource, PostgresResource)
+                    },
+                }
+            )
+        )
+
     def inspect(self, nonce: str):
         domain, gate = self.domain(), self.gate.state()
         installed = self.journal.get("application_installation", self.profile.id)
@@ -128,21 +144,7 @@ class ApplicationOwner:
             observed_at=int(time.time()),
             observation_id=nonce,
             profile_digest=digest(dumps(self.profile)),
-            config_revision=digest(
-                dumps(
-                    {
-                        "profile": self.revision,
-                        "application": domain.configuration_digest,
-                        "credentials": {
-                            key: digest(
-                                protected_read(Path(resource.binding.dsn_file), private=True)
-                            )
-                            for key, resource in self.resources.items()
-                            if isinstance(resource, PostgresResource)
-                        },
-                    }
-                )
-            ),
+            config_revision=self.configuration_revision(domain),
             journal_revision=gate["epoch"],
             active_work=domain.active_work or gate["active_work"],
             unknown_work=domain.unknown_work or gate["unknown_work"] or unresolved,
@@ -162,6 +164,7 @@ class ApplicationOwner:
             or claim["plan_digest"] != request.plan_digest
             or job["plan_digest"] != request.plan_digest
             or job["artifact_digest"] != request.artifact_digest
+            or job["config_revision"] != self.configuration_revision()
             or job["physical_bindings"]
             != {k: r.binding_digest() for k, r in self.resources.items()}
         ):
@@ -280,6 +283,7 @@ class ApplicationOwner:
                     {
                         "plan_digest": r.plan_digest,
                         "artifact_digest": r.artifact_digest,
+                        "config_revision": self.configuration_revision(domain),
                         "entry": r.arguments.get("standalone_transition") is True,
                         "physical_bindings": {
                             k: resource.binding_digest() for k, resource in self.resources.items()

@@ -393,6 +393,26 @@ class DockerDriver:
         if len(obj["containers"]) != 1:
             raise UpdateError("outcome_unknown")
         c = obj["containers"][0]
+        host = c["HostConfig"]
+        mounts = {
+            (m.get("Type"), m.get("Source"), m.get("Destination"), m.get("RW"))
+            for m in c.get("Mounts", [])
+        }
+        expected_mounts = {
+            ("bind", m.source, m.target, not m.read_only) for m in self.binding.mounts
+        }
+        ports = {}
+        for port in self.binding.ports:
+            ports.setdefault(f"{port.container_port}/tcp", []).append(
+                {"HostIp": port.host_ip, "HostPort": str(port.host_port)}
+            )
+
+        def normalize_ports(values):
+            return {
+                key: sorted((item["HostIp"], item["HostPort"]) for item in members)
+                for key, members in (values or {}).items()
+            }
+
         if (
             c["Image"] != prepared["config_digest"]
             or c["Config"]["Image"] != locator
@@ -401,6 +421,20 @@ class DockerDriver:
             or c["Config"].get("Labels", {}).get("flamoris.updater.operation") != operation_id
             or c["HostConfig"].get("ReadonlyRootfs") is not True
             or c["HostConfig"].get("Privileged") is not False
+            or mounts != expected_mounts
+            or len(c.get("Mounts", [])) != len(expected_mounts)
+            or host.get("NetworkMode") != self.binding.network
+            or normalize_ports(host.get("PortBindings")) != normalize_ports(ports)
+            or host.get("Memory") != self.binding.memory_bytes
+            or host.get("PidsLimit") != self.binding.pids_limit
+            or host.get("CapDrop") != ["ALL"]
+            or host.get("CapAdd")
+            or host.get("SecurityOpt") not in [["no-new-privileges"], ["no-new-privileges:true"]]
+            or host.get("Tmpfs") != {"/tmp": "rw,noexec,nosuid,nodev,size=268435456,mode=1777"}
+            or any(
+                host.get(key)
+                for key in ["Devices", "DeviceRequests", "VolumesFrom", "Links", "PidMode"]
+            )
         ):
             raise UpdateError("outcome_unknown")
 

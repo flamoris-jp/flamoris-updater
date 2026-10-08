@@ -76,8 +76,20 @@ def credential_files(cfg):
     def visit(obj):
         if isinstance(obj, dict):
             for name, value in obj.items():
-                if name in {"ca_file", "cert_file", "key_file", "signer_private_file"} and value:
-                    files.append((value, name in {"key_file", "signer_private_file"}))
+                if (
+                    name
+                    in {
+                        "ca_file",
+                        "cert_file",
+                        "key_file",
+                        "signer_private_file",
+                        "environment_file",
+                    }
+                    and value
+                ):
+                    files.append(
+                        (value, name in {"key_file", "signer_private_file", "environment_file"})
+                    )
                 elif isinstance(value, (dict, list)):
                     visit(value)
         elif isinstance(obj, list):

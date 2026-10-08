@@ -74,7 +74,11 @@ Tree snapshots refuse symlinks, hardlinks, FIFOs, devices and privileged modes.
 They bound bytes and include at most 4096 members (directories included), then
 verify an isolated copy's bytes, ownership and permissions. Model/cache trees
 using links are not included by assumption; bind preserved external resources
-through a reviewed profile rather than copying or normalizing them.
+through a reviewed profile rather than copying or normalizing them. The Owner
+account must be able to reproduce every recorded UID/GID and mode in its private
+backup directory. Mixed ownership that it cannot preserve is unsupported; do not
+change source ownership to make backup pass. File and directory metadata are
+fsynced before a snapshot receipt is issued.
 
 PostgreSQL backup fences writers, records data/schema/ACL/role membership and
 verifies a real restore into a disposable local cluster inside bubblewrap's
@@ -120,7 +124,9 @@ flamoris-updater-entry --config /protected/entry.json status --job ENTRY_JOB_ID
 
 The 15-minute plan binds actual observation, resource/profile/configuration,
 source state and signed target. Apply rechecks it before durable claims/intents.
-It prepares, claims the owner job, closes/drains admission, stops, snapshots,
+It rechecks protected Helper/Entry configuration, TLS/key and environment-file
+bytes before each step. The Owner also binds its application configuration and
+DSN bytes to the claimed Job. It prepares, claims the owner job, closes/drains admission, stops, snapshots,
 verifies isolated restore, activates, validates, reopens and finalizes. Activation
 requires both host-signed artifact evidence and matching maintenance boot.
 

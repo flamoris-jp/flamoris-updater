@@ -49,3 +49,21 @@ This is an implementation checkpoint, not completed review/CI or restore evidenc
 Read-only live observations were used during adoption research; no live changes
 were made. Signed releases, private trust/profile provisioning, enrollment and
 host rollout remain unperformed. Adoption PRs and final review/CI are pending.
+
+
+### Adoption review checkpoint
+
+Updater PR #6 tracks the standalone application-entry implementation. CI run
+37764725423 at fadd7358e630af6cb932904e62fe50e3cae9f45a passed the real PostgreSQL 14
+isolated restore, ordinary verification/SDK build, and amd64/arm64 bundles.
+The restore comparison correction scopes source and cloned role memberships
+identically and canonicalizes timestamp/interval/float serialization.
+
+Further local review corrected protected environment/configuration checks between
+entry effects, application Job configuration binding, snapshot directory/metadata
+durability, and Docker activation attestation of mounts/ports/security/limits.
+Local suite: **132 passed, 2 real PostgreSQL tests skipped**; those skipped tests
+are exercised by CI. These corrections require final CI at their own revision.
+Seven application owner/retained-state tests are added in their owning repos;
+matched SDK/dependency pins and application CI are being prepared.
+No publication, trust provisioning, live writes or enrollment has occurred.

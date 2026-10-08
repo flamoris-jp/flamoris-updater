@@ -579,3 +579,76 @@ def test_restore_verification_cannot_substitute_another_owners_snapshot(environm
     e.coordinator.run_job(job["job_id"])
     assert e.coordinator.job("operator", job["job_id"])["state"] == "unknown"
     assert "apply_step" not in e.backend.calls
+
+
+def test_application_environment_bytes_are_part_of_configuration_guard(tmp_path):
+    from flamoris_updater_adapters.runtime import configuration_guard, credential_files
+
+    configuration = tmp_path / "host.json"
+    configuration.write_bytes(b"protected-host")
+    environment = tmp_path / "application.env"
+    environment.write_bytes(b"SETTING=first")
+    environment.chmod(0o600)
+    cfg = SimpleNamespace(model_dump=lambda: {"binding": {"environment_file": str(environment)}})
+    guard = configuration_guard(configuration, files=credential_files(cfg))
+    guard()
+    environment.write_bytes(b"SETTING=second")
+    with pytest.raises(UpdateError) as error:
+        guard()
+    assert error.value.code == "policy_changed"
+
+
+@pytest.mark.parametrize(
+    "field,replacement",
+    [
+        ("Memory", 0),
+        ("PidsLimit", 0),
+        ("CapDrop", []),
+        ("NetworkMode", "host"),
+        ("Tmpfs", {}),
+        ("PortBindings", {"80/tcp": [{"HostIp": "0.0.0.0", "HostPort": "80"}]}),
+        ("Devices", [{"PathOnHost": "/unapproved"}]),
+    ],
+)
+def test_activation_attestation_refuses_changed_container_policy(field, replacement):
+    from flamoris_updater_adapters.docker import DockerDriver
+
+    driver = DockerDriver.__new__(DockerDriver)
+    driver.binding = SimpleNamespace(
+        container_name="synthetic",
+        runtime_user="1000:1000",
+        mounts=[],
+        ports=[],
+        network="isolated",
+        memory_bytes=1024,
+        pids_limit=32,
+    )
+    driver._validate_binding = lambda: None
+    driver.preparation_id = lambda _: "prepared"
+    driver.journal = SimpleNamespace(get=lambda *_: {"config_digest": digest(b"config")})
+    driver._image = lambda _: "trusted-locator"
+    inspection = {
+        "Image": digest(b"config"),
+        "State": {"Running": True},
+        "Mounts": [],
+        "Config": {
+            "Image": "trusted-locator",
+            "User": "1000:1000",
+            "Labels": {"flamoris.updater.operation": "operation"},
+        },
+        "HostConfig": {
+            "ReadonlyRootfs": True,
+            "Privileged": False,
+            "NetworkMode": "isolated",
+            "Memory": 1024,
+            "PidsLimit": 32,
+            "CapDrop": ["ALL"],
+            "SecurityOpt": ["no-new-privileges:true"],
+            "Tmpfs": {"/tmp": "rw,noexec,nosuid,nodev,size=268435456,mode=1777"},
+        },
+    }
+    driver._docker = lambda *_: dumps([inspection])
+    driver.verify_active(None, "operation")
+    inspection["HostConfig"][field] = replacement
+    with pytest.raises(UpdateError):
+        driver.verify_active(None, "operation")

@@ -192,7 +192,12 @@ class TreeResource:
             if (item["uid"], item["gid"]) != (os.geteuid(), os.getegid()):
                 os.chown(target, item["uid"], item["gid"])
         for item in reversed(expected):
-            (tree / item["path"]).chmod(item["mode"])
+            fd = self._open(tree, item["path"], os.O_RDONLY)
+            try:
+                os.fchmod(fd, item["mode"])
+                os.fsync(fd)
+            finally:
+                os.close(fd)
         if self.inventory(tree) != expected or self.inventory() != expected:
             raise UpdateError("resource_changed")
         raw = dumps({"resource": self.binding.id, "members": expected})

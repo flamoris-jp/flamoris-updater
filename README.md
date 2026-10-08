@@ -46,7 +46,7 @@ Authenticate GitHub CLI first when needed. CI runs the checks and builds/verifie
 
 ## Running
 
-Five installed entry points are available:
+Six installed entry points are available:
 
 ```bash
 flamoris-updater --help
@@ -54,6 +54,7 @@ flamoris-updater-host --help
 flamoris-updater-helper --help
 flamoris-updater-recovery --help
 flamoris-update-migration --help
+flamoris-updater-entry --help
 ```
 
 Follow [running and release procedures](docs/RUNNING.md) for protected configuration, mTLS, identities, Web login, exact-plan authorization and independent recovery. There are no default credentials or production host bindings. Exported schemas and models define the actual accepted JSON fields; design examples with shortened digests remain illustrative.

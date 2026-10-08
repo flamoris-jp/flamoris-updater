@@ -15,7 +15,7 @@ from flamoris_update_core.wire import decode, digest, dumps
 
 from .config import HelperConfig, load, protected_read
 from .journal import durable_write, exclusive
-from .runtime import executor, pinned_keys
+from .runtime import configuration_guard, executor, pinned_keys
 
 
 class EntryConfiguration(Model):
@@ -53,6 +53,7 @@ class EntryTransition:
         self.driver = host.backend.drivers[profile.id]
 
     def plan(self):
+        self.host.guard()
         p, target = self.profile, self.target
         gpu = p.application_id == "flamoris-gpu-node-manager"
         if (
@@ -142,6 +143,7 @@ class EntryTransition:
                     "reopen_admission",
                     "release",
                 ]:
+                    self.host.guard()
                     with journal.transaction() as db:
                         job = journal.get("entry_job", plan.id, db)
                         journal.put(
@@ -184,6 +186,7 @@ class EntryTransition:
                         )
                         journal.event(db, "entry_result", plan.id, operation)
                     journal.flush_export()
+                self.host.guard()
                 observation = self.host.inspect(self.profile.id)
                 if (
                     observation.manifest_digest != plan.manifest_digest
@@ -242,6 +245,18 @@ def configured(path):
         "release",
     )
     revision = digest(dumps({"entry": cfg.model_dump(), "helper": digest(helper_raw)}))
+    helper_guard = host.guard
+    entry_guard = configuration_guard(
+        path,
+        root_only=True,
+        files=[(cfg.manifest_file, False), (cfg.manifest_file + ".sig", False)],
+    )
+
+    def guard():
+        helper_guard()
+        entry_guard()
+
+    host.guard = guard
     return EntryTransition(
         cfg,
         host,

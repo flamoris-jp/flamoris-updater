@@ -60,6 +60,7 @@ def transition(tmp_path):
         backend=backend,
         inspect=lambda _: owner.inspect("fresh"),
         clock=lambda: 2000000000,
+        guard=lambda: None,
     )
     cfg = EntryConfiguration(
         helper_config_file="/protected/helper.json",
@@ -109,3 +110,20 @@ def test_activation_failure_preserves_closed_gate_and_claims(tmp_path):
         assert db.execute("SELECT 1 FROM claims WHERE job_id=?", (plan.id,)).fetchone()
     with pytest.raises(UpdateError):
         entry.apply(plan, digest(dumps(plan)))
+
+
+def test_configuration_change_between_steps_keeps_claim_and_stops_effects(tmp_path):
+    entry, owner, driver, _ = transition(tmp_path)
+    plan = entry.plan()
+
+    def changed():
+        raise UpdateError("policy_changed")
+
+    driver.prepare = lambda _: setattr(entry.host, "guard", changed)
+    with pytest.raises(UpdateError) as error:
+        entry.apply(plan, digest(dumps(plan)))
+    assert error.value.code == "policy_changed"
+    assert owner.journal.get("application_claim", owner.profile.id) is None
+    assert entry.host.journal.get("entry_job", plan.id)["phase"] == "recovery_required"
+    with entry.host.journal.connection() as db:
+        assert db.execute("SELECT 1 FROM claims WHERE job_id=?", (plan.id,)).fetchone()
