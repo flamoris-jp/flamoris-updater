@@ -47,7 +47,7 @@ For each shared resource record the consistency group, external effects and all 
 
 A portable public example uses fictitious IDs only. Do not publish private topology, actual hostpaths, secrets or operational receipts here.
 
-## Future implementation work packages
+## Work packages and implementation boundary
 
 These are scoped backlog proposals, not created Issues or implementation authorization.
 
@@ -71,3 +71,7 @@ No live acceptance, trusted signing keys or release-ready status is implied by t
 Private profiles must resolve dependency providers/incoming consumers, physical resource aliases, one resource owner and all restart/timer paths enforcing durable maintenance epochs. Application startup must support controlled maintenance validation rather than automatically migrating or replaying jobs.
 
 Recovery-controller bootstrap provisions the normal coordinator epoch, outage-independent recovery CLI and supported executor handoff. Entry evidence is typed (transition, installation or supported adoption), and each is re-inspected before inventory commit. Missing contracts keep automatic updates blocked; this review adds no application implementation or live validation.
+
+## Source implementation checkpoint
+
+Updater-owned U1–U7 source is implemented and tested; see [roadmap](ROADMAP.md) and [implementation review](IMPLEMENTATION_REVIEW.md). The table above preserves package ownership and adoption gates. A1 application-specific contracts/entry handlers, A2 production keys/catalogs/publication and D1 real inventory/profile provisioning/rollout remain pending. No live system, other repository or production credential was modified by this implementation.

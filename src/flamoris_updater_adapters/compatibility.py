@@ -31,6 +31,15 @@ def inspect_control(directory):
             or db.execute("PRAGMA quick_check").fetchone()[0] != "ok"
         ):
             raise ValueError("unsupported journal")
+        if db.execute("SELECT value FROM meta WHERE key='format'").fetchone() != ("1",):
+            raise ValueError("unsupported control format")
+        if {
+            r[0]
+            for r in db.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"
+            )
+        } != set(TABLES):
+            raise ValueError("unsupported control tables")
         for table, columns in TABLES.items():
             if [row[1] for row in db.execute(f"PRAGMA table_info({table})")] != columns:
                 raise ValueError("unsupported control schema")

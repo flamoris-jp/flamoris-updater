@@ -50,6 +50,23 @@ class AuthStore:
             self.journal.event(db, "token_issued", subject)
         return token
 
+    def revoke_token(self, subject: str, token: str):
+        identity = token_hash(token)
+        with self.journal.transaction() as db:
+            if self.journal.meta("mode", db) != "active":
+                raise UpdateError("busy")
+            record = self.journal.get("token", identity, db)
+            if record is None or record["subject"] != subject:
+                raise UpdateError("forbidden")
+            self.journal.put("token", identity, {**record, "revoked": True}, db)
+            self.journal.event(db, "token_revoked", subject)
+
+    def disable_user(self, subject: str):
+        principal = self.journal.get("principal", subject)
+        if principal is None:
+            raise UpdateError("forbidden")
+        self.authority.provision(subject, principal["roles"], principal["targets"], active=False)
+
     def bearer(self, token: str) -> str:
         if not isinstance(token, str) or not 16 <= len(token) <= 256:
             raise UpdateError("unauthorized")

@@ -226,8 +226,30 @@ class DockerDriver:
             raise UpdateError("unsafe_storage")
         for mount in b.mounts:
             source, target = Path(mount.source), Path(mount.target)
+            protected = [
+                Path(x)
+                for x in [
+                    "/etc",
+                    "/usr",
+                    "/bin",
+                    "/sbin",
+                    "/lib",
+                    "/lib64",
+                    "/boot",
+                    "/root",
+                    "/proc",
+                    "/sys",
+                    "/dev",
+                    "/run",
+                    "/var/run",
+                    b.daemon_socket,
+                    b.daemon_data_directory,
+                    b.docker_config_directory,
+                ]
+            ]
             if (
-                not source.is_absolute()
+                any(source.is_relative_to(x) or x.is_relative_to(source) for x in protected)
+                or not source.is_absolute()
                 or not target.is_absolute()
                 or "," in mount.source + mount.target
                 or any(c in mount.source + mount.target for c in "\n\r\x00")
@@ -243,7 +265,14 @@ class DockerDriver:
 
     def _docker(self, *args, timeout=120):
         return self.command(
-            ["/usr/bin/docker", "--config", self.binding.docker_config_directory, *args],
+            [
+                "/usr/bin/docker",
+                "--host",
+                "unix://" + self.binding.daemon_socket,
+                "--config",
+                self.binding.docker_config_directory,
+                *args,
+            ],
             timeout=timeout,
         )
 
@@ -263,6 +292,7 @@ class DockerDriver:
             or images[0].get("Os") + "/" + images[0].get("Architecture") != prepared["platform"]
             or locator not in images[0].get("RepoDigests", [])
             or images[0].get("RootFS", {}).get("Layers") != prepared["diff_ids"]
+            or images[0].get("Config", {}).get("Volumes")
         ):
             raise UpdateError("untrusted_release")
         return locator
@@ -342,6 +372,7 @@ class DockerDriver:
             "--user",
             self.binding.runtime_user,
             "--read-only",
+            "--no-healthcheck",
             "--cap-drop",
             "ALL",
             "--security-opt",

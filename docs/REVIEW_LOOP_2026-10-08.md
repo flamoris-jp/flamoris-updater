@@ -1,5 +1,7 @@
 # Design review and correction loop
 
+> Historical design review before the later implementation authorization. Current source/testing/adoption state is in [PROGRESS](../PROGRESS.md) and [implementation review](IMPLEMENTATION_REVIEW.md). The implementation hold below describes that earlier task only.
+
 Date: 2026-10-08. Base: `3fbe5efe65c465b93d4e12c99712ee755c883bcc` (dedicated Web correction).
 
 **Documentation-only self-review: two review/correction rounds followed by a final consistency pass.** No independent reviewer, executable implementation, runtime test or deployment acceptance is claimed.

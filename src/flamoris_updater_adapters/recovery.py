@@ -13,7 +13,7 @@ class RecoveryController:
 
     def __init__(self, coordinator, signer, control_deployment_id, current_manifest, readiness):
         self.c, self.j, self.signer = coordinator, coordinator.journal, signer
-        self.target, self.current_manifest, self.readiness = (
+        self.target, self.bootstrap_manifest, self.readiness = (
             control_deployment_id,
             current_manifest,
             readiness,
@@ -21,6 +21,11 @@ class RecoveryController:
         if coordinator.profiles[control_deployment_id].role != "coordinator":
             raise UpdateError("invalid_profile")
         self.c.signer = signer
+
+    @property
+    def current_manifest(self):
+        accepted = self.j.get("control_inventory", self.target)
+        return accepted["manifest_digest"] if accepted else self.bootstrap_manifest
 
     def _call(self, host_id, action, identity, epoch=None, **arguments):
         identity = "ctl-" + digest(identity.encode()).removeprefix("sha256:")[:48]
@@ -56,12 +61,13 @@ class RecoveryController:
         profile = self.c.profiles[self.target]
         return self._call(profile.host_id, action, identity, deployment_id=self.target, **arguments)
 
-    def gate(self, identity, allow_blocked):
+    def gate(self, identity, allow_blocked, finalizing_child=None):
         with self.j.transaction() as db:
             if not allow_blocked and db.execute("SELECT 1 FROM claims LIMIT 1").fetchone():
                 raise UpdateError("busy")
             if db.execute(
-                "SELECT 1 FROM jobs WHERE state NOT IN ('succeeded','failed_safe','cancelled_safe','unknown','recovery_required') LIMIT 1"
+                "SELECT 1 FROM jobs WHERE state NOT IN ('succeeded','failed_safe','cancelled_safe','unknown','recovery_required') AND NOT (state='finalizing' AND id=?) LIMIT 1",
+                (finalizing_child or "",),
             ).fetchone():
                 raise UpdateError("busy")
             db.execute("UPDATE meta SET value='recovery' WHERE key='mode'")
@@ -177,6 +183,50 @@ class RecoveryController:
         if set(targets) != set(parent["targets"]):
             raise UpdateError("forbidden", "Recovery must retain the complete parent's scope")
         with exclusive(self.j.directory / "controller.lock"):
+            # A fully verified child may need only the protected publication transaction.
+            # Recovering that transaction does not replay effects or advance its bound epoch.
+            with self.j.transaction() as db:
+                previous_plan = self.c._request(
+                    db,
+                    operator,
+                    "plan",
+                    request_key,
+                    {
+                        "action": "verify_recovery" if verify_only else "recover",
+                        "targets": targets,
+                        "parent_job_id": parent_job_id,
+                    },
+                )
+            if previous_plan and approved_digest is not None:
+                result = self.c.get_plan(operator, previous_plan)
+                if result["plan_digest"] != approved_digest:
+                    raise UpdateError("stale_plan")
+                if result["consumed_job_id"]:
+                    child = self.c.job(operator, result["consumed_job_id"])
+                    if child["state"] == "finalizing" and not verify_only:
+                        self.gate(identity, True, child["job_id"])
+                        with exclusive(self.j.directory / "coordinator.lock"):
+                            plan, raw = self.c.plan(previous_plan)
+                            if plan.coordinator_epoch != int(self.j.meta("epoch")):
+                                raise UpdateError("stale_authority")
+                            with self.j.connection() as db:
+                                info = loads(
+                                    db.execute(
+                                        "SELECT payload FROM jobs WHERE id=?", (child["job_id"],)
+                                    ).fetchone()[0]
+                                )
+                            self.c.authority.check(
+                                operator,
+                                info["authorization_id"],
+                                plan,
+                                digest(raw),
+                                admitted=True,
+                            )
+                            self._finalize_recovery(operator, parent_job_id, identity, child, plan)
+                        return self.c.job(operator, child["job_id"])
+                    handoff = self.j.get("ownership_handoff", child["job_id"])
+                    if not handoff or handoff["state"] == "committed":
+                        return child
             self.gate(identity, True)
             with exclusive(self.j.directory / "coordinator.lock"):
                 try:
@@ -260,48 +310,50 @@ class RecoveryController:
                     self.c.run_job(child["job_id"])
                     child = self.c.job(operator, child["job_id"])
                     if child["state"] == "finalizing" and not verify_only:
-                        inventory = {}
-                        for target in plan.targets:
-                            observation = self.c.hosts[self.c.profiles[target].host_id].inspect(
-                                target
-                            )
-                            if (
-                                observation.unknown_work
-                                or observation.manifest_digest != plan.targets[target]
-                                or observation.schemas
-                                != self.c.releases.get(plan.targets[target]).schema_targets
-                            ):
-                                raise UpdateError("outcome_unknown")
-                            inventory[target] = observation.model_dump()
-                        for host_id in plan.hosts:
-                            self._call(
-                                host_id,
-                                "resolve_parent",
-                                identity + "-r-" + host_id,
-                                parent_job_id=parent_job_id,
-                                child_job_id=child["job_id"],
-                            )
-                        with self.j.transaction() as db:
-                            for target, observed in inventory.items():
-                                self.j.put("inventory", target, observed, db)
-                            db.execute("DELETE FROM claims WHERE job_id=?", (child["job_id"],))
-                            self.j.put(
-                                "parent_resolution",
-                                parent_job_id,
-                                {"child_job_id": child["job_id"], "resolved": True},
-                                db,
-                            )
-                            db.execute(
-                                "UPDATE jobs SET state='succeeded',revision=revision+1 WHERE id=?",
-                                (child["job_id"],),
-                            )
-                            self.j.event(db, "parent_recovered", parent_job_id)
-                            self.j.event(db, "job_accepted", child["job_id"], "succeeded")
-                        self.j.flush_export()
+                        self._finalize_recovery(operator, parent_job_id, identity, child, plan)
                     return self.c.job(operator, child["job_id"])
                 finally:
                     with self.j.transaction() as db:
                         db.execute("UPDATE meta SET value='recovery' WHERE key='mode'")
+
+    def _finalize_recovery(self, operator, parent_job_id, identity, child, plan):
+        self.c.guard()
+        self.c.authority.require(operator, "recover", plan.targets)
+        inventory = {}
+        for target in plan.targets:
+            observation = self.c.hosts[self.c.profiles[target].host_id].inspect(target)
+            if (
+                observation.unknown_work
+                or observation.manifest_digest != plan.targets[target]
+                or observation.schemas != self.c.releases.get(plan.targets[target]).schema_targets
+            ):
+                raise UpdateError("outcome_unknown")
+            inventory[target] = observation.model_dump()
+        for host_id in plan.hosts:
+            self._call(
+                host_id,
+                "resolve_parent",
+                identity + "-r-" + host_id,
+                parent_job_id=parent_job_id,
+                child_job_id=child["job_id"],
+            )
+        with self.j.transaction() as db:
+            for target, observed in inventory.items():
+                self.j.put("inventory", target, observed, db)
+            db.execute("DELETE FROM claims WHERE job_id=?", (child["job_id"],))
+            self.j.put(
+                "parent_resolution",
+                parent_job_id,
+                {"child_job_id": child["job_id"], "resolved": True},
+                db,
+            )
+            db.execute(
+                "UPDATE jobs SET state='succeeded',revision=revision+1 WHERE id=?",
+                (child["job_id"],),
+            )
+            self.j.event(db, "parent_recovered", parent_job_id)
+            self.j.event(db, "job_accepted", child["job_id"], "succeeded")
+        self.j.flush_export()
 
     def _admit_recovery(self, operator, result, grant, key, parent):
         plan, raw = self.c.plan(result["plan_id"])
@@ -344,11 +396,15 @@ class RecoveryController:
         return self.c.job(operator, child)
 
     def self_update(self, operator, target_manifest, request_key, approved_digest=None):
-        self.c.authority.require(operator, "operator", [self.target])
+        self.c.guard()
+        principal = self.c.authority.require(operator, "operator", [self.target])
         self.c.authority.require(operator, "recover", [self.target])
         manifest = self.c.releases.get(target_manifest)
         if manifest.application_id != self.c.profiles[self.target].application_id:
             raise UpdateError("forbidden")
+        selected = manifest.select(self.c.profiles[self.target].platform, "native")
+        if selected.migrations or selected.schema_targets != {"control": "updater-control-1"}:
+            raise UpdateError("unsupported_journal")
         identity = (
             "self-"
             + digest(
@@ -360,6 +416,7 @@ class RecoveryController:
             "target": target_manifest,
             "previous": self.current_manifest,
             "deployment_id": self.target,
+            "operator_revision": principal["_revision"],
             "policy_revision": self.c.policy_revision,
             "epoch": int(self.j.meta("epoch")),
             "expires_at": self.c.clock() + 900,
@@ -388,83 +445,111 @@ class RecoveryController:
             return {"plan_id": identity, "plan_digest": plan_digest, **payload}
         if approved_digest != plan_digest or payload["policy_revision"] != self.c.policy_revision:
             raise UpdateError("stale_plan")
+
+        def authorized():
+            self.c.guard()
+            current = self.c.authority.require(operator, "operator", [self.target])
+            self.c.authority.require(operator, "recover", [self.target])
+            if current["_revision"] != payload["operator_revision"]:
+                raise UpdateError("policy_changed")
+            self.c.releases.get(target_manifest)
+
         with exclusive(self.j.directory / "controller.lock"):
             old = self.j.get("self_job", identity)
-            if old and old["state"] in {"succeeded", "failed_safe", "unknown", "recovery_required"}:
-                return old
-            if payload["expires_at"] <= self.c.clock() and old is None:
+            if old:
+                if old["state"] not in {"succeeded", "failed_safe", "unknown", "recovery_required"}:
+                    with self.j.transaction() as db:
+                        self.j.put("self_job", identity, {**old, "state": "unknown"}, db)
+                        self.j.event(db, "self_update_interrupted", identity, "unknown")
+                    self.j.flush_export()
+                return self.j.get("self_job", identity)
+            authorized()
+            if (
+                payload["expires_at"] <= self.c.clock()
+                or payload["epoch"] != int(self.j.meta("epoch"))
+                or payload["previous"] != self.current_manifest
+            ):
                 raise UpdateError("stale_plan")
+            previous_manifest = payload["previous"]
+            state = {"state": "preparing", "target": target_manifest, "previous": previous_manifest}
             with self.j.transaction() as db:
-                self.j.put(
-                    "self_job",
-                    identity,
-                    {
-                        "state": "preparing",
-                        "target": target_manifest,
-                        "previous": self.current_manifest,
-                    },
-                    db,
-                )
+                if (
+                    self.j.meta("mode", db) != "active"
+                    or db.execute("SELECT 1 FROM claims LIMIT 1").fetchone()
+                    or db.execute(
+                        "SELECT 1 FROM jobs WHERE state NOT IN ('succeeded','failed_safe','cancelled_safe','unknown','recovery_required') LIMIT 1"
+                    ).fetchone()
+                ):
+                    raise UpdateError("busy")
+                # Fence ordinary admissions atomically with the self intent.
+                db.execute("UPDATE meta SET value='recovery' WHERE key='mode'")
+                self.j.put("self_job", identity, state, db)
                 self.j.event(db, "self_update_intent", identity)
             self.j.flush_export()
-            self.gate(identity, False)
-            with exclusive(self.j.directory / "coordinator.lock"):
-                epoch = self.advance_epoch(identity, False)
-                self._control("self_stage", identity + "-stage", manifest_digest=target_manifest)
-                self._control("self_probe", identity + "-probe", manifest_digest=target_manifest)
+            switched = False
             try:
+                self.gate(identity, False)
+                with exclusive(self.j.directory / "coordinator.lock"):
+                    authorized()
+                    epoch = self.advance_epoch(identity, False)
+                    authorized()
+                    self._control(
+                        "self_stage", identity + "-stage", manifest_digest=target_manifest
+                    )
+                    authorized()
+                    self._control(
+                        "self_probe", identity + "-probe", manifest_digest=target_manifest
+                    )
+                authorized()
+                switched = True
                 self._control("self_switch", identity + "-switch", manifest_digest=target_manifest)
                 health = self._ready(manifest.release, epoch)
+                authorized()
+                state.update(state="succeeded", epoch=epoch, readiness=health)
                 with self.j.transaction() as db:
                     db.execute("UPDATE meta SET value='active' WHERE key='mode'")
                     self.j.put(
-                        "self_job",
-                        identity,
-                        {
-                            "state": "succeeded",
-                            "target": target_manifest,
-                            "previous": self.current_manifest,
-                            "epoch": epoch,
-                            "readiness": health,
-                        },
-                        db,
+                        "control_inventory", self.target, {"manifest_digest": target_manifest}, db
                     )
+                    self.j.put("self_job", identity, state, db)
                     self.j.event(db, "self_update_committed", identity)
-                self.j.flush_export()
-                return self.j.get("self_job", identity)
-            except Exception:
-                # Rollback always advances epoch and preserves the current control database.
-                self._control("self_stop", identity + "-rollback-stop")
-                with exclusive(self.j.directory / "coordinator.lock"):
-                    epoch = self.advance_epoch(identity + "-rollback", False)
-                    self.c.releases.get(self.current_manifest)
+            except BaseException:
+                try:
+                    # A switch may have happened. Recovery requires current authority and a fresh epoch.
+                    if not switched:
+                        raise UpdateError("outcome_unknown")
+                    authorized()
+                    self._control("self_stop", identity + "-rollback-stop")
+                    with exclusive(self.j.directory / "coordinator.lock"):
+                        authorized()
+                        epoch = self.advance_epoch(identity + "-rollback", False)
+                        self.c.releases.get(previous_manifest)
+                        self._control(
+                            "self_probe",
+                            identity + "-rollback-probe",
+                            manifest_digest=previous_manifest,
+                        )
+                    authorized()
                     self._control(
-                        "self_probe",
-                        identity + "-rollback-probe",
-                        manifest_digest=self.current_manifest,
+                        "self_switch",
+                        identity + "-rollback-switch",
+                        manifest_digest=previous_manifest,
                     )
-                self._control(
-                    "self_switch",
-                    identity + "-rollback-switch",
-                    manifest_digest=self.current_manifest,
-                )
-                self._ready(self.c.releases.get(self.current_manifest).release, epoch)
-                with self.j.transaction() as db:
-                    db.execute("UPDATE meta SET value='active' WHERE key='mode'")
-                    self.j.put(
-                        "self_job",
-                        identity,
-                        {
-                            "state": "failed_safe",
-                            "target": target_manifest,
-                            "previous": self.current_manifest,
-                            "epoch": epoch,
-                        },
-                        db,
-                    )
-                    self.j.event(db, "self_update_rolled_back", identity)
-                self.j.flush_export()
-                return self.j.get("self_job", identity)
+                    self._ready(self.c.releases.get(previous_manifest).release, epoch)
+                    authorized()
+                    state.update(state="failed_safe", epoch=epoch)
+                    with self.j.transaction() as db:
+                        db.execute("UPDATE meta SET value='active' WHERE key='mode'")
+                        self.j.put("self_job", identity, state, db)
+                        self.j.event(db, "self_update_rolled_back", identity)
+                except BaseException:
+                    state.update(state="unknown")
+                    with self.j.transaction() as db:
+                        db.execute("UPDATE meta SET value='recovery' WHERE key='mode'")
+                        self.j.put("self_job", identity, state, db)
+                        self.j.event(db, "self_update_unknown", identity, "unknown")
+            self.j.flush_export()
+            return self.j.get("self_job", identity)
 
     def resume(self, operator, request_key):
         self.c.authority.require(operator, "operator", [self.target])

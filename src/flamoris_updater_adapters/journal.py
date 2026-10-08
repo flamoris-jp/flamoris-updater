@@ -192,22 +192,35 @@ class Journal:
         with exclusive(self.directory / "export.lock", blocking=True):
             with self.connection() as db:
                 db.execute("BEGIN")
-                rows = db.execute(
-                    "SELECT sequence,payload,digest FROM events ORDER BY sequence"
-                ).fetchall()
-                lines = [
-                    dumps(
-                        {
-                            "sequence": r["sequence"],
-                            "digest": r["digest"],
-                            **loads(r["payload"], 2 * 1024 * 1024),
-                        }
-                    )
-                    for r in rows
-                ]
-            durable_write(
-                self.directory / "recovery.jsonl", b"\n".join(lines) + (b"\n" if lines else b"")
-            )
+                temporary = self.directory / "recovery.jsonl.new"
+                fd = os.open(
+                    temporary, os.O_CREAT | os.O_TRUNC | os.O_WRONLY | os.O_NOFOLLOW, 0o600
+                )
+                try:
+                    with os.fdopen(fd, "wb", closefd=False) as stream:
+                        for r in db.execute(
+                            "SELECT sequence,payload,digest FROM events ORDER BY sequence"
+                        ):
+                            stream.write(
+                                dumps(
+                                    {
+                                        "sequence": r["sequence"],
+                                        "digest": r["digest"],
+                                        **loads(r["payload"], 2 * 1024 * 1024),
+                                    }
+                                )
+                                + b"\n"
+                            )
+                        stream.flush()
+                        os.fsync(fd)
+                    os.replace(temporary, self.directory / "recovery.jsonl")
+                    directory_fd = os.open(self.directory, os.O_DIRECTORY)
+                    try:
+                        os.fsync(directory_fd)
+                    finally:
+                        os.close(directory_fd)
+                finally:
+                    os.close(fd)
 
     def recover_intents(self):
         # Called only while holding the relevant execution-authority process lock.
@@ -221,7 +234,7 @@ class Journal:
 
 def inspect_journal(directory: Path) -> dict:
     """Read-only, does not bootstrap, migrate, checkpoint or clear blockers."""
-    path = Path(directory) / "journal.sqlite"
+    path = Path(directory).absolute() / "journal.sqlite"
     if path.is_symlink() or not path.is_file():
         raise UpdateError("unsafe_storage")
     uri = path.as_uri() + "?mode=ro"
@@ -231,7 +244,72 @@ def inspect_journal(directory: Path) -> dict:
             or db.execute("PRAGMA quick_check").fetchone()[0] != "ok"
         ):
             raise UpdateError("unsupported_journal")
+        db.execute("BEGIN")
+        previous, sequence = None, 0
+        for row in db.execute("SELECT sequence,payload,digest FROM events ORDER BY sequence"):
+            event = loads(row[1], 2 * 1024 * 1024)
+            if (
+                row[0] != sequence + 1
+                or digest(row[1]) != row[2]
+                or event.get("previous") != previous
+            ):
+                raise UpdateError("journal_corrupt")
+            previous, sequence = row[2], row[0]
+        export_sequence, export_digest, export_valid = 0, None, True
+        export = path.parent / "recovery.jsonl"
+        if export.exists() and not export.is_symlink():
+            try:
+                with export.open("rb") as stream:
+                    while line := stream.readline(2 * 1024 * 1024 + 1):
+                        obj = loads(line, 2 * 1024 * 1024)
+                        raw = dumps(
+                            {k: v for k, v in obj.items() if k not in {"sequence", "digest"}}
+                        )
+                        if (
+                            obj["sequence"] != export_sequence + 1
+                            or obj["previous"] != export_digest
+                            or digest(raw) != obj["digest"]
+                        ):
+                            raise ValueError("invalid export chain")
+                        export_sequence, export_digest = obj["sequence"], obj["digest"]
+                row = db.execute(
+                    "SELECT digest FROM events WHERE sequence=?", (export_sequence,)
+                ).fetchone()
+                export_valid = (
+                    (row is not None and row[0] == export_digest) if export_sequence else True
+                )
+            except (OSError, ValueError, KeyError, UpdateError):
+                export_valid = False
+        else:
+            export_valid = False
         return {
+            "mode": db.execute("SELECT value FROM meta WHERE key='mode'").fetchone()[0],
+            "epoch": int(db.execute("SELECT value FROM meta WHERE key='epoch'").fetchone()[0]),
+            "event_sequence": sequence,
+            "export": {
+                "valid": export_valid,
+                "sequence": export_sequence,
+                "lagging": export_sequence != sequence,
+            },
+            "record_counts": {
+                kind: count
+                for kind, count in db.execute("SELECT kind,COUNT(*) FROM records GROUP BY kind")
+            },
+            "protected_operations": [
+                {
+                    "kind": kind,
+                    "id": identity,
+                    "state": (obj := loads(raw, 2 * 1024 * 1024)).get("state", obj.get("outcome")),
+                }
+                for kind, identity, raw in db.execute(
+                    "SELECT kind,id,payload FROM records WHERE kind IN ('control','self_job','ownership_handoff') ORDER BY kind,id LIMIT 100"
+                )
+            ],
+            "counts": {
+                table: db.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
+                for table in ["jobs", "claims", "operations"]
+            },
+            "projection_limit": 100,
             "journal_version": 1,
             "jobs": [
                 dict(zip(("id", "state", "revision"), row))

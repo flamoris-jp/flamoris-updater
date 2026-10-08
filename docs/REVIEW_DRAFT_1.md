@@ -1,5 +1,7 @@
 # Draft 1 design review
 
+> Historical design review before the later implementation authorization. Current source/testing/adoption state is in [PROGRESS](../PROGRESS.md) and [implementation review](IMPLEMENTATION_REVIEW.md). The implementation hold below describes that earlier task only.
+
 Date: 2026-10-08. **Documentation review, not runtime tests or deployment acceptance.**
 
 ## Scope

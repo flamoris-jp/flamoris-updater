@@ -1,6 +1,6 @@
 # Dedicated Updater Web design
 
-Date: 2026-10-08. **Design only; implementation remains held.**
+Date: 2026-10-08. **Dedicated Web implemented in bundled static assets and the coordinator adapter.** Session/CSRF/API behavior is tested; deployment browser/accessibility acceptance remains pending. See [running](RUNNING.md).
 
 ## Ownership and deployment
 
@@ -34,7 +34,7 @@ A Job started by CLI/MCP appears in Web according to actor/target scope; Web-sta
 
 The dedicated backend owns its operator identities, sessions, role/target mapping and CSRF checks. Initial operator enrollment is provisioned through a protected local administrative flow; there is no shared default password or use of Studio user accounts. Private credential/bootstrap inputs belong to deployment work.
 
-Use maintained authentication/password-hashing components during later implementation. Auth state/configuration lives outside replaceable release directories; its schema and grant/revocation compatibility are part of Updater self-update. A candidate or rollback must read current auth/policy state without restoring older accounts, sessions or permissions. Secrets and credential material never enter browser bundles or update manifests.
+The implementation uses Argon2 and independent persistent identities/session state. Auth state/configuration lives outside replaceable release directories; its schema and grant/revocation compatibility are part of Updater self-update. A candidate or rollback must read current auth/policy state without restoring older accounts, sessions or permissions. Secrets and credential material never enter browser bundles or update manifests.
 
 Browser sessions use protected cookies with Secure/HttpOnly/SameSite policy. Bind mutation/authorization requests to validated session, CSRF and same-origin checks; use POST for effects and do not broaden CORS. Authenticate and enforce role/target scope on every request, including Job/receipt reads. Prevent login guessing with bounded attempts and audited account/session changes.
 

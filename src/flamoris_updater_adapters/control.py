@@ -161,7 +161,7 @@ class HostControl:
             profile = h.profiles.get(command["deployment_id"])
             if (
                 profile is None
-                or profile.role not in {"coordinator", "executor"}
+                or profile.role != "coordinator"
                 or profile.artifact_kind != "native"
             ):
                 raise UpdateError("protected_target")

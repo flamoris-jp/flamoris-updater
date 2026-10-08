@@ -314,6 +314,8 @@ class Coordinator:
                 "SELECT plan_id,state,payload FROM jobs WHERE id=?", (identity,)
             ).fetchone()
             plan, _ = self.plan(row["plan_id"])
+            if plan.action == "recover":
+                raise UpdateError("protected_target")
             self.authority.require(subject, "cancel", plan.targets, db)
             payload = {"job_id": identity}
             previous = self._request(db, subject, "cancel", request_key, payload)

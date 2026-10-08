@@ -162,9 +162,14 @@ class Planner:
                 or not manifest.lifecycle_profile.admission_gate_required
             ):
                 raise UpdateError("invalid_profile")
-            if set(profile.resources) != set(manifest.schema_targets) or not set(
-                profile.resources
-            ) <= set(manifest.backup_profile.resource_classes):
+            owned_classes = {
+                logical
+                for logical, physical in profile.resources.items()
+                if self.resources[physical].owner_deployment == identity
+            }
+            if set(profile.resources) != set(manifest.schema_targets) or not owned_classes <= set(
+                manifest.backup_profile.resource_classes
+            ):
                 raise UpdateError("backup_unverified", "Resource backup scope is incomplete")
             if any(
                 not self.resources[r].external_writers_fenced for r in profile.resources.values()
@@ -269,7 +274,18 @@ class Planner:
                         host_id=profile.host_id,
                         phase=phase_name,
                         operation=operation,
-                        resources=sorted(profile.resources.values()),
+                        resources=sorted(
+                            r
+                            for r in profile.resources.values()
+                            if operation
+                            not in {
+                                "snapshot",
+                                "restore_verify",
+                                "restore",
+                                "verify_restored_state",
+                            }
+                            or self.resources[r].owner_deployment == identity
+                        ),
                         predecessors=list(previous),
                         arguments=args,
                     )

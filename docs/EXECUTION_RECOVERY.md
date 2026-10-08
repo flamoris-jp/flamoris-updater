@@ -1,6 +1,8 @@
 # Execution, persistence and recovery v1
 
-**Draft 1; documentation only.** No services, scripts or DB schema are created.
+> Reviewed execution design with v1 source implementation. [Running](RUNNING.md) and [implementation review](IMPLEMENTATION_REVIEW.md) describe executable behavior and coverage. Root helper/executor/controller replacement is an explicit v1 bootstrap blocker; protected automated self-update supports the coordinator with control format 1 only. Operational capacity monitoring and all real-host cases remain deployment gates.
+
+**Reviewed v1 execution contract with source, services/scripts and SQLite schema implemented.** Real application owners and deployment acceptance remain separate gates.
 
 ## Immutable plan
 

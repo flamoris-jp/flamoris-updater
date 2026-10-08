@@ -1,6 +1,6 @@
 # Release Manifest v1 design
 
-**Draft 1; documentation only.** JSON examples are proposed fixtures, not accepted by an implemented loader.
+**Reviewed v1 contract with strict loader implementation.** Shortened-digest JSON examples remain illustrative. Actual models/exported schemas and [running](RUNNING.md) define accepted fields.
 
 ## Wire representation and validation
 
@@ -36,7 +36,7 @@ Application/resource/handler/profile IDs reference operator-registered contracts
 
 ## Illustrative release
 
-The IDs, digests and source below are fictitious. The shortened placeholder digests would be rejected by the proposed production validator.
+The IDs, digests and source below are fictitious. The shortened placeholder digests would be rejected by the production validator.
 
 ```json
 {
@@ -156,3 +156,7 @@ After verification, staging/content indexes and release pointers are protected f
 Apply streaming byte limits before parsing/fetch buffering: release/catalog JSON 1 MiB each, signature envelope 16 KiB, each human/structured note 1 MiB, cumulative note response 2 MiB. Catalogs have at most 2048 entries, depth 16 and unique version/Manifest mappings; notes have bounded strings/entries/depth. Larger verified history is cursor-paginated, not concatenated without a limit. Artifact downloads/extraction also enforce profile-specific byte/file quotas independent of claimed release values.
 
 Local notes locators are confined relative artifact paths; remote locators resolve only through the approved origin/profile. No absolute/traversing path, uncontrolled redirect or arbitrary URL is executable input.
+
+## Implemented multi-platform root
+
+`artifact` is the primary artifact; optional `artifact_variants` holds at most seven alternatives with unique `(kind, platform)`. One exact signed root and immutable application/release mapping covers both amd64 and arm64. `Manifest.select` chooses the profile-bound artifact view without changing the signed root digest. Release and catalog signatures have separate purposes. Same-byte catalog signature rotation is allowed; equal-sequence different bytes remain replay/equivocation. Cumulative notes use bounded character-safe chunks and catalog/range-bound cursors. See [implementation review](IMPLEMENTATION_REVIEW.md).

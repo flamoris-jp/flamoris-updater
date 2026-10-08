@@ -1,6 +1,6 @@
 # FLAMORIS Updater design
 
-**State:** accepted basic direction; implementation pending. [Detailed draft 1](DETAILED_DESIGN.md) specifies proposed APIs, persistence, trust and failure semantics.
+**State:** accepted basic direction with Updater-owned v1 source implemented; release/live adoption pending. [Detailed draft 1](DETAILED_DESIGN.md) specifies proposed APIs, persistence, trust and failure semantics.
 
 ## 1. Repository and dependency boundaries
 
@@ -66,7 +66,7 @@ CI builds release artifacts. Hosts normally install prebuilt artifacts rather th
 
 Treat manifests and release notes as untrusted input. Verify against the configured trust policy before mutation, including binding the manifest to the artifact and its migration/validation content. A manifest cannot grant itself trust or permission to execute arbitrary commands.
 
-The [Manifest draft](RELEASE_MANIFEST.md) selects exact-byte Ed25519 signatures, application-scoped operator-pinned keys, catalog replay protection and rotation/revocation rules. Key provisioning and the CI signing pipeline are not implemented.
+The [Manifest draft](RELEASE_MANIFEST.md) selects exact-byte Ed25519 signatures, application-scoped operator-pinned keys, catalog replay protection and rotation/revocation rules. The manual isolated signing-candidate workflow is implemented; keys, protected release Environment and publication remain release-owner work.
 
 ## 7. Configuration and persistence
 
@@ -120,10 +120,10 @@ Updater's dedicated Web management UI shows installed versions, candidates, plan
 
 Remaining evidence and owning-application work: exact live inventory and artifact/version mappings, maintenance/drain contracts, DB-role and backup scopes, signing-key provisioning, host bindings, implementation verification and live acceptance. These are not inferred from source inspection. See [adoption](ADOPTION.md).
 
-The draft refines the accepted direction without changing responsibility or management-entry versions. The current task remains design-only.
+The draft refines the accepted direction without changing responsibility or management-entry versions. The later task authorized source implementation; see [implementation review](IMPLEMENTATION_REVIEW.md).
 
 ## 12. Review-loop refinements
 
 The [2026-10-08 review loop](REVIEW_LOOP_2026-10-08.md) clarifies plan consumption, step/action binding, restart-safe maintenance, shared-resource/dependency identities, finalization, isolated restore drills, catalog re-observation and protected recovery/self-update ownership.
 
-These are design-contract corrections only. Core/wrapper ownership, AI-side v1.0 / GPU Node Manager v1.2 / Updater v1.0 entry policy, dedicated Web ownership and the implementation hold remain unchanged.
+These are design-contract corrections only. Core/wrapper ownership, AI-side v1.0 / GPU Node Manager v1.2 / Updater v1.0 entry policy, dedicated Web ownership remain unchanged; implementation was subsequently authorized.

@@ -135,6 +135,7 @@ class ReleaseStore:
                 previous
                 and catalog.sequence == previous["sequence"]
                 and digest(raw) == previous["digest"]
+                and digest(signature) == previous["signature"]
             ):
                 return
             for entry in catalog.releases:

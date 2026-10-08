@@ -205,7 +205,15 @@ class HostExecutor:
             or profile.role != "application"
             or step.operation not in profile.operations
             or plan.profile_digests[profile.id] != digest(dumps(profile))
-            or set(step.resources) != set(profile.resources.values())
+            or set(step.resources)
+            != {
+                r
+                for r in profile.resources.values()
+                if step.operation
+                not in {"snapshot", "restore_verify", "restore", "verify_restored_state"}
+                or self.resources is None
+                or self.resources[r].owner_deployment == profile.id
+            }
         ):
             raise UpdateError("forbidden")
         if (
@@ -400,6 +408,12 @@ class HostExecutor:
 
     def _perform(self, plan, step, manifest, profile, job_id, operation_id, plan_digest, read_only):
         observed = self.backend.inspect(profile)
+        if observed.resource_bindings != profile.resources or (
+            self.resources is not None
+            and observed.physical_binding_digests
+            != {r: self.resources[r].physical_binding_digest for r in profile.resources.values()}
+        ):
+            raise UpdateError("stale_plan")
         if step.operation == "prepare":
             if fingerprint(observed) != plan.observations[profile.id]:
                 raise UpdateError("stale_plan")

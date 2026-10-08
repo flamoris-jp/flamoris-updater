@@ -38,9 +38,9 @@ def origin(url: str) -> str:
     ):
         raise UpdateError("untrusted_origin")
     try:
-        return (
-            "https://" + parsed.hostname.lower() + (":" + str(parsed.port) if parsed.port else "")
-        )
+        hostname = parsed.hostname.lower()
+        hostname = "[" + hostname + "]" if ":" in hostname else hostname
+        return "https://" + hostname + (":" + str(parsed.port) if parsed.port else "")
     except ValueError:
         raise UpdateError("untrusted_origin") from None
 

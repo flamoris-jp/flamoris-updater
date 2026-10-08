@@ -31,15 +31,17 @@ def main(argv=None):
     call.add_argument("--key", required=True)
     call.add_argument("--tool", choices=list(TOOLS) + ["grant", "revoke-grant"], required=True)
     call.add_argument("--arguments", default="-", help="JSON file or stdin")
-    for name in ("provision-user", "issue-token"):
+    for name in ("provision-user", "issue-token", "revoke-token", "disable-user"):
         command = commands.add_parser(name)
         command.add_argument("--config", required=True)
         command.add_argument("--subject", required=True)
         if name == "provision-user":
             command.add_argument("--roles", required=True)
             command.add_argument("--targets", required=True)
-        else:
+        elif name == "issue-token":
             command.add_argument("--output", required=True)
+        elif name == "revoke-token":
+            command.add_argument("--token-file", required=True)
     args = parser.parse_args(argv)
     try:
         if args.command == "call":
@@ -106,6 +108,13 @@ def main(argv=None):
                         args.roles.split(","),
                         args.targets.split(","),
                     )
+                elif args.command == "disable-user":
+                    auth.disable_user(args.subject)
+                elif args.command == "revoke-token":
+                    token = (
+                        protected_read(args.token_file, private=True, limit=256).decode().strip()
+                    )
+                    auth.revoke_token(args.subject, token)
                 else:
                     path = Path(args.output)
                     if not path.is_absolute() or path.exists() or path.is_symlink():
