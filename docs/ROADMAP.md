@@ -18,6 +18,8 @@ Application transitions and Updater implementation are separate deliverables. Ph
 
 [Detailed design](DETAILED_DESIGN.md) and linked specifications describe the v1 interfaces, trust, migration, state machine, recovery and [acceptance scenarios](ACCEPTANCE.md). [Adoption](ADOPTION.md) records pinned source boundaries and proposed work packages.
 
+The [review/correction loop](REVIEW_LOOP_2026-10-08.md) refines these draft contracts and acceptance cases. Documentation review completion does not advance any runtime or live phase.
+
 ## Implementation hold and future work
 
 Do not start runtime implementation, create runnable schemas/CI/deployment files, apply migrations or change hosts under this design-only instruction.

@@ -38,7 +38,7 @@ This repository contains the project documentation and contributor guidance. The
 
 基本方針と詳細設計案を文書化しています。Python 3.12、Native coordinator／host executor、署名付きManifest、永続Job、Migration契約、復旧、MCPの具体案は [詳細設計](docs/DETAILED_DESIGN.md) を参照してください。ソース・CI・実機設定は未実装で、実機棚卸しや各アプリ固有の移行／保守契約は別工程です。
 
-See [PROGRESS.md](PROGRESS.md) for completed work and [roadmap](docs/ROADMAP.md) for the next phases.
+See [PROGRESS.md](PROGRESS.md) for completed work and [roadmap](docs/ROADMAP.md) for the next phases. The [review/correction loop](docs/REVIEW_LOOP_2026-10-08.md) records two rounds of contract fixes and future acceptance cases; implementation remains held.
 
 ## Management entry versions / 管理開始バージョン
 

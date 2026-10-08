@@ -6,7 +6,7 @@
 
 A host profile maps logical resources (`config`, `database`, `persistent-data`) to stable `resource_id` values and writer sets. Resource identity includes DB namespace/schema or file namespace, not just a path label. Shared resources have one schema owner and one backup/restore domain.
 
-Schema observations return `resource_id`, owner, actual schema ID, protected config/mapping revision, domain journal revision, active/unknown work and inspect evidence ID. Unknown, unreadable or conflicting state rejects planning. Rows may change during normal operation; do not hash an entire mutable DB to make every plan instantly stale. Plan preconditions bind schema/ownership/config revisions and the drain contract; snapshot contents are bound later after quiescence.
+Schema observations return `resource_id`, owner, actual schema ID, protected config/mapping revision, domain journal revision, active/unknown work and inspect evidence ID. Profiles resolve physical identity and a single authoritative resource owner: two host/path/DB aliases for the same namespace must map to the same resource and consistency domain. A remote/shared DB migration must acquire its owner-maintenance fence, not only the caller host's local lock. Unknown, unreadable or conflicting state rejects planning. Rows may change during normal operation; do not hash an entire mutable DB to make every plan instantly stale. Plan preconditions bind schema/ownership/config revisions and the drain contract; snapshot contents are bound later after quiescence.
 
 For shared DBs, register all participating writers, migration-role authority and restore coupling. Unknown external writers block destructive migration until fenced or positively excluded. A handler cannot declare exclusive ownership just because its application is stopping.
 
@@ -60,13 +60,13 @@ Update records are append-only at the logical level; correction adds reconciliat
 
 Close application admission first, wait for already accepted work to finish and verify no pending unknown provider effects. Stop/fence every registered writer, including timers and administrative import/retention paths, before the snapshot and migration.
 
-Acquire an application-provided maintenance fence held through validation/reopening. Mere observation that an application is idle is insufficient. Generation currently has one reservation/owner authority, and GPU Node Manager already has its own lock; adapters must use their owners' supported maintenance contracts. Missing contracts are implementation blockers, not permission to kill processes.
+Acquire an application-provided durable maintenance epoch/fence held through validation/reopening. Candidate startup and restarted timers must honor it before domain writes; an old process lock disappearing cannot clear maintenance. Mere observation that an application is idle is insufficient. Generation currently has one reservation/owner authority, and GPU Node Manager already has its own lock; adapters must use their owners' supported maintenance contracts. Missing contracts are implementation blockers, not permission to kill processes.
 
 DB migration credentials differ from runtime DML credentials. Backup and restore roles are narrowly scoped. Existing owners, ACLs, grants and protected data are validation invariants.
 
 ## Standalone pre-entry migration
 
-AI-side v0.1 → v1.0 and GPU Node Manager v1.1 → v1.2 are executed by their applications. The runner and journal contract is the same without a coordinator dependency. The standalone tool produces an enrollment receipt binding application/deployment/artifact identity, resource schemas, validation, backup/recovery evidence and operation history.
+AI-side v0.1 → v1.0 and GPU Node Manager v1.1 → v1.2 are executed by their applications. The runner and journal contract is the same without a coordinator dependency. The standalone tool produces a standalone_transition receipt binding application/deployment/artifact identity, resource schemas, validation, backup/recovery evidence and operation history. Fresh signed installations use verified_installation evidence; already supported signed deployments may use verified_adoption inspection evidence under [enrollment rules](EXECUTION_RECOVERY.md#enrollment-evidence-and-control-state-compatibility).
 
 Enrollment does not accept a receipt alone: the host re-inspects actual artifact/config/resources and verifies journal continuity. Old receipts or evidence from another deployment cannot enroll it.
 
@@ -78,6 +78,14 @@ Test unchanged schemas, direct 1 → 3, unsupported intermediate vector, ambiguo
 
 Every request names `contract_version:1`, operation, application/deployment IDs, immutable artifact digest, operation ID and profile-resolved resource IDs. Apply additionally requires expected schema vector and owner-validated maintenance/backup receipt IDs. Unknown fields/types fail validation.
 
-Results name the same version/identities/operation ID, outcome (`verified|not_applied|partial_known|unknown`), observed schemas and bounded evidence refs. Exit status, response envelope and persisted domain result must agree. A zero process exit or response missing evidence is not a successful migration. An inspection/plan response cannot be used as an apply receipt.
+Results name the same version/identities/operation ID, operation-specific outcome, observed schemas and bounded evidence refs. Inspect/plan/validate use `verified|unknown`; apply_step/initialize use `applied_verified|not_applied|partial_known|unknown`; reconcile uses `not_applied|applied_verified|partial_known|unknown`. `verified` and `applied_verified` are distinct valid values with those exact operation restrictions. Exit status, response envelope and persisted domain result must agree. A zero process exit or response missing evidence is not a successful migration. An inspection/plan response cannot be used as an apply receipt.
 
 A runner timeout requests cooperative termination only where the declared handler supports it. Otherwise fence resources and record unknown while reconciling the process/domain journal. Do not kill a nontransactional handler and immediately restart it.
+
+## Shared resources, immutable operations and snapshot isolation
+
+Standalone tools and coordinator-driven runners honor the same application/resource-owner maintenance contract and immutable operation binding. They cannot bypass another host's active/unknown maintenance ownership with a local-only lock. Resource alias discovery is read/validation work; uncertain ownership blocks planning rather than inventing a second owner.
+
+Apply requests bind the exact handler/input/artifact/schema/resource/maintenance epoch and backup/predecessor receipts. Same operation ID with changed binding is rejected even if a caller labels the handler idempotent.
+
+A restoration drill is not ordinary candidate startup. The backup owner supplies a profile-confined scratch namespace, scratch credentials and read/validation-only invocation. Block production DB/resource mounts, production secret identities, provider/network side effects, timers, automatic migration and job replay. Production write credentials are never handed to the scratch validator. If the owner's schema/grant/content checks cannot run with these constraints, restoration verification is unsupported and the update is blocked.

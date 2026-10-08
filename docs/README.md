@@ -14,7 +14,8 @@ Basic direction is accepted. Detailed draft 1 is a concrete design proposal; eve
 | [Dedicated Web UI](WEB_UI.md) | Updater-owned operator screen and independent auth/session |
 | [Adoption](ADOPTION.md) | Pinned source inspection and owning-repository work |
 | [Acceptance](ACCEPTANCE.md) | Future failure/acceptance scenarios |
-| [Review record](REVIEW_DRAFT_1.md) | Draft findings, corrections and verification limits |
+| [Draft 1 review](REVIEW_DRAFT_1.md) | Historical draft findings and verification limits |
+| [Review/correction loop](REVIEW_LOOP_2026-10-08.md) | Two rounds, final consistency fixes and future counterexamples |
 | [Roadmap](ROADMAP.md) | Phases and implementation hold |
 | [Progress](../PROGRESS.md) | Actual design/source/release/live state |
 | [Contributor guide](../CONTRIBUTING.md) | Change and review workflow |

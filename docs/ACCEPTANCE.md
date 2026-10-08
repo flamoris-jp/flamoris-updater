@@ -41,7 +41,28 @@
 | Web/CLI/MCP observe the same admitted update | One coordinator/Job history; scopes enforced on every adapter |
 | Web authorization or mutation lacks session/CSRF/scope | Reject before grant or effect admission |
 | Browser refresh/lost start response | Query/reuse existing request identity; no duplicate Job |
-| Web disconnected during Updater self-update | CLI/controller handoff continues; reconnect reads persisted evidence |
+| Web disconnected during Updater self-update | Independent recovery CLI/controller handoff continues; reconnect reads persisted evidence |
+| Consumed plan with another caller/grant/adapter/request key | At most one Job; return an authorized existing identity or plan_consumed; preserve tombstone after failure/cancel |
+| Same operation ID with changed action/input/resource/epoch/predecessor | operation_conflict before effects; exact duplicate only queries persisted state |
+| Activation request before backup/group barrier receipts | Reject step admission; an authenticated coordinator cannot skip prerequisites |
+| Candidate restart, timer or administrative writer during maintenance | Durable owner epoch still gates new work; no automatic migration/replay |
+| Health passed but reopening/local release/global commit is incomplete | No succeeded claim or conflicting Job admission; reconcile recorded finalization |
+| Safe failure/cancel with missing local reservation-release evidence | Remain blocked/unknown until local receipts and global terminal commit; never infer safety from an exception |
+| Two host aliases address one DB, including standalone runner | One authoritative physical-resource owner/fence; no independent local-lock migration |
+| Runner outcome enum inconsistent with operation type | Reject invalid receipt; reconcile accepts applied_verified while inspection cannot authorize apply |
+| Identical catalog sequence/digest fetched repeatedly | Accept unchanged evidence; equal-sequence changed digest and lower sequence are rejected |
+| Staged Native runner modified or writable loader path selected | Reject before execution/rollback; recheck sealed identity and trusted environment |
+| Oversized catalog/notes, duplicate mapping or escaping locator | Enforce streaming/parser/response budgets and confinement; paginate history |
+| Scratch restore validator attempts production credentials, timers or network effects | No production access/effects; unsupported isolated verification blocks update |
+| Enrollment from transition vs fresh install vs supported adoption | Reinspect the corresponding typed evidence; unsupported legacy/unknown state cannot enroll |
+| Self rollback with newer auth/grant/trust/consumption state | Preserve all current control records and monotonic watermarks; no destructive routine store migration |
+| Recovery verify receives recover/self_update plan or runs over unsettled parent effects | Reject wrong action; return unknown for unstable observation; never acquire mutation rights or clear blockers |
+| Protected recovery interrupted during parent-to-child ownership transfer | No concurrent rights or parent resume; partial handoff stays blocked and is reconciled |
+| Unchanged incoming client or unrelated matching provider instance | Resolve exact deployment bindings; verify full affected graph and disclose additional scope before authorization |
+| Coordinator/executor target disguised as ordinary application alias | Resolve protected local role and reject normal Web/CLI/MCP update/install/enroll |
+| Old coordinator after partial epoch handoff or executable rollback | Reject stale-epoch mutation; all managed host acknowledgements required; rollback uses a newer epoch |
+| Coordinator outage while operator uses ordinary CLI | Ordinary interfaces unavailable; independent recovery CLI can inspect and only perform protected authorized recovery |
+| Recovery planning repeated with a request key or changed requested action | Shared plan-creation deduplication; changed payload conflicts; verify_recovery/recover remain distinct |
 
 ## Review and release gates
 

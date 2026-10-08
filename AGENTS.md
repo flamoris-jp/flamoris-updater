@@ -82,6 +82,7 @@ Use the repository documentation, Issues, tests, logs, and source code as primar
 - Backup success and verified restore are separate. Preserve irreplaceable data and independently readable history. Do not claim atomic multi-host/group rollback.
 - MCP exposes planning, authorized plan execution, progress, release notes and update history. Do not implement arbitrary shell or duplicate Server Manager diagnostics.
 - Plans must bind artifacts, targets and preconditions; host execution is least privilege and limited to approved operations.
+- Read docs/REVIEW_LOOP_2026-10-08.md before implementing these contracts. Enforce one consumed plan/Job, immutable operation bindings, durable owner maintenance/authority epochs, confirmed predecessor/barrier receipts and local/global finalization. Preserve blockers through linked recovery ownership transfer; normal adapters cannot update protected coordinator/executor roles under aliases.
 - CI builds signed/digested artifacts. Hosts normally do not build source. Never clone source directly into /opt; use the connected GitHub integration for private repository work, or authenticated gh on a workstation.
 - Public documentation remains portable. Do not copy private hostnames, topology, secrets or deployment-specific paths into product defaults.
 - Update PROGRESS.md as work advances. Distinguish documentation, implemented source, tests/CI, releases and live acceptance.

@@ -18,3 +18,5 @@ The accepted ownership/entry policy remains in [DESIGN.md](DESIGN.md). Proposed 
 The application-owned pre-entry migration contract remains independently executable in the future. Updater enrollment verifies completion; it does not assume ownership of the legacy transition.
 
 Review and implementation evidence must distinguish draft design, source completion, signed releases and live acceptance. Track actual state in [PROGRESS.md](../PROGRESS.md).
+
+The [2026-10-08 review/correction loop](REVIEW_LOOP_2026-10-08.md) records the reviewed contract changes and their future acceptance cases. It is documentation evidence only.

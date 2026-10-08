@@ -46,3 +46,7 @@ Web owns independent authentication/session/CSRF, consumes the same coordinator 
 The architecture/contract draft is complete for this task. Application-specific handlers, exact schema/resource mappings, live inventory, DB writer/role scopes, trusted key provisioning, actual package compatibility and runtime/fault/live acceptance remain later work.
 
 No future acceptance case is reported as executed. The user explicitly holds implementation; [roadmap](ROADMAP.md) and [progress](../PROGRESS.md) preserve that hold.
+
+## Later review loop
+
+The [review/correction loop](REVIEW_LOOP_2026-10-08.md) records a subsequent two-round review of the dedicated-Web design and final consistency corrections. The verification totals above remain the historical checks for their respective earlier changes.

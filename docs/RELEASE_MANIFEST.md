@@ -119,7 +119,7 @@ Trusted public keys, application/channel scope, allowed download origins, host p
 
 CI signs through an isolated release-signing role after build/verification. Hosts receive public keys only. Provisioning the first signing key and the CI signing integration is an implementation task; no signing secret exists in this repository.
 
-The signed Manifest binds artifacts and human/structured notes by digest. The signed release catalog binds application/channel, monotonically increasing catalog sequence, expiry and release/Manifest digests. Persist the highest accepted sequence; reject rollback/replay and expired catalogs for new planning/admission. Withdrawn releases remain in history but cannot be new targets. Already prepared content does not override withdrawal/revocation at activation.
+The signed Manifest binds artifacts and human/structured notes by digest. The signed release catalog binds application/channel, monotonically increasing catalog sequence, expiry and release/Manifest digests. Persist the highest accepted sequence and its exact catalog digest. Lower sequences are rejected for new planning/admission; the same sequence with the identical digest is valid re-observation, while the same sequence with a different digest is equivocation and is rejected. Expired catalogs reject new planning/admission. Withdrawn releases remain in history but cannot be new targets. Already prepared content does not override withdrawal/revocation at activation.
 
 Downloads are limited to profile-approved HTTPS/OCI origins. Reject redirects outside the approved origin, local metadata destinations and user-provided arbitrary URLs. Credentials are injected from protected host/coordinator stores, never from Manifest fields.
 
@@ -146,3 +146,13 @@ The only optional root extension in v1 is `preferred_routes`: a bounded list of 
 `initialization.supported:false` permits no additional initializer fields. When true, require `handler_id`, `runner_profile`, `empty_validator_id`, resulting schema vector and `failed_initialization_recovery_profile`. Initialization cannot reuse a migration handler implicitly. The signed handler may create only profile-approved initially absent resources. Failed initialization preserves unknown/new data until the owner confirms a supported cleanup or repair; absence before install is not blanket permission to delete everything afterwards.
 
 Contract identifiers use lowercase ASCII letters/digits plus dot, underscore or hyphen, at most 128 characters. Reject empty IDs, unrecognized enums, empty schema vectors where resources are owned, invalid digests/revisions and range endpoints with min >= max. Exact digest fields are lowercase `sha256:` plus 64 hex characters; source revisions declare the supported repository's full immutable object ID rather than a short hash.
+
+## Sealed content and parser budgets
+
+Release signature input is exact Manifest bytes; catalog signature input is exact catalog bytes. The verifier applies separately configured release/catalog key purposes and rejects cross-purpose key use even if both JSON documents can be parsed. Signature-envelope fields are strict, bounded and cannot select an unconfigured key or purpose.
+
+After verification, staging/content indexes and release pointers are protected from application/runner writes. Native activation and rollback recheck the exact sealed artifact/content identity immediately before use and run only the profile-selected trusted interpreter/loader environment. Do not load a runner through writable search paths or caller-provided environment. Docker execution uses the verified platform digest, never a mutable tag.
+
+Apply streaming byte limits before parsing/fetch buffering: release/catalog JSON 1 MiB each, signature envelope 16 KiB, each human/structured note 1 MiB, cumulative note response 2 MiB. Catalogs have at most 2048 entries, depth 16 and unique version/Manifest mappings; notes have bounded strings/entries/depth. Larger verified history is cursor-paginated, not concatenated without a limit. Artifact downloads/extraction also enforce profile-specific byte/file quotas independent of claimed release values.
+
+Local notes locators are confined relative artifact paths; remote locators resolve only through the approved origin/profile. No absolute/traversing path, uncontrolled redirect or arbitrary URL is executable input.
