@@ -1,4 +1,3 @@
-Attempting to perform the InitializeDefaultDrives operation on the 'FileSystem' provider failed.
 # Progress
 
 Updated: 2026-10-08.
@@ -153,4 +152,3 @@ state and thumbnails respectively. Linux verification at this checkpoint is
 link checks. Matched dependency pins, PR review and CI at the new revisions are
 pending. No service, production data, trust, release, enrollment or host
 configuration was changed by this checkpoint.
-
