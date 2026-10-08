@@ -36,6 +36,7 @@ class Coordinator:
         self.releases, self.hosts, self.authority = releases, hosts, authority
         self.signer, self.receipt_keys, self.clock = signer, receipt_keys, clock
         self.policy_revision = policy_revision
+        self.guard = lambda: None
         self.wakeup, self.stopping = threading.Event(), threading.Event()
 
     def _request(self, db, subject, action, key, payload):
@@ -52,6 +53,8 @@ class Coordinator:
     def get_plan(self, subject, identity):
         plan, raw = self.plan(identity)
         self.authority.require(subject, "read", plan.targets)
+        with self.journal.connection() as db:
+            consumed = db.execute("SELECT id FROM jobs WHERE plan_id=?", (identity,)).fetchone()
         return {
             "plan_id": plan.id,
             "plan_digest": digest(raw),
@@ -70,6 +73,7 @@ class Coordinator:
                 for s in plan.steps
             ],
             "parent_job_id": plan.parent_job_id,
+            "consumed_job_id": consumed[0] if consumed else None,
         }
 
     def plan(self, identity):
@@ -82,6 +86,7 @@ class Coordinator:
             return decode(Plan, row[1]), row[1]
 
     def create_plan(self, subject, action, targets, request_key, parent_job_id=None):
+        self.guard()
         payload = {"action": action, "targets": targets, "parent_job_id": parent_job_id}
         self.authority.require(subject, "plan", targets)
         with self.journal.transaction() as db:
@@ -115,6 +120,69 @@ class Coordinator:
             int(self.journal.meta("epoch")),
             parent_job_id,
         )
+        from flamoris_update_core.inventory import fingerprint
+
+        dependency_observations = {
+            i: fingerprint(o) for i, o in observed.items() if i not in plan.targets
+        }
+        plan = plan.model_copy(
+            update={
+                "provider_observations": dependency_observations,
+                "hosts": sorted(
+                    set(plan.hosts) | {self.profiles[i].host_id for i in dependency_observations}
+                ),
+            }
+        )
+        plan = plan.model_copy(
+            update={
+                "catalog_sequences": {
+                    manifests[i].application_id: self.releases._catalog(
+                        manifests[i].application_id
+                    )["sequence"]
+                    for i in plan.targets
+                }
+            }
+        )
+        if action == "recover":
+            if not self.journal.get("frozen_parent", parent_job_id):
+                raise UpdateError("recovery_required")
+            parent_plan, parent_raw = self.plan(parent["plan_id"])
+            if plan.targets != parent_plan.previous_targets:
+                raise UpdateError(
+                    "forbidden", "Recovery requires the recorded previous executables"
+                )
+            snapshots = {}
+            for previous_step in parent_plan.steps:
+                if previous_step.operation == "snapshot":
+                    saved = self.journal.get("receipt", parent_job_id + "." + previous_step.id)
+                    if saved is None:
+                        raise UpdateError("backup_unverified")
+                    proof = receipt(
+                        saved["packet"],
+                        self.receipt_keys,
+                        self.domain,
+                        parent_job_id,
+                        digest(parent_raw),
+                        previous_step,
+                    )
+                    snapshots[previous_step.deployment_id] = proof["result"]["snapshot_digest"]
+            plan = plan.model_copy(
+                update={
+                    "steps": [
+                        s.model_copy(
+                            update={
+                                "arguments": {
+                                    **s.arguments,
+                                    "snapshot_digest": snapshots[s.deployment_id],
+                                }
+                            }
+                        )
+                        if s.operation == "restore"
+                        else s
+                        for s in plan.steps
+                    ]
+                }
+            )
         self.authority.require(subject, "plan", plan.targets)
         for identity in plan.targets:
             verify_entry(self.profiles[identity], observed[identity], action)
@@ -135,6 +203,7 @@ class Coordinator:
         return self.get_plan(subject, plan.id)
 
     def authorize(self, operator, caller, plan_id, plan_digest):
+        self.guard()
         plan, raw = self.plan(plan_id)
         if digest(raw) != plan_digest:
             raise UpdateError("stale_plan")
@@ -150,6 +219,7 @@ class Coordinator:
         actions=frozenset({"update", "install"}),
         protected=False,
     ):
+        self.guard()
         plan, raw = self.plan(plan_id)
         if plan.action not in actions or (plan.action == "recover" and not protected):
             raise UpdateError("forbidden")
@@ -221,7 +291,9 @@ class Coordinator:
         plan, _ = self.plan(row["plan_id"])
         self.authority.require(subject, "read", plan.targets)
         info = loads(row["payload"])
+        resolution = self.journal.get("parent_resolution", identity)
         return {
+            "resolution_job_id": resolution["child_job_id"] if resolution else None,
             "job_id": identity,
             "plan_id": plan.id,
             "state": row["state"],
@@ -231,7 +303,7 @@ class Coordinator:
             "error": info["error"],
             "parent_job_id": info["parent_job_id"],
             "blocked_resources": plan.resources
-            if row["state"] not in {"succeeded", "failed_safe", "cancelled_safe"}
+            if not resolution and row["state"] not in {"succeeded", "failed_safe", "cancelled_safe"}
             else [],
         }
 
@@ -283,6 +355,7 @@ class Coordinator:
         info = loads(row["payload"])
         try:
             for step in plan.steps:
+                self.guard()
                 known = self.journal.get("receipt", identity + "." + step.id)
                 if known:
                     continue
@@ -302,8 +375,22 @@ class Coordinator:
                     or self.journal.meta("mode") != "active"
                 ):
                     raise UpdateError("policy_changed")
+                from flamoris_update_core.inventory import fingerprint
+
+                for provider_id, expected in plan.provider_observations.items():
+                    if (
+                        fingerprint(
+                            self.hosts[self.profiles[provider_id].host_id].inspect(provider_id)
+                        )
+                        != expected
+                    ):
+                        raise UpdateError("stale_plan", "Bound provider changed")
                 for manifest_digest in plan.targets.values():
-                    self.releases.get(manifest_digest)
+                    trusted = self.releases.get(manifest_digest)
+                    if self.releases._catalog(trusted.application_id)[
+                        "sequence"
+                    ] < plan.catalog_sequences.get(trusted.application_id, 1):
+                        raise UpdateError("catalog_replay")
                 predecessors = {}
                 for previous in step.predecessors:
                     saved = self.journal.get("receipt", identity + "." + previous)
@@ -352,6 +439,9 @@ class Coordinator:
                     ):
                         raise UpdateError("outcome_unknown")
                     inventory[target] = observed.model_dump()
+            if plan.action == "recover":
+                self._state(identity, "finalizing")
+                return  # Protected controller performs linked acceptance atomically after host resolution.
             with self.journal.transaction() as db:
                 for target, observation in inventory.items():
                     self.journal.put("inventory", target, observation, db)
@@ -384,6 +474,8 @@ class Coordinator:
                     }
                 )
                 response = self.hosts[host_id].abort(packet)
+                if response.get("signature", {}).get("key_id") != host_id:
+                    raise UpdateError("outcome_unknown")
                 evidence = open_packet(response, self.receipt_keys, self.domain, "receipt")
                 if evidence != {
                     "command": "preparation_aborted",
@@ -424,20 +516,36 @@ class Coordinator:
                 "application_id": x["application_id"],
                 "release": x["release"],
                 "manifest_digest": x["manifest_digest"],
-                "stale": True,
+                "observed_at": x.get("observed_at", 0),
+                "stale": x.get("observed_at", 0) < self.clock() - 300,
             }
             for x in rows
             if x["id"] in principal["targets"]
         ]
         return {"items": items, "next_cursor": rows[-1]["id"] if len(rows) == limit else None}
 
-    def worker(self):
-        with exclusive(self.journal.directory / "coordinator.lock"):
+    def worker(self, own_lock=True):
+        from contextlib import nullcontext
+
+        with exclusive(self.journal.directory / "coordinator.lock") if own_lock else nullcontext():
+            while self.journal.meta("mode") != "active" and not self.stopping.is_set():
+                self.stopping.wait(0.25)
+            if self.journal.meta("mode") != "active":
+                return
             with self.journal.transaction() as db:
-                db.execute(
-                    "UPDATE jobs SET state='unknown',revision=revision+1 WHERE state NOT IN ('accepted','succeeded','failed_safe','cancelled_safe','recovery_required','unknown')"
-                )
+                interrupted = db.execute(
+                    "SELECT id FROM jobs WHERE state NOT IN ('accepted','succeeded','failed_safe','cancelled_safe','recovery_required','unknown')"
+                ).fetchall()
+                for row in interrupted:
+                    db.execute(
+                        "UPDATE jobs SET state='unknown',revision=revision+1 WHERE id=?", (row[0],)
+                    )
+                    self.journal.event(db, "job_interrupted", row[0], "unknown")
+            self.journal.flush_export()
             while not self.stopping.is_set():
+                if self.journal.meta("mode") != "active":
+                    self.stopping.wait(0.25)
+                    continue
                 with self.journal.connection() as db:
                     jobs = [
                         r[0]

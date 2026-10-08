@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="ja">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>FLAMORIS Updater</title><link rel="stylesheet" href="/static/style.css"><script src="/static/app.js" defer></script></head>
+<body>
+<header><a class="brand" href="/"><span class="mark">U</span><span>FLAMORIS <strong>Updater</strong></span></a><div id="identity"></div><button id="logout" class="quiet" hidden>ログアウト</button></header>
+<main>
+<section id="login-panel" class="login card"><div class="eyebrow">OPERATOR ACCESS</div><h1>制作環境を、次のバージョンへ。</h1><p>更新計画を確認してから実行できます。実行中の処理は、画面を閉じても記録されます。</p><form id="login-form"><label>アカウント<input name="username" autocomplete="username" required maxlength="128"></label><label>パスワード<input name="password" type="password" autocomplete="current-password" required maxlength="1024"></label><button type="submit">ログイン</button></form></section>
+<section id="workspace" hidden>
+<div class="heading"><div><div class="eyebrow">APPLICATION RELEASES</div><h1>更新管理</h1></div><button id="refresh" class="quiet">再読み込み</button></div>
+<nav aria-label="画面"><button id="tab-apps" class="active">アプリケーション</button><button id="tab-history">実行履歴</button></nav>
+<div id="applications" class="grid"></div><div id="history" hidden></div><button id="more-history" class="quiet" hidden>次の履歴</button>
+<section id="details" class="card" hidden><div class="eyebrow">RELEASE DETAILS</div><h2 id="details-title"></h2><div id="release-options"></div><pre id="release-notes"></pre><button id="more-notes" class="quiet" hidden>続きのリリース情報</button></section>
+<section id="plan" class="card" hidden><div class="eyebrow">UPDATE PLAN</div><h2>実行する計画</h2><div id="plan-summary"></div><div id="plan-steps"></div><p class="hint">表示されたアプリと資源が、この計画の対象です。バックアップと復元確認を経て切り替えます。</p><button id="execute">この計画を承認して実行</button></section>
+<section id="job" class="card" hidden><div class="eyebrow">DURABLE JOB</div><h2>実行状況</h2><div id="job-status" role="status" aria-live="polite"></div><button id="cancel" class="quiet">取消を依頼</button><p class="hint">取消は安全な区切りで判断されます。復旧が必要な場合は、調査と検証を経て対応します。</p></section>
+</section>
+<div id="message" role="alert" aria-live="polite" hidden></div>
+</main><footer>FLAMORIS · Updater専用の管理画面</footer>
+</body></html>

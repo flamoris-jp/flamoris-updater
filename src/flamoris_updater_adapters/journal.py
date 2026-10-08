@@ -120,7 +120,11 @@ class Journal:
         row = db.execute(
             "SELECT payload,revision FROM records WHERE kind=? AND id=?", (kind, identity)
         ).fetchone()
-        return None if row is None else {**loads(row["payload"]), "_revision": row["revision"]}
+        return (
+            None
+            if row is None
+            else {**loads(row["payload"], 2 * 1024 * 1024), "_revision": row["revision"]}
+        )
 
     def put(self, kind: str, identity: str, payload: dict, db, expected: int | None = None):
         payload = {k: v for k, v in payload.items() if k != "_revision"}
@@ -143,7 +147,8 @@ class Journal:
                 (kind, cursor, limit),
             ).fetchall()
             return [
-                {**loads(r["payload"]), "id": r["id"], "_revision": r["revision"]} for r in rows
+                {**loads(r["payload"], 2 * 1024 * 1024), "id": r["id"], "_revision": r["revision"]}
+                for r in rows
             ]
 
     def meta(self, key: str, db=None) -> str:
@@ -191,7 +196,13 @@ class Journal:
                     "SELECT sequence,payload,digest FROM events ORDER BY sequence"
                 ).fetchall()
                 lines = [
-                    dumps({"sequence": r["sequence"], "digest": r["digest"], **loads(r["payload"])})
+                    dumps(
+                        {
+                            "sequence": r["sequence"],
+                            "digest": r["digest"],
+                            **loads(r["payload"], 2 * 1024 * 1024),
+                        }
+                    )
                     for r in rows
                 ]
             durable_write(

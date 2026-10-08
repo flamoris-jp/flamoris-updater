@@ -82,9 +82,9 @@ class BoundedReader:
         self.source, self.remaining = source, budget
 
     def read(self, size=-1):
-        if size < 0 or size > min(self.remaining, 1024 * 1024):
+        if size < 0 or size > 1024 * 1024:
             raise UpdateError("quota_exceeded")
-        result = self.source.read(size)
+        result = self.source.read(min(size, self.remaining + 1))
         self.remaining -= len(result)
         if self.remaining < 0:
             raise UpdateError("quota_exceeded")
@@ -161,6 +161,9 @@ class NativeStore:
                                 or len(members) >= self.max_files
                                 or not (member.isdir() or member.isfile())
                                 or member.mode & 0o7000
+                                or member.uid != 0
+                                or member.gid != 0
+                                or member.sparse is not None
                             ):
                                 raise UpdateError("unsafe_artifact")
                             members.add(name)
@@ -186,8 +189,8 @@ class NativeStore:
             for path in tree.rglob("*"):
                 if path.is_dir():
                     path.chmod(0o555)
-            tree.chmod(0o555)
             os.replace(tree, destination)
+            destination.chmod(0o555)
             parent = os.open(self.root, os.O_DIRECTORY)
             try:
                 os.fsync(parent)
@@ -200,6 +203,7 @@ class NativeStore:
         if (
             directory.is_symlink()
             or not directory.is_dir()
+            or (not staged and directory.stat().st_mode & 0o222)
             or directory.parent.resolve() != self.root.resolve()
             and not staged
         ):
@@ -209,6 +213,8 @@ class NativeStore:
             index_path.is_symlink()
             or not index_path.is_file()
             or index_path.stat().st_size > 1024 * 1024
+            or index_path.stat().st_mode & 0o222
+            or index_path.stat().st_uid != os.geteuid()
         ):
             raise UpdateError("unsafe_artifact")
         raw = index_path.read_bytes()

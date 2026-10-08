@@ -82,6 +82,10 @@ class Planner:
         if action in {"recover", "verify_recovery"} and parent is None:
             raise UpdateError("invalid_input")
         selected = self.affected(requested, action)
+        manifests = {
+            i: m.select(self.profiles[i].platform, self.profiles[i].artifact_kind)
+            for i, m in manifests.items()
+        }
         # Include every affected shared-resource participant and incoming consumer.
         if action in {"update", "recover"}:
             while True:
@@ -109,6 +113,20 @@ class Planner:
             targets[identity] = observed[identity].manifest_digest
         graph = {i: set() for i in selected}
         paths = {}
+        shared_targets = {}
+        shared_observed = {}
+        for identity in selected:
+            profile = self.profiles[identity]
+            for logical, physical in profile.resources.items():
+                target_schema = manifests[identity].schema_targets.get(logical)
+                old = shared_targets.setdefault(physical, target_schema)
+                actual = observed[identity].schemas.get(logical)
+                prior = shared_observed.setdefault(physical, actual)
+                if old != target_schema or prior != actual:
+                    raise UpdateError("incompatible_dependency", "Shared resource schemas disagree")
+                owner = self.resources[physical].owner_deployment
+                if owner in selected and owner != identity:
+                    graph[identity].add(owner)
         for identity in selected:
             profile, manifest, obs = (
                 self.profiles[identity],
@@ -123,6 +141,10 @@ class Planner:
                 obs.application_id != profile.application_id
                 or manifest.application_id != profile.application_id
                 or obs.resource_bindings != profile.resources
+                or obs.physical_binding_digests
+                != {
+                    r: self.resources[r].physical_binding_digest for r in profile.resources.values()
+                }
                 or obs.profile_digest != digest(dumps(profile))
                 or manifest.artifact.platform != profile.platform
                 or manifest.artifact.kind != profile.artifact_kind
@@ -164,7 +186,12 @@ class Planner:
                     raise UpdateError("unsupported_entry")
                 if action == "update" and version(manifest.release) < version(obs.release):
                     raise UpdateError("unsupported_entry", "Automatic downgrade is excluded")
-                paths[identity] = [] if action == "recover" else route(manifest, obs.schemas)
+                starting_schemas = dict(obs.schemas)
+                if action == "update":
+                    for logical, physical in profile.resources.items():
+                        if self.resources[physical].owner_deployment != identity:
+                            starting_schemas[logical] = shared_targets[physical]
+                paths[identity] = [] if action == "recover" else route(manifest, starting_schemas)
                 if action in {"enroll", "verify_recovery"} and paths[identity]:
                     raise UpdateError(
                         "unsupported_migration", "Read-only action cannot transform schemas"
@@ -177,7 +204,11 @@ class Planner:
             for edge_id in paths[identity]:
                 edge = by_id[edge_id]
                 if (
-                    edge.runner_profile not in profile.runner_profiles
+                    any(
+                        self.resources[profile.resources[logical]].owner_deployment != identity
+                        for logical in edge.affected_resources
+                    )
+                    or edge.runner_profile not in profile.runner_profiles
                     or edge.restore_profile not in profile.restore_profiles
                     or not edge.backup_required
                     or not manifest.recovery.data_restore
@@ -258,7 +289,8 @@ class Planner:
             phase("prepared", [(i, "begin", {}) for i in sorted(selected)])
             phase("quiescing", [(i, "close_admission", {}) for i in sorted(selected)])
             phase("quiescing", [(i, "drain", {}) for i in sorted(selected)])
-            phase("quiescing", [(i, "stop", {}) for i in reversed(activation)])
+            for identity in reversed(activation):
+                phase("quiescing", [(identity, "stop", {})])
             backup_owners = sorted(
                 {
                     self.resources[r].owner_deployment
@@ -303,7 +335,8 @@ class Planner:
                     for i in sorted(selected)
                 ],
             )
-            phase("reopening", [(i, "reopen_admission", {}) for i in activation])
+            for identity in activation:
+                phase("reopening", [(identity, "reopen_admission", {})])
         phase(
             "finalizing",
             [
@@ -317,6 +350,8 @@ class Planner:
             targets=targets,
             resources=sorted({r for i in selected for r in self.profiles[i].resources.values()}),
             hosts=sorted({self.profiles[i].host_id for i in selected}),
+            previous_targets={i: observed[i].manifest_digest for i in selected},
+            previous_schemas={i: observed[i].schemas for i in selected},
             observations={i: fingerprint(observed[i]) for i in sorted(selected)},
             profile_digests={i: digest(dumps(self.profiles[i])) for i in selected},
             policy_revision=policy_revision,

@@ -1,3 +1,5 @@
+import time
+import uuid
 from pathlib import Path
 
 import httpx
@@ -41,11 +43,13 @@ class RemoteOwner:
             raise UpdateError("outcome_unknown", "Owner response is unavailable") from None
 
     def inspect(self, profile):
+        nonce = "obs-" + uuid.uuid4().hex
         raw = self._post(
             "inspect",
             dumps(
                 {
                     "contract_version": 1,
+                    "observation_id": nonce,
                     "deployment_id": profile.id,
                     "resource_ids": sorted(profile.resources.values()),
                     "profile_digest": digest(dumps(profile)),
@@ -54,7 +58,9 @@ class RemoteOwner:
         )
         result = decode(Observation, raw, 256 * 1024)
         if (
-            result.deployment_id != profile.id
+            result.observation_id != nonce
+            or not int(time.time()) - 30 <= result.observed_at <= int(time.time()) + 5
+            or result.deployment_id != profile.id
             or result.application_id != profile.application_id
             or result.profile_digest != digest(dumps(profile))
             or result.resource_bindings != profile.resources

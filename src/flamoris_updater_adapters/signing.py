@@ -51,6 +51,8 @@ def verify(
         or type(obj["signature_version"]) is not int
         or obj["signature_version"] != 1
         or obj["algorithm"] != "ed25519"
+        or not isinstance(obj["key_id"], str)
+        or not isinstance(obj["signature"], str)
         or obj["manifest_sha256"] != digest(data)
     ):
         raise UpdateError("untrusted_release")

@@ -3,6 +3,7 @@ from typing import Protocol
 
 from flamoris_update_core.contracts import OwnerRequest, OwnerResult, verified
 from flamoris_update_core.errors import UpdateError
+from flamoris_update_core.execution_graph import validate_execution_graph
 from flamoris_update_core.inventory import DeploymentProfile, Observation, fingerprint
 from flamoris_update_core.models import Manifest, Plan, Step
 from flamoris_update_core.wire import decode, digest, dumps, loads
@@ -68,9 +69,12 @@ class HostExecutor:
         authorities: dict[str, Key],
         receipt_keys: dict[str, Key],
         clock,
+        resources=None,
     ):
         self.host_id, self.domain, self.journal = host_id, domain, journal
+        self.resources = resources
         self.profiles, self.releases, self.backend = profiles, releases, backend
+        self.guard = lambda: None
         self.signer, self.authorities, self.receipt_keys, self.clock = (
             signer,
             authorities,
@@ -79,10 +83,23 @@ class HostExecutor:
         )
 
     def inspect(self, identity: str) -> Observation:
+        self.guard()
         profile = self.profiles.get(identity)
         if profile is None or profile.host_id != self.host_id:
             raise UpdateError("forbidden")
-        return self.backend.inspect(profile)
+        observed = self.backend.inspect(profile)
+        if self.resources is not None and observed.physical_binding_digests != {
+            r: self.resources[r].physical_binding_digest for r in profile.resources.values()
+        }:
+            raise UpdateError("invalid_profile")
+        observed = observed.model_copy(update={"observed_at": self.clock()})
+        with self.journal.connection() as db:
+            unresolved = db.execute(
+                "SELECT job_id FROM operations WHERE outcome IN ('intent','unknown','partial_known')"
+            ).fetchall()
+        if any(not self.journal.get("frozen_parent", row[0]) for row in unresolved):
+            return observed.model_copy(update={"unknown_work": True})
+        return observed
 
     def outcome(self, operation_id: str) -> dict:
         with self.journal.connection() as db:
@@ -133,6 +150,7 @@ class HostExecutor:
             return response
 
     def run(self, packet: dict) -> dict:
+        self.guard()
         purpose = (
             "controller"
             if packet.get("signature", {}).get("key_id")
@@ -164,6 +182,7 @@ class HostExecutor:
         except (ValueError, TypeError):
             raise UpdateError("invalid_input") from None
         plan = decode(Plan, plan_raw)
+        validate_execution_graph(plan)
         plan_digest = digest(plan_raw)
         if (
             type(ticket["epoch"]) is not int
@@ -189,6 +208,12 @@ class HostExecutor:
             or set(step.resources) != set(profile.resources.values())
         ):
             raise UpdateError("forbidden")
+        if (
+            self.resources is not None
+            and step.operation in {"snapshot", "restore_verify", "restore", "verify_restored_state"}
+            and any(self.resources[r].owner_deployment != profile.id for r in step.resources)
+        ):
+            raise UpdateError("forbidden")
         if plan.action == "recover" and purpose != "controller":
             raise UpdateError("forbidden")
         if plan.action not in {"update", "install", "enroll", "verify_recovery", "recover"}:
@@ -198,9 +223,10 @@ class HostExecutor:
             raise UpdateError("forbidden")
         if plan.action == "verify_recovery" and not plan.parent_job_id:
             raise UpdateError("invalid_input")
+        group_epochs = {}
         for predecessor_id, predecessor in ticket["predecessors"].items():
             predecessor_step = next(s for s in plan.steps if s.id == predecessor_id)
-            receipt(
+            confirmed = receipt(
                 predecessor,
                 self.receipt_keys,
                 self.domain,
@@ -208,9 +234,15 @@ class HostExecutor:
                 plan_digest,
                 predecessor_step,
             )
+            for resource_id, epoch in confirmed["result"]["maintenance_epochs"].items():
+                if resource_id in group_epochs and group_epochs[resource_id] != epoch:
+                    raise UpdateError(
+                        "outcome_unknown", "Shared resource maintenance epochs disagree"
+                    )
+                group_epochs[resource_id] = epoch
         manifest = self.releases.get(
             plan.targets[profile.id], eligible=step.operation in {"prepare", "activate"}
-        )
+        ).select(profile.platform, profile.artifact_kind)
         if manifest.application_id != profile.application_id:
             raise UpdateError("forbidden")
         operation_id = ticket["job_id"] + "." + step.id
@@ -236,6 +268,8 @@ class HostExecutor:
                     if existing[0] != binding:
                         raise UpdateError("operation_conflict")
                     return self.outcome(operation_id)
+                if self.journal.get("frozen_parent", ticket["job_id"], db):
+                    raise UpdateError("recovery_required", "Frozen parent operations cannot resume")
                 if self.journal.meta("mode", db) != "active":
                     raise UpdateError("busy")
                 # A read-only child cannot claim a blocked parent's mutation rights.
@@ -244,7 +278,9 @@ class HostExecutor:
                         "SELECT 1 FROM operations WHERE job_id=? AND outcome IN ('intent','unknown','partial_known') LIMIT 1",
                         (plan.parent_job_id or "",),
                     ).fetchone()
-                    if unsettled:
+                    if unsettled and not self.journal.get(
+                        "frozen_parent", plan.parent_job_id or "", db
+                    ):
                         raise UpdateError("outcome_unknown")
                 if step.operation == "prepare":
                     if not read_only:
@@ -263,7 +299,11 @@ class HostExecutor:
                     self.journal.put(
                         "host_plan",
                         ticket["job_id"],
-                        {"plan_digest": plan_digest, "admitted_at": ticket["admitted_at"]},
+                        {
+                            "plan_digest": plan_digest,
+                            "admitted_at": ticket["admitted_at"],
+                            "plan": ticket["plan"],
+                        },
                         db,
                     )
                 elif (self.journal.get("host_plan", ticket["job_id"], db) or {}).get(
@@ -304,6 +344,18 @@ class HostExecutor:
                         if set(result.maintenance_epochs) != set(step.resources):
                             raise UpdateError("outcome_unknown")
                         for resource_id, epoch in result.maintenance_epochs.items():
+                            previous = self.journal.get("maintenance", resource_id, db)
+                            if previous and (
+                                (
+                                    previous["job_id"] == ticket["job_id"]
+                                    and previous["epoch"] != epoch
+                                )
+                                or (
+                                    previous["job_id"] != ticket["job_id"]
+                                    and previous["epoch"] >= epoch
+                                )
+                            ):
+                                raise UpdateError("outcome_unknown")
                             self.journal.put(
                                 "maintenance",
                                 resource_id,
@@ -311,21 +363,22 @@ class HostExecutor:
                                 db,
                             )
                     if step.operation == "release" and not read_only:
-                        # Local release is acknowledged before coordinator final acceptance.
-                        for resource_id in step.resources:
-                            db.execute(
-                                "DELETE FROM claims WHERE kind='resource' AND id=? AND job_id=?",
-                                (resource_id, ticket["job_id"]),
-                            )
-                        remaining = db.execute(
-                            "SELECT 1 FROM claims WHERE kind='resource' AND job_id=? LIMIT 1",
-                            (ticket["job_id"],),
-                        ).fetchone()
-                        if not remaining:
-                            db.execute(
-                                "DELETE FROM claims WHERE kind='host' AND id=? AND job_id=?",
-                                (self.host_id, ticket["job_id"]),
-                            )
+                        # Keep shared local claims until every local participant finalized.
+                        required = [
+                            s
+                            for s in plan.steps
+                            if s.host_id == self.host_id and s.operation == "release"
+                        ]
+                        done = all(
+                            s.id == step.id
+                            or db.execute(
+                                "SELECT 1 FROM operations WHERE id=? AND outcome IN ('verified','applied_verified')",
+                                (ticket["job_id"] + "." + s.id,),
+                            ).fetchone()
+                            for s in required
+                        )
+                        if done:
+                            db.execute("DELETE FROM claims WHERE job_id=?", (ticket["job_id"],))
                     db.execute(
                         "UPDATE operations SET outcome=?,result=? WHERE id=?",
                         (result.outcome, dumps(response), operation_id),
@@ -355,7 +408,10 @@ class HostExecutor:
         epochs = {}
         for r in step.resources:
             maintenance = self.journal.get("maintenance", r)
-            if maintenance and maintenance["job_id"] == job_id:
+            if maintenance and maintenance["job_id"] in {
+                job_id,
+                plan.parent_job_id if read_only else None,
+            }:
                 epochs[r] = maintenance["epoch"]
         if (
             not read_only
@@ -371,7 +427,7 @@ class HostExecutor:
             ):
                 raise UpdateError("stale_plan")
             schemas.update(step.arguments["to"])
-        elif step.operation in {"validate", "initialize"}:
+        elif step.operation in {"validate", "initialize", "restore", "verify_restored_state"}:
             schemas = manifest.schema_targets
         if step.operation in {"prepare", "begin"} or (step.operation == "release" and read_only):
             return OwnerResult(
@@ -421,5 +477,32 @@ class HostExecutor:
                 == "snapshot"
             ]
             if result.snapshot_digest not in expected:
+                raise UpdateError("backup_unverified")
+        if step.operation == "restore":
+            parent = plan.parent_job_id
+            frozen = self.journal.get("frozen_parent", parent)
+            with self.journal.connection() as db:
+                packets = [
+                    loads(row[0])
+                    for row in db.execute(
+                        "SELECT result FROM operations WHERE job_id=? AND result IS NOT NULL AND outcome='verified'",
+                        (parent,),
+                    )
+                ]
+            snapshots = [
+                open_packet(packet, self.receipt_keys, self.domain, "receipt") for packet in packets
+            ]
+            if (
+                not frozen
+                or result.snapshot_digest != step.arguments.get("snapshot_digest")
+                or not any(
+                    s["job_id"] == parent
+                    and s["plan_digest"] == frozen["plan_digest"]
+                    and s["result"]["operation"] == "snapshot"
+                    and s["result"]["deployment_id"] == profile.id
+                    and s["result"]["snapshot_digest"] == result.snapshot_digest
+                    for s in snapshots
+                )
+            ):
                 raise UpdateError("backup_unverified")
         return result

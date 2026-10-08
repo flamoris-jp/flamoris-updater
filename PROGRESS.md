@@ -53,4 +53,4 @@ Added future fault/acceptance cases; none were executed as runtime tests. Source
 
 ## Next checkpoint
 
-The user authorized implementation, review/correction loops and completion. Implement Updater-owned U1–U7; application-specific A1/A2, private inventory/key/profile provisioning and D1 live rollout remain separate deliverables. Initial isolated execution tests: 31 passed, covering malformed contracts, direct/ambiguous/cyclic routes, duplicate plans/operations, lost effect responses, process death, restoration proof, cancellation and revocation. This is interim source evidence, not final validation or live acceptance.
+The user authorized implementation, review/correction loops and completion. Implement Updater-owned U1–U7; application-specific A1/A2, private inventory/key/profile provisioning and D1 live rollout remain separate deliverables. Interim isolated execution/interface/artifact/recovery tests: 71 passed, covering malformed contracts, direct/ambiguous/cyclic routes, duplicate plans/operations, lost effect responses, process death, restoration proof, cancellation and revocation. This is interim source evidence, not final validation or live acceptance.

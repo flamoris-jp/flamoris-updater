@@ -64,6 +64,17 @@ Op = Literal[
 class Model(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True, frozen=True, populate_by_name=True)
 
+    @model_validator(mode="before")
+    @classmethod
+    def integer_versions(cls, value):
+        if isinstance(value, dict) and any(
+            name.endswith("_version") and name in value and type(value[name]) is not int
+            for name in cls.model_fields
+            if name.endswith("_version") and cls.model_fields[name].annotation == Literal[1]
+        ):
+            raise ValueError("Protocol versions must be integers")
+        return value
+
 
 class VersionRange(Model):
     min_inclusive: str
@@ -200,6 +211,17 @@ class Initialization(Model):
     schema_targets: dict[ID, Schema] | None = None
     failed_initialization_recovery_profile: ID | None = None
 
+    @model_validator(mode="before")
+    @classmethod
+    def unsupported_fields(cls, value):
+        if (
+            isinstance(value, dict)
+            and value.get("supported") is False
+            and set(value) != {"supported"}
+        ):
+            raise ValueError("unsupported initialization has no optional fields")
+        return value
+
     @model_validator(mode="after")
     def shape(self):
         fields = (
@@ -237,6 +259,7 @@ class Manifest(Model):
     release: str
     source: Source
     artifact: Artifact
+    artifact_variants: list[Artifact] = Field(default_factory=list, max_length=7)
     components: list[Component] = Field(max_length=128)
     interfaces: list[Interface] = Field(max_length=128)
     dependencies: list[Dependency] = Field(max_length=128)
@@ -252,6 +275,9 @@ class Manifest(Model):
     @model_validator(mode="after")
     def consistency(self):
         version(self.release)
+        artifacts = [self.artifact, *self.artifact_variants]
+        if len({(a.kind, a.platform) for a in artifacts}) != len(artifacts):
+            raise ValueError("ambiguous artifact variants")
         for component in self.components:
             version(component.version)
         for items in (self.components, self.interfaces, self.migrations):
@@ -275,6 +301,20 @@ class Manifest(Model):
             raise ValueError("initial schema target mismatch")
         return self
 
+    def select(self, platform, kind):
+        from .errors import UpdateError
+
+        artifacts = [self.artifact, *self.artifact_variants]
+        selected = [a for a in artifacts if a.platform == platform and a.kind == kind]
+        if len(selected) != 1:
+            raise UpdateError("unsupported_platform")
+        return self.model_copy(
+            update={
+                "artifact": selected[0],
+                "artifact_variants": [a for a in artifacts if a != selected[0]],
+            }
+        )
+
 
 class Step(Model):
     id: ID
@@ -294,6 +334,10 @@ class Plan(Model):
     targets: dict[ID, Digest]
     resources: list[ID]
     hosts: list[ID]
+    provider_observations: dict[ID, Digest] = Field(default_factory=dict)
+    catalog_sequences: dict[ID, int] = Field(default_factory=dict)
+    previous_targets: dict[ID, Digest | None] = Field(default_factory=dict)
+    previous_schemas: dict[ID, dict[ID, Schema]] = Field(default_factory=dict)
     observations: dict[ID, Digest]
     profile_digests: dict[ID, Digest]
     policy_revision: int = Field(ge=1)

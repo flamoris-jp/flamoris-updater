@@ -143,6 +143,9 @@ def observation(p, release_id, release="1.0.0", schema="db-1"):
         release=release,
         schemas={"database": schema},
         resource_bindings=p.resources,
+        physical_binding_digests={
+            r: digest(("physical-" + r).encode()) for r in p.resources.values()
+        },
         profile_digest=digest(dumps(p)),
         config_revision=digest(b"config"),
         journal_revision=1,
@@ -176,7 +179,7 @@ class FakeBackend:
         if r.operation == self.fail:
             raise OSError("private provider output must never escape")
         if r.operation == "close_admission":
-            self.epochs = {x: 1 for x in r.resource_ids}
+            self.epochs = {x: self.epochs.get(x, 0) + 1 for x in r.resource_ids}
         if r.operation in {"apply_step", "initialize"}:
             self.schema = dict(r.expected_schemas)
         if r.operation == "activate":

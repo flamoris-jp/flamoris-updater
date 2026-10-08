@@ -47,6 +47,9 @@ class Observation(Model):
     release: str | None
     schemas: dict[ID, Schema]
     resource_bindings: dict[ID, ID]
+    physical_binding_digests: dict[ID, Digest] = Field(default_factory=dict)
+    observed_at: int = Field(default=0, ge=0)
+    observation_id: ID | None = None
     profile_digest: Digest
     config_revision: Digest
     journal_revision: int = Field(ge=0)
@@ -63,5 +66,7 @@ class Observation(Model):
 def fingerprint(observation: Observation) -> str:
     from .wire import digest, dumps
 
-    payload = observation.model_dump(exclude={"evidence", "journal_revision"})
+    payload = observation.model_dump(
+        exclude={"evidence", "journal_revision", "observed_at", "observation_id"}
+    )
     return digest(dumps(payload))

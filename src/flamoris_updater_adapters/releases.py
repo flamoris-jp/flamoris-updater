@@ -104,6 +104,8 @@ class ReleaseStore:
     ):
         self.journal, self.keys, self.clock = journal, keys, clock
         self.channel_keys = channel_keys or {}
+        self.refresh = lambda application, channel="stable": None
+        self.ensure = lambda identity: None
 
     def accept_catalog(self, application: str, channel: str, raw: bytes, signature: bytes):
         keys = {
@@ -129,6 +131,12 @@ class ReleaseStore:
                 or (catalog.sequence == previous["sequence"] and digest(raw) != previous["digest"])
             ):
                 raise UpdateError("catalog_replay")
+            if (
+                previous
+                and catalog.sequence == previous["sequence"]
+                and digest(raw) == previous["digest"]
+            ):
+                return
             for entry in catalog.releases:
                 mapping = application + "." + entry.release
                 old = self.journal.get("release_mapping", mapping, db)
@@ -189,6 +197,9 @@ class ReleaseStore:
     def get(self, identity: str, channel: str = "stable", eligible: bool = True) -> Manifest:
         record = self.journal.get("release", identity)
         if record is None:
+            self.ensure(identity)
+            record = self.journal.get("release", identity)
+        if record is None:
             raise UpdateError("untrusted_release", "Verified release is unavailable")
         raw, signature = self.journal.blob(record["raw"]), self.journal.blob(record["signature"])
         verify(raw, signature, self.keys, record["application_id"], "release")
@@ -196,6 +207,7 @@ class ReleaseStore:
         if digest(raw) != identity:
             raise UpdateError("untrusted_release")
         if eligible:
+            self.refresh(manifest.application_id, channel)
             cat = self.journal.get("catalog", manifest.application_id + "." + channel)
             if cat is None:
                 raise UpdateError("untrusted_release", "Current signed catalog is required")
@@ -220,10 +232,27 @@ class ReleaseStore:
                 )
         return manifest
 
-    def candidates(self, application: str, channel: str = "stable") -> list[dict]:
+    def _catalog(self, application, channel="stable"):
         cat = self.journal.get("catalog", application + "." + channel)
         if cat is None:
-            return []
+            raise UpdateError("untrusted_release")
+        keys = {
+            k: v
+            for k, v in self.keys.items()
+            if k in self.channel_keys.get(channel, list(self.keys))
+        }
+        verify(
+            self.journal.blob(cat["raw"]),
+            self.journal.blob(cat["signature"]),
+            keys,
+            application,
+            "catalog",
+        )
+        return cat
+
+    def candidates(self, application: str, channel: str = "stable") -> list[dict]:
+        self.refresh(application, channel)
+        cat = self._catalog(application, channel)
         return [
             {
                 "release": x["release"],
@@ -231,7 +260,7 @@ class ReleaseStore:
                 "withdrawn": x["withdrawn"],
                 "stale": timestamp(cat["expires_at"]) <= self.clock(),
             }
-            for x in cat["releases"]
+            for x in sorted(cat["releases"], key=lambda e: version(e["release"]), reverse=True)
         ]
 
     def notes(
@@ -240,39 +269,84 @@ class ReleaseStore:
         low, high = version(start), version(end)
         if not 1 <= limit <= 100 or low >= high:
             raise UpdateError("invalid_input")
-        catalog = self.journal.get("catalog", application + ".stable")
-        if catalog is None:
-            raise UpdateError("untrusted_release")
-        all_entries = sorted(
+        catalog = self._catalog(application)
+        entries = sorted(
             (e for e in catalog["releases"] if low < version(e["release"]) <= high),
             key=lambda e: version(e["release"]),
         )
-        entries = [e for e in all_entries if not cursor or version(e["release"]) > version(cursor)]
-        results, missing, used = [], [], 0
-        for item in entries[:limit]:
+        binding = digest(
+            dumps({"catalog": catalog["digest"], "app": application, "start": start, "end": end})
+        ).removeprefix("sha256:")
+        index, human_offset, changes_offset = 0, 0, 0
+        if cursor:
+            try:
+                prefix, a, b, c = cursor.split(".")
+                if prefix != binding or any(not x.isdecimal() for x in (a, b, c)):
+                    raise ValueError("cursor")
+                index, human_offset, changes_offset = int(a), int(b), int(c)
+                if index >= len(entries):
+                    raise ValueError("index")
+            except ValueError:
+                raise UpdateError(
+                    "invalid_input", "Release-note cursor no longer matches this range"
+                ) from None
+        missing = [
+            e["release"]
+            for e in entries
+            if self.journal.get("release", e["manifest_digest"]) is None
+        ]
+        results, used = [], 0
+        while index < len(entries) and len(results) < limit:
+            item = entries[index]
             record = self.journal.get("release", item["manifest_digest"])
             if record is None:
-                missing.append(item["release"])
-                text = None
+                human, changes = "", ""
             else:
                 manifest = self.get(item["manifest_digest"], eligible=False)
-                human, changes = (
+                human_raw, changes_raw = (
                     self.journal.blob(record["human"]),
                     self.journal.blob(record["changes"]),
                 )
-                validate_notes(manifest, human, changes)
-                text = human.decode()
-            projected = {"release": item["release"], "withdrawn": item["withdrawn"], "human": text}
+                validate_notes(manifest, human_raw, changes_raw)
+                human, changes = human_raw.decode(), changes_raw.decode()
+            if human_offset > len(human) or changes_offset > len(changes):
+                raise UpdateError("invalid_input")
+            # Character boundaries preserve UTF-8. Each chunk is below the total escaped-byte cap.
+            human_chunk, changes_chunk = (
+                human[human_offset : human_offset + 65536],
+                changes[changes_offset : changes_offset + 65536],
+            )
+            last = human_offset + len(human_chunk) == len(human) and changes_offset + len(
+                changes_chunk
+            ) == len(changes)
+            projected = {
+                "release": item["release"],
+                "withdrawn": item["withdrawn"],
+                "human": human_chunk,
+                "changes": changes_chunk,
+                "human_offset": human_offset,
+                "changes_offset": changes_offset,
+                "last_chunk": last,
+            }
             size = len(dumps(projected))
-            if used + size > 2 * 1024 * 1024:
+            if used + size > 1800 * 1024:
                 break
             used += size
             results.append(projected)
+            if last:
+                index += 1
+                human_offset = changes_offset = 0
+            else:
+                human_offset += len(human_chunk)
+                changes_offset += len(changes_chunk)
+        next_cursor = (
+            f"{binding}.{index}.{human_offset}.{changes_offset}" if index < len(entries) else None
+        )
         return {
             "entries": results,
-            "complete": not missing and any(e["release"] == end for e in all_entries),
+            "complete": not missing
+            and next_cursor is None
+            and any(e["release"] == end for e in entries),
             "missing": missing,
-            "next_cursor": results[-1]["release"]
-            if results and len(results) < len(entries)
-            else None,
+            "next_cursor": next_cursor,
         }
