@@ -157,7 +157,7 @@ configuration was changed by this checkpoint.
 
 The live binding review found that replacement containers would otherwise lose
 their approved restart policy. Docker bindings now require an explicit
-`always`, `unless-stopped`, or `on-failure` policy; activation applies it
+`always` or `unless-stopped` policy; activation applies it
 and post-start attestation rejects drift. Linux verification is **139 passed, 2
 skipped**, with Ruff, format and documentation-link checks successful. PR review
 and CI at the new revision remain pending. No live service or host was changed.
