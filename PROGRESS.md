@@ -2,7 +2,7 @@
 
 Updated: 2026-10-10 (JST).
 
-## Simple installation and update — source complete, CI pending
+## Simple installation and update — source and CI verified
 
 Current authorization covers the agreed source changes, tests/CI and a reviewable
 PR; no live host changes or release publication. PRs #12 and #13 are merged.
@@ -38,6 +38,14 @@ Native wheel/venv staging, settings/data retention, socket-pair OS credentials,
 Web/MCP/CLI shared jobs, failures and path boundaries pass locally. Ruff/format,
 JavaScript syntax, documentation links, schema export and Updater/Core wheel/
 sdist builds pass. These results do not certify all app domains or real hosts.
+
+[CI run 37967458776](https://github.com/flamoris-jp/flamoris-updater/actions/runs/37967458776)
+on source commit `4e10f7837cba9118f063a060ed443d84c61e52fc` passed all five
+jobs: ordinary verification/build/schemas/docs, actual stopped Generation Docker
+provision/start/health, new PostgreSQL DB/role initialization plus managed flows,
+and amd64/arm64 indexed Native bundle verification. Its first predecessor run
+exposed the known OS-peer rejection/reset race; that was corrected and verified,
+not suppressed. The final documentation-only commit is also checked on PR #11.
 
 Limits: release candidates/catalogs are not published; six actual application
 first setups and external connections have not been accepted on real hosts.
