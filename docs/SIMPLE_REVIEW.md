@@ -38,6 +38,17 @@ release publication or external runtime was modified by this source work.
   the temporary socket directory. Setup code/credential values are not subprocess
   arguments or ordinary job/history responses.
 
+- Polling the Web could reset a form while typing or hide previous deletion
+  when no newer release existed. Cards retain drafts through polling and status
+  changes; previous deletion is independent of release choices. Only explicitly
+  compatible higher updates appear. Actual-script checks use a DOM adapter;
+  browser rendering/accessibility acceptance remains separate.
+- CI exposed an OS-peer rejection reply racing a close with unread request
+  bytes. The service consumes a bounded frame before rejecting the UID, still
+  before JSON parsing/guard/dispatch. Known rejection no longer becomes a reset.
+- Actual Docker CI now provisions stopped containers and verifies they remain
+  stopped, then explicitly starts and checks health/runtime identity.
+
 ## Evidence and limits
 
 Tests exercise real settings/files/SQLite/Auth/Web/MCP/CLI, actual offline native

@@ -242,6 +242,7 @@ class Manager:
                         "releases": [
                             {
                                 "release": r.release,
+                                "compatible_from": r.compatible_from,
                                 "settings": [s.model_dump() for s in r.settings],
                                 "dependencies": {
                                     k: v.model_dump() for k, v in r.dependencies.items()

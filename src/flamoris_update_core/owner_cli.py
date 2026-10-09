@@ -58,12 +58,14 @@ def serve_connection(connection, owner, allowed_peer_uids, guard, dispatch_fn=No
         _, uid, _ = struct.unpack(
             "3i", connection.getsockopt(socket.SOL_SOCKET, socket.SO_PEERCRED, 12)
         )
-        if uid not in allowed_peer_uids:
-            raise UpdateError("forbidden")
         size = struct.unpack("!I", receive_exact(connection, 4))[0]
-        packet = loads(receive_exact(connection, size))
+        frame = receive_exact(connection, size)
         # Consume the bounded frame before returning a policy error. Otherwise
         # closing with unread request bytes can turn a known rejection into a reset.
+        # Check OS identity before parsing or dispatching that untrusted frame.
+        if uid not in allowed_peer_uids:
+            raise UpdateError("forbidden")
+        packet = loads(frame)
         guard()
         if set(packet) != {"action", "body"} or not isinstance(packet["action"], str):
             raise UpdateError("invalid_input")

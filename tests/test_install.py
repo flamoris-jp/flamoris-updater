@@ -340,7 +340,13 @@ def test_real_docker_candidate_can_be_installed_and_become_ready(tmp_path):
         }
     )
     try:
-        assert Installer(cfg).apply()["phase"] == "succeeded"
+        installer = Installer(cfg)
+        assert installer.apply(start=False)["phase"] == "awaiting_setup"
+        stopped = json.loads(subprocess.check_output(["/usr/bin/docker", "inspect", container]))[0]
+        assert stopped["State"]["Running"] is False
+        subprocess.check_call(["/usr/bin/docker", "start", container])
+        installer.health(cfg.applications[0])
+        installer._verify_running(cfg.applications[0])
     finally:
         subprocess.run(
             ["/usr/bin/docker", "rm", "-f", container],

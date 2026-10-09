@@ -756,7 +756,7 @@ class Installer:
             argv = [
                 "/usr/bin/docker",
                 "run" if start else "create",
-                "--detach",
+                *(["--detach"] if start else []),
                 "--name",
                 app.container_name,
                 "--restart",
@@ -779,8 +779,6 @@ class Installer:
                 "--env-file",
                 app.environment_file,
             ]
-            if not start:
-                argv.remove("--detach")
             if app.hostname:
                 argv += ["--hostname", app.hostname]
             for port in app.ports:
@@ -899,10 +897,12 @@ class Installer:
                         effect(app)
                         record["phase"] = "step_succeeded"
                         persist()
-                record.update(phase="succeeded", application_id=None, step=None)
+                record.update(
+                    phase="succeeded" if start else "awaiting_setup", application_id=None, step=None
+                )
                 persist()
                 return {
-                    "phase": "succeeded",
+                    "phase": record["phase"],
                     "applications": [
                         {"application_id": a.application_id, "release": a.release}
                         for a in self.cfg.applications

@@ -139,6 +139,8 @@ def managed(tmp_path, monkeypatch):
             if argv[1] == "rename":
                 containers[argv[3]] = containers.pop(argv[2])
             if argv[1] in {"run", "create"}:
+                if argv[1] == "create":
+                    assert "--detach" not in argv
                 containers[app.container_name] = {
                     "Image": app.image_id,
                     "State": {"Running": argv[1] == "run"},
