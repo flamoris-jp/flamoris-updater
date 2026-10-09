@@ -224,9 +224,9 @@ class HostExecutor:
             raise UpdateError("forbidden")
         if plan.action == "recover" and purpose != "controller":
             raise UpdateError("forbidden")
-        if plan.action not in {"update", "install", "enroll", "verify_recovery", "recover"}:
+        if plan.action not in {"update", "install", "verify_recovery", "recover"}:
             raise UpdateError("protected_target")
-        read_only = plan.action in {"enroll", "verify_recovery"}
+        read_only = plan.action == "verify_recovery"
         if read_only and step.operation not in {"prepare", "validate", "release"}:
             raise UpdateError("forbidden")
         if plan.action == "verify_recovery" and not plan.parent_job_id:

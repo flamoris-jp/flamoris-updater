@@ -1,5 +1,9 @@
 # Application adoption review — 2026-10-08
 
+> Historical review evidence. Any entry-transition or unmanaged-registration
+> instructions below are obsolete; that feature has been removed. Use the
+> current [roadmap](ROADMAP.md) and [progress](../PROGRESS.md).
+
 The source review/fix loop is complete and all eight repositories have successful
 CI evidence. The operator made flamoris-updater public, resolving the anonymous
 SDK download 404. A subsequent Agent container failure was corrected and both

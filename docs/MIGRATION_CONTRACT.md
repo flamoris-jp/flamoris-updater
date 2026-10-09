@@ -64,11 +64,13 @@ Acquire an application-provided durable maintenance epoch/fence held through val
 
 DB migration credentials differ from runtime DML credentials. Backup and restore roles are narrowly scoped. Existing owners, ACLs, grants and protected data are validation invariants.
 
-## Standalone pre-entry migration
+## Application-owned schema migration
 
-AI-side v0.1 → v1.0 and GPU Node Manager v1.1 → v1.2 are executed by their applications. The runner and journal contract is the same without a coordinator dependency. The standalone tool produces a standalone_transition receipt binding application/deployment/artifact identity, resource schemas, validation, backup/recovery evidence and operation history. Fresh signed installations use verified_installation evidence; already supported signed deployments may use verified_adoption inspection evidence under [enrollment rules](EXECUTION_RECOVERY.md#enrollment-evidence-and-control-state-compatibility).
-
-Enrollment does not accept a receipt alone: the host re-inspects actual artifact/config/resources and verifies journal continuity. Old receipts or evidence from another deployment cannot enroll it.
+The independent runner remains available for normal schema changes through pinned
+application-owned handlers. It does not convert unmanaged deployments into
+Updater-managed installations. There are no entry-transition receipts or
+registration operations. Schema migration must not be confused with installing
+an old release before the target release.
 
 ## Acceptance scenarios
 
@@ -92,4 +94,4 @@ A restoration drill is not ordinary candidate startup. The backup owner supplies
 
 ## Source clarification
 
-Every physical resource has one registered owner and all known writers. Shared observed/target schemas must agree; only the owner changes/snapshots/restores it. Consumer guards can reference borrowed schemas after the owner's planned transition. Fresh owner inspections echo a nonce/time and report actual physical binding digests. The common standalone runner uses installed allowlisted handlers and durable intent; an unknown committed SQLite transaction is never replayed. Production proof correctness and baseline transformations remain adoption gates.
+Every physical resource has one registered owner and all known writers. Shared observed/target schemas must agree; only the owner changes/snapshots/restores it. Consumer guards can reference borrowed schemas after the owner's planned transition. Fresh owner inspections echo a nonce/time and report actual physical binding digests. The common standalone runner uses installed allowlisted handlers and durable intent; an unknown committed SQLite transaction is never replayed. Actual application handler and production proof correctness require separate verification.

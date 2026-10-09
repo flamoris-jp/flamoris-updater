@@ -57,9 +57,6 @@ class Observation(Model):
     unknown_work: bool
     evidence: list[ID] = Field(min_length=1)
     absent_resources: list[ID]
-    entry_evidence: (
-        Literal["standalone_transition", "verified_installation", "verified_adoption"] | None
-    )
     maintenance_epoch: int = Field(ge=0)
 
 

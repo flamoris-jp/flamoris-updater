@@ -1,6 +1,6 @@
 # MCP and operator interface v1
 
-**Reviewed v1 contract with fourteen callable SDK tools at `/mcp`.** `inputs.TOOLS` and exported schemas are authoritative for current payloads; see [running](RUNNING.md). Mutating protected recovery uses the independent CLI.
+**Reviewed v1 contract with twelve callable SDK tools at `/mcp`.** `inputs.TOOLS` and exported schemas are authoritative for current payloads; see [running](RUNNING.md). Mutating protected recovery uses the independent CLI.
 
 ## Surface and security
 
@@ -10,21 +10,19 @@ Internal coordinator ↔ host JSON API uses HTTPS with mutual TLS and per-operat
 
 MCP authenticates external callers through the configured ingress/Hub identity. Trust delegated principal/role only under an explicitly verified signed envelope; arbitrary JSON/header principal fields are not identity. Otherwise all requests use the configured connector service identity with its own limited scope.
 
-Roles: `read`, `plan`, `execute`, `enroll`, `cancel`, `recover_verify`, `operator`. Roles also restrict target deployments/resources. Possession of a plan/Job/receipt ID grants no access. Only a protected operator flow can issue authorization; an AI execution identity cannot self-authorize.
+Roles: `read`, `plan`, `execute`, `cancel`, `recover_verify`, `operator`. Roles also restrict target deployments/resources. Possession of a plan/Job/receipt ID grants no access. Only a protected operator flow can issue authorization; an AI execution identity cannot self-authorize.
 
 ## Tool proposals
 
 | Tool | Scope | Arguments / result |
 | --- | --- | --- |
-| `updater_inventory_list` | read | Optional target/page → enrolled and inspected identities, observed_at and stale status |
+| `updater_inventory_list` | read | Optional target/page → managed and inspected identities, observed_at and stale status |
 | `updater_releases_list` | read | Application/channel → verified candidates, withdrawal and compatibility summaries |
 | `updater_release_notes_get` | read | Application/from/to → ordered notes and completeness/missing history |
 | `updater_update_plan` | plan | Targets with exact release digests, request key → immutable plan, checks and blockers |
 | `updater_install_plan` | plan | Approved empty deployment targets, release digests, request key → explicit initialization plan |
-| `updater_enrollment_plan` | plan + enroll | Existing deployment/evidence refs, request key → validation/enrollment plan |
 | `updater_plan_get` | read | Plan ID → summary, digest, preconditions and authorization state |
 | `updater_update_execute` | execute | Plan ID/digest, authorization ID, request key → durable Job ID; action restricted to update/install |
-| `updater_enroll_execute` | enroll | Enrollment plan ID/digest, authorization ID, request key → validation Job, then inventory |
 | `updater_job_get` | read | Job ID/event cursor → phase, steps, known/unknown effects and next safe action |
 | `updater_job_cancel` | cancel | Job ID/request key → cooperative cancellation request, not proof of cancellation |
 | `updater_history_list` | read | Scoped targets/page → durable outcomes, blockers and recovery linkage |
@@ -111,7 +109,7 @@ See [dedicated Web design](WEB_UI.md). Self-update and production restoration re
 
 Read/query tools advertise `readOnlyHint:true`. Creating a plan is read-only with respect to application/deployment resources but writes coordinator metadata, so plan-creation tools advertise `readOnlyHint:false`, `destructiveHint:false` and `idempotentHint:true` with required request keys.
 
-Execute/enroll/cancel/verification tools advertise `readOnlyHint:false`. Idempotency hints reflect durable request-key deduplication, never permission to retry unresolved physical effects. Update/install execution can be destructive and must declare that annotation. Notes and annotations are usability hints; server authorization always enforces policy.
+Execute/cancel/verification tools advertise `readOnlyHint:false`. Idempotency hints reflect durable request-key deduplication, never permission to retry unresolved physical effects. Update/install execution can be destructive and must declare that annotation. Notes and annotations are usability hints; server authorization always enforces policy.
 
 Recovery verification needs an exact operator-authorized verification plan and returns evidence. Only the protected recovery controller can finalize blocker release/admission reopening after checking the full consistent state. Neither an arbitrary attached report nor a successful inspection tool call clears an unknown Job.
 

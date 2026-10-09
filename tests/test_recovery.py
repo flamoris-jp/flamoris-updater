@@ -23,7 +23,7 @@ def controller(environment, tmp_path):
     e.host.profiles[p.id] = p
     e.coordinator.authority.provision(
         "operator",
-        ["read", "plan", "execute", "enroll", "cancel", "recover_verify", "operator", "recover"],
+        ["read", "plan", "execute", "cancel", "recover_verify", "operator", "recover"],
         ["app", "updater"],
     )
     signing = Signer("controller", Ed25519PrivateKey.generate().private_bytes_raw())

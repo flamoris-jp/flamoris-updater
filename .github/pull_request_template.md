@@ -17,7 +17,7 @@ For runtime changes, describe API/schema impact, plan/authorization changes, bac
 ## Checklist
 
 - [ ] Core/wrapper, application-migration and neighboring service ownership remain clear.
-- [ ] Management-entry versions are preserved or an explicit policy change is documented.
+- [ ] Direct installation target versions are preserved or an explicit policy change is documented.
 - [ ] Relevant verification is complete; no planned capability is described as shipped.
 - [ ] Documentation and PROGRESS.md reflect the actual completion state.
 - [ ] No secrets, private topology, sensitive data or machine-specific runtime evidence were added.

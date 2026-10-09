@@ -74,7 +74,7 @@ class Planner:
         parent: str | None = None,
     ) -> Plan:
         if (
-            action not in {"update", "install", "enroll", "verify_recovery", "recover"}
+            action not in {"update", "install", "verify_recovery", "recover"}
             or not requested
             or not set(requested) <= set(self.profiles)
         ):
@@ -197,14 +197,10 @@ class Planner:
                         if self.resources[physical].owner_deployment != identity:
                             starting_schemas[logical] = shared_targets[physical]
                 paths[identity] = [] if action == "recover" else route(manifest, starting_schemas)
-                if action in {"enroll", "verify_recovery"} and paths[identity]:
+                if action == "verify_recovery" and paths[identity]:
                     raise UpdateError(
                         "unsupported_migration", "Read-only action cannot transform schemas"
                     )
-                if action == "enroll" and (
-                    obs.entry_evidence is None or obs.manifest_digest != targets[identity]
-                ):
-                    raise UpdateError("unsupported_entry")
             by_id = {e.id: e for e in manifest.migrations}
             for edge_id in paths[identity]:
                 edge = by_id[edge_id]
@@ -293,7 +289,7 @@ class Planner:
                 frontier.append(step_id)
 
         phase("preparing", [(i, "prepare", {}) for i in sorted(selected)])
-        if action in {"enroll", "verify_recovery"}:
+        if action == "verify_recovery":
             phase(
                 "validating",
                 [
@@ -355,10 +351,7 @@ class Planner:
                 phase("reopening", [(identity, "reopen_admission", {})])
         phase(
             "finalizing",
-            [
-                (i, "release", {"read_only": action in {"enroll", "verify_recovery"}})
-                for i in sorted(selected)
-            ],
+            [(i, "release", {"read_only": action == "verify_recovery"}) for i in sorted(selected)],
         )
         return Plan(
             id="plan-" + uuid.uuid4().hex,

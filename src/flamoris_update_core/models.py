@@ -17,7 +17,6 @@ Schema = Annotated[str, StringConstraints(pattern=r"^[\x21-\x7e]{1,128}$")]
 Action = Literal[
     "update",
     "install",
-    "enroll",
     "verify_recovery",
     "recover",
     "self_update",

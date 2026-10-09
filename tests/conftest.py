@@ -153,7 +153,6 @@ def observation(p, release_id, release="1.0.0", schema="db-1"):
         unknown_work=False,
         evidence=["inspection"],
         absent_resources=[],
-        entry_evidence="verified_adoption",
         maintenance_epoch=0,
     )
 
@@ -302,7 +301,7 @@ def environment(tmp_path):
     authority = Authority(j, clock)
     authority.provision(
         "operator",
-        ["read", "plan", "execute", "enroll", "cancel", "recover_verify", "operator", "recover"],
+        ["read", "plan", "execute", "cancel", "recover_verify", "operator", "recover"],
         ["app"],
     )
     resources = {

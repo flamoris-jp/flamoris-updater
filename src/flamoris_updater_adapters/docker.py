@@ -356,29 +356,6 @@ class DockerDriver:
             if obj["containers"][0]["State"]["Running"]:
                 raise UpdateError("outcome_unknown")
 
-    def source_state(self):
-        if not self._exists():
-            raise UpdateError("entry_required")
-        obj = loads(
-            b'{"containers":'
-            + self._docker("container", "inspect", self.binding.container_name)
-            + b"}"
-        )
-        if len(obj["containers"]) != 1 or obj["containers"][0]["State"]["Running"]:
-            raise UpdateError("legacy_not_quiescent")
-        # Bind the complete inspected configuration, but never disclose its
-        # environment values or credentials in a plan or public diagnostics.
-        from flamoris_update_core.wire import dumps
-
-        container = obj["containers"][0]
-        return {
-            "container_id": container["Id"],
-            "image_id": container["Image"],
-            "configuration_digest": digest(dumps(container["Config"])),
-            "host_digest": digest(dumps(container["HostConfig"])),
-            "mounts_digest": digest(dumps(container["Mounts"])),
-        }
-
     def verify_active(self, manifest, operation_id):
         self._validate_binding()
         prepared = self.journal.get("docker_prepared", self.preparation_id(manifest))

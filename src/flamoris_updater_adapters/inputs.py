@@ -72,14 +72,12 @@ TOOLS = {
     "updater_release_notes_get": (NotesRequest, "Ordered bounded release notes", "read"),
     "updater_update_plan": (PlanRequest, "Immutable application update plan", "plan"),
     "updater_install_plan": (PlanRequest, "Explicit empty-state initialization plan", "plan"),
-    "updater_enrollment_plan": (PlanRequest, "Validate and enroll a supported deployment", "plan"),
     "updater_plan_get": (PlanID, "Scoped exact-plan summary", "read"),
     "updater_update_execute": (
         ExecuteRequest,
         "Admit an operator-authorized durable Job",
         "execute",
     ),
-    "updater_enroll_execute": (ExecuteRequest, "Admit a validation/enrollment Job", "execute"),
     "updater_job_get": (JobID, "Durable Job status and blockers", "read"),
     "updater_job_cancel": (CancelRequest, "Request cancellation at a safe boundary", "cancel"),
     "updater_history_list": (Page, "Scoped update and recovery history", "read"),
@@ -135,19 +133,17 @@ class Facade:
             return c.releases.notes(
                 args.application_id, args.from_release, args.to_release, args.cursor, args.limit
             )
-        if name in {"updater_update_plan", "updater_install_plan", "updater_enrollment_plan"}:
+        if name in {"updater_update_plan", "updater_install_plan"}:
             action = {
                 "updater_update_plan": "update",
                 "updater_install_plan": "install",
-                "updater_enrollment_plan": "enroll",
             }[name]
             return c.create_plan(subject, action, args.targets, args.request_key)
         if name == "updater_plan_get":
             return c.get_plan(subject, args.plan_id)
-        if name in {"updater_update_execute", "updater_enroll_execute", "updater_recovery_verify"}:
+        if name in {"updater_update_execute", "updater_recovery_verify"}:
             allowed = {
                 "updater_update_execute": {"update", "install"},
-                "updater_enroll_execute": {"enroll"},
                 "updater_recovery_verify": {"verify_recovery"},
             }[name]
             if name == "updater_recovery_verify":

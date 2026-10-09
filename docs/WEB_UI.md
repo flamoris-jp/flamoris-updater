@@ -18,7 +18,7 @@ Web can remain usable while Studio is stopped or being updated. If the coordinat
 
 | View | Contents / actions |
 | --- | --- |
-| Overview | Enrolled applications, observed/installed releases and embedded components, pending updates and blocked Jobs |
+| Overview | Managed applications, observed/installed releases and embedded components, pending updates and blocked Jobs |
 | Release details | Verified candidate metadata, cumulative notes, restart/migration/recovery conditions and missing history |
 | Plan | Exact target/digest, dependencies, affected resources, backup/restore requirements, authorization and blockers |
 | Execution | Authorize/execute a valid plan, follow a durable Job and request cooperative cancellation |
@@ -26,13 +26,13 @@ Web can remain usable while Studio is stopped or being updated. If the coordinat
 
 An operator selects targets, requests a plan, reviews the concrete result, authorizes that exact plan, then starts it. Read-only users can inspect permitted summaries; authorization needs an operator role and execution needs scoped action permission.
 
-Web install/enrollment flows use their separate typed plan actions. Do not infer initialization from an empty screen, missing resource marker or inaccessible target.
+Web install flows use an explicit typed plan action; importing unmanaged applications is unsupported. Do not infer initialization from an empty screen, missing resource marker or inaccessible target.
 
 A Job started by CLI/MCP appears in Web according to actor/target scope; Web-started Jobs are equally inspectable through CLI/MCP. Browser disconnection, refresh or timeout does not cancel or duplicate a Job. Preserve a request key across an uncertain start response and query the admitted Job instead of submitting a new one.
 
 ## Independent identity and browser boundary
 
-The dedicated backend owns its operator identities, sessions, role/target mapping and CSRF checks. Initial operator enrollment is provisioned through a protected local administrative flow; there is no shared default password or use of Studio user accounts. Private credential/bootstrap inputs belong to deployment work.
+The dedicated backend owns its operator identities, sessions, role/target mapping and CSRF checks. Initial operator account creation is provisioned through a protected local administrative flow; there is no shared default password or use of Studio user accounts. Private credential/bootstrap inputs belong to deployment work.
 
 The implementation uses Argon2 and independent persistent identities/session state. Auth state/configuration lives outside replaceable release directories; its schema and grant/revocation compatibility are part of Updater self-update. A candidate or rollback must read current auth/policy state without restoring older accounts, sessions or permissions. Secrets and credential material never enter browser bundles or update manifests.
 
@@ -44,7 +44,7 @@ Release notes, errors and evidence summaries are inert escaped/sanitized data. E
 
 ## Self-update and recovery
 
-The normal screen controls application update/install/enrollment Jobs. In v1, Updater self-update and production restoration are started through the protected operator CLI/independent recovery controller described in [execution/recovery](EXECUTION_RECOVERY.md).
+The normal screen controls application update/install Jobs. In v1, Updater self-update and production restoration are started through the protected operator CLI/independent recovery controller described in [execution/recovery](EXECUTION_RECOVERY.md).
 
 Web may show their history/status when the coordinator is available. During coordinator replacement the screen may disconnect; after reconnect it reads the same persisted Job. It cannot replace the independent recovery controller, clear unknown-resource blockers or restore old journals.
 
@@ -60,4 +60,4 @@ Use the same one-plan/one-Job admission across every adapter: a new browser requ
 
 Show reopening/finalizing separately from completed success. A missing gate or blocker-release acknowledgement remains uncertain, even if target health checks succeeded. Safe summaries are paginated under [parser/response budgets](RELEASE_MANIFEST.md), and the UI never constructs a different authorization digest by reserializing a displayed plan.
 
-Only application update/install/enrollment plans can be authorized/executed from normal Web controls. Profile-resolved coordinator/executor aliases cannot bypass the protected CLI/controller handoff restrictions. Recovery verification is a typed read-only child Job; a successful result is not permission to clear the parent's block.
+Only application update/install plans can be authorized/executed from normal Web controls. Profile-resolved coordinator/executor aliases cannot bypass the protected CLI/controller handoff restrictions. Recovery verification is a typed read-only child Job; a successful result is not permission to clear the parent's block.

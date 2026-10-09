@@ -23,7 +23,6 @@ class Authority:
             "read",
             "plan",
             "execute",
-            "enroll",
             "cancel",
             "recover_verify",
             "operator",
@@ -44,7 +43,7 @@ class Authority:
         deadline = deadline if deadline is not None else self.clock() + 900
         if not self.clock() < deadline <= min(self.clock() + 3600, plan.expires_at):
             raise UpdateError("invalid_input")
-        role = {"enroll": "enroll", "verify_recovery": "recover_verify", "recover": "recover"}.get(
+        role = {"verify_recovery": "recover_verify", "recover": "recover"}.get(
             plan.action, "execute"
         )
         with self.journal.transaction() as db:
@@ -77,7 +76,7 @@ class Authority:
         self, caller: str, grant_id: str, plan, plan_digest: str, db=None, admitted: bool = False
     ):
         grant = self.journal.get("grant", grant_id, db)
-        role = {"enroll": "enroll", "verify_recovery": "recover_verify", "recover": "recover"}.get(
+        role = {"verify_recovery": "recover_verify", "recover": "recover"}.get(
             plan.action, "execute"
         )
         if (

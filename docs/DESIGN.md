@@ -1,6 +1,6 @@
 # FLAMORIS Updater design
 
-**State:** accepted basic direction with Updater-owned v1 source implemented; release/live adoption pending. [Detailed draft 1](DETAILED_DESIGN.md) specifies proposed APIs, persistence, trust and failure semantics.
+**State:** accepted basic direction with Updater-owned v1 source implemented; release/live acceptance pending. [Detailed draft 1](DETAILED_DESIGN.md) specifies proposed APIs, persistence, trust and failure semantics.
 
 ## 1. Repository and dependency boundaries
 
@@ -14,19 +14,17 @@ Each application owns its configuration, DB and persistent-data formats, migrati
 
 Server Manager is the primary source for live server status and diagnostics. GPU Node Manager retains runtime/GPU lifecycle and exclusion authority. Updater coordinates through their supported contracts rather than creating parallel state machines.
 
-## 2. Entry into management
+## 2. Installation and managed updates
 
-| Target | Baseline agreed for transition | Management entry |
-| --- | --- | --- |
-| Installed AI-side applications | v0.1 | v1.0 |
-| GPU Node Manager | v1.1 | v1.2 |
-| Updater | New | v1.0 |
+Install Updater first, then install the selected AI applications at 1.0.0 or
+GPU Node Manager at 1.2.0 and perform first setup. Historical baseline versions
+are not installation prerequisites. Existing unmanaged deployments cannot be
+converted or registered through Updater.
 
-The deployed application list and artifact identities must be audited before implementation. These values describe the agreed release boundary, not discovered live state.
-
-Each application provides a standalone transition to its entry version. This transition does not require Updater and adopts the common migration contract. After successful migration and validation, Updater verifies evidence and enrolls the application. It must not infer, rewrite or silently adopt an unknown legacy deployment.
-
-An application release, config schema, DB schema and persistent-data schema are separate version dimensions.
+The entry CLI, enrollment APIs/action/role and transition evidence are removed.
+A recorded managed installation is required for updates. The simple fresh
+installer and the install-to-update connection are separate work, not completed
+by deleting the old import mechanism.
 
 ## 3. Update units and compatibility
 
@@ -82,7 +80,7 @@ The [Manifest draft](RELEASE_MANIFEST.md) selects exact-byte Ed25519 signatures,
 
 These are portable design defaults, not verified live paths. Never clone source directly into `/opt`.
 
-New management-entry releases adopt standard separation. Existing installations move incrementally through application-owned validated transitions. Do not relocate all live configuration at once or copy private host paths into public defaults.
+Managed installations separate immutable release files from persistent configuration and data. Preserve that configuration during updates. Do not copy private host paths into public defaults or automatically import unmanaged installations.
 
 ## 8. Host permissions and MCP
 
@@ -118,7 +116,7 @@ Updater's dedicated Web management UI shows installed versions, candidates, plan
 
 [Detailed draft 1](DETAILED_DESIGN.md) chooses platform/language, package/API boundaries, Manifest/trust, migration runner, durable jobs/authorization, group failures, self-update recovery and MCP contracts.
 
-Remaining evidence and owning-application work: exact live inventory and artifact/version mappings, maintenance/drain contracts, DB-role and backup scopes, signing-key provisioning, host bindings, implementation verification and live acceptance. These are not inferred from source inspection. See [adoption](ADOPTION.md).
+Remaining evidence and owning-application work: exact live inventory and artifact/version mappings, maintenance/drain contracts, DB-role and backup scopes, signing-key provisioning, host bindings, implementation verification and live acceptance. These are not inferred from source inspection. See [integration](ADOPTION.md).
 
 The draft refines the accepted direction without changing responsibility or management-entry versions. The later task authorized source implementation; see [implementation review](IMPLEMENTATION_REVIEW.md).
 

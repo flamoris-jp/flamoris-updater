@@ -1,24 +1,16 @@
-# Application entry transition
+# Application installation and update ownership
 
-The six AI packages enter managed updating at 1.0.0. GPU Node Manager enters at
-1.2.0. Existing release labels are v0.1 and v1.1 respectively. GPU v1.1 points
-to a source distribution reporting 1.0.0; a tag is not installed package evidence.
+Existing unmanaged applications cannot be imported into Updater management.
+The former entry CLI, registration tools/action/role and transition evidence
+have been removed. AI applications target 1.0.0 and GPU Node Manager 1.2.0 directly.
 
-## Source and operational status
-
-Application adoption source passed review/CI and is merged. This implementation does not
-publish releases, install trust keys/profiles, change production data, or update
-hosts. A signed candidate and private protected deployment configuration are
-required before executing any transition. The PostgreSQL sandbox has a real CI
-integration job; skipped local integration tests are not restore evidence.
-
-`packages/update-core` builds the MCP-independent `flamoris-update-core`
-distribution from the same Core sources. Applications install that SDK; the
-Updater coordinator and entry CLI remain in their separate environment. Do not
-install the full Updater into an application's MCP 2 environment. Do not install
-both distributions into the same environment: they share Core namespaces.
+The simple new installation, first setup and subsequent update connection remain
+separate work. This document does not claim end-to-end installation acceptance.
 
 ## Application-owned resources
+
+The following source contract inventory describes ordinary application ownership,
+not resources that must be preserved when an operator chooses a clean install.
 
 | Application | Required resource classes | Current accepted schema identifiers |
 | --- | --- | --- |
@@ -29,113 +21,11 @@ both distributions into the same environment: they share Core namespaces.
 | Hub | configuration | hub-catalog-1 |
 | GPU Node Manager | configuration, evidence | gpu-profiles-1; runtime-evidence-1 |
 
-The packaged Controller is updated with its hosting Generation MCP artifact.
-It is not another live process/JobStore. Bind it as an embedded component and
-preserve the one Controller authority. No competing owner may claim the same
-physical resource. The explicit Controller resources retain provider inputs,
-registered definitions, saved recipes, generated assets, managed inputs/uploads,
-job reservations and journals. Read-only shared models remain an external
-library and are not copied by the application Owner. Other provider-owned trees
-require their own writer fencing/backup contract; do not silently omit them.
+Applications own schema migrations and domain validation. Normal updates keep
+persistent configuration/data separate from executable releases. Controller is
+embedded in Generation's deployment; external runtimes and models are outside
+Updater's application resources. The common `flamoris-update-core` SDK remains
+separate from the full coordinator's dependencies.
 
-These transitions preserve existing schemas. They do not initialize databases,
-run Alembic upgrades, erase assets, rebuild persona, or reconcile unknown work.
-Older schemas must use their application's existing reviewed migration procedure
-before this entry path. Unknown reservations remain blockers, including retired
-generation reservations. No provider inference or automatic replay is performed.
-
-## Provisioning before use
-
-Each application has a separate `*-update-owner --config /protected/owner.json`
-entrypoint. OwnerConfiguration declares its DeploymentProfile, exact TreeBinding
-and PostgresBinding resources, private state/backup directories, protected signed
-manifest files and pinned release/host receipt keys. ServerConfiguration adds
-the listen address, mTLS CA/certificate/key and allowed client DER certificate
-SHA256 fingerprints. There is no product UI integration or arbitrary command
-route. The dedicated Updater Web/CLI/MCP retain orchestration.
-
-Run the Owner under the same dedicated account as the application. Its private
-state is shared with that application via a fixed writable binding. Its signed
-configuration and code are protected from application edits. Owner availability
-is independent of stopping/replacing the application executable/container.
-PostgreSQL Owners run as non-root, with a private owner-only DSN to a maintenance
-role. That role must be distinct from the bound writer roles. All writer roles
-and timers/external writers must be declared and fenced. The fixed `pg_bin`
-must match the production server major version.
-
-`FLAMORIS_UPDATE_REQUIRED=1` and `FLAMORIS_UPDATE_STATE=/private/owner-state`
-are mandatory in a managed application's protected environment. A missing gate
-fails closed. Admission is durable across processes and restarts; uncertainty
-never expires by elapsed time. Managed service startup waits while the gate is
-closed, without starting DB/provider work, and records its package boot identity.
-Owner inspections never masquerade as a service boot. Set the Owner's environment
-to the same protected application settings, including Intelligence configuration.
-
-Tree snapshots refuse symlinks, hardlinks, FIFOs, devices, setuid, sticky
-directories and setgid regular files. A normal setgid directory is accepted and
-its group-inheritance mode is preserved through snapshot and restore verification.
-Snapshots bound bytes and include at most 4096 members (directories included), then
-verify an isolated copy's bytes, ownership and permissions. Model/cache trees
-using links are not included by assumption; bind preserved external resources
-through a reviewed profile rather than copying or normalizing them. The Owner
-account must be able to reproduce every recorded UID/GID and mode in its private
-backup directory. Mixed ownership that it cannot preserve is unsupported; do not
-change source ownership to make backup pass. File and directory metadata are
-fsynced before a snapshot receipt is issued.
-
-PostgreSQL backup fences writers, records data/schema/ACL/role membership and
-verifies a real restore into a disposable local cluster inside bubblewrap's
-empty network/PID namespace. Production DSN/passwords are not passed to the
-probe; copied roles have NOLOGIN and no passwords. Only immutable SDK/Python
-code, backup bytes and a disposable directory are mapped. Credentials and
-deployment configuration must be outside the mapped code prefixes. User namespace
-support and protected PostgreSQL/bubblewrap executables are required; no fallback
-to an unisolated production connection is provided.
-
-Private HelperConfig binds fixed Docker or native lifecycle. Docker retains the
-previous stopped container, uses a digested verified image, fixed mounts/user,
-resource limits and explicit ports. Host networking requires explicit
-`allow_host_network=true` in the protected binding. Native entry requires an
-already provisioned fixed systemd unit and protected release pointer; existing
-legacy units/venvs are not silently rewritten. Preserve deployment overlays and
-their complete matched dependency set in a native candidate. GPU Node Manager
-remains native and uses its existing RuntimeManager and host-wide lock.
-
-## Independent execution
-
-Stop the legacy service and all its external writers through the existing
-authorized maintenance procedure. Legacy binaries cannot honor the new SDK gate.
-The standalone CLI refuses an active legacy container/unit or unresolved work.
-Never treat a healthy endpoint or a missing PID as proof of writer fencing.
-
-Use the read-only `source` command to obtain the stopped source binding digest;
-review it against the approved installed artifact before recording it.
-
-Prepare a root-owned EntryConfiguration containing `helper_config_file`,
-`deployment_id`, `manifest_file`, `baseline_tag`, `baseline_revision`, and the
-reviewed `expected_source_state_digest`. The source binding ties the actual old
-container/image/configuration or native unit/pointer to the approved baseline;
-baseline_revision is an operator-recorded provenance assertion, not inferred from
-package version. The candidate Manifest and `.sig` are verified against pinned
-application release keys. Release publication and trust provisioning are separate.
-
-```bash
-flamoris-updater-entry --config /protected/entry.json plan --output /private/entry-plan.json
-flamoris-updater-entry --config /protected/entry.json apply --plan /private/entry-plan.json --confirm sha256:REVIEWED_PLAN_DIGEST
-flamoris-updater-entry --config /protected/entry.json status --job ENTRY_JOB_ID
-```
-
-The 15-minute plan binds actual observation, resource/profile/configuration,
-source state and signed target. Apply rechecks it before durable claims/intents.
-It rechecks protected Helper/Entry configuration, TLS/key and environment-file
-bytes before each step. The Owner also binds its application configuration and
-DSN bytes to the claimed Job. It prepares, claims the owner job, closes/drains admission, stops, snapshots,
-verifies isolated restore, activates, validates, reopens and finalizes. Activation
-requires both host-signed artifact evidence and matching maintenance boot.
-
-Failure retains claims/history and requires explicit reconciliation. Re-running
-the same plan never repeats an effect. Status remains available for investigation.
-There is no automatic rollback/data restore or multi-host atomicity claim.
-Verified `standalone_transition` evidence permits the ordinary coordinator's
-read-only enrollment afterward. Normal updates use that coordinator; the entry
-CLI cannot re-enter an already enrolled installation.
+See [migration](MIGRATION_CONTRACT.md), [execution](EXECUTION_RECOVERY.md) and
+[running](RUNNING.md) for the remaining managed-update contracts.
