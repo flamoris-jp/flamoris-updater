@@ -18,8 +18,9 @@ syntax, documentation links and exported schema checks passed. Updater and Core
 wheel/sdist builds passed; the Updater artifacts contain five console commands
 and no entry module, and the exported MCP catalog contains twelve tools.
 
-The dedicated PR/CI is in preparation. No merge, release publication, real-host
-change, deletion of live applications or live install has occurred. The new simple installation/first-setup/update flow remains separate
+The dedicated removal [PR #12](https://github.com/flamoris-jp/flamoris-updater/pull/12)
+tracks CI at its exact head. No merge, release publication, real-host change,
+deletion of live applications or live install has occurred. The new simple installation/first-setup/update flow remains separate
 work; source deletion is not evidence that this flow is complete.
 
 ## Historical checkpoints
