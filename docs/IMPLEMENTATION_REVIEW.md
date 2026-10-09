@@ -49,10 +49,10 @@ The manual signing workflow was reviewed, but not run: no production key, Enviro
 ## Supported boundaries and remaining acceptance
 
 - Application-specific migration/lifecycle/backup/domain owners, Server/GPU Manager adapters and baseline entry transformations belong to adoption owners. Their production proof correctness is not established by test doubles.
-- Live systemd, Docker daemon/registry, TLS/peer provisioning, independent service availability, real snapshots/restore, actual disk exhaustion and multi-host network/power failure scenarios remain [acceptance work](ACCEPTANCE.md). Source quotas are bounded; journal capacity/reserve and retention need deployment monitoring. No automatic capacity monitor or journal pruning is supplied.
+- Live systemd, Docker daemon/registry, local peer/tunnel provisioning, independent service availability, real snapshots/restore, actual disk exhaustion and multi-host network/power failure scenarios remain [acceptance work](ACCEPTANCE.md). Source quotas are bounded; journal capacity/reserve and retention need deployment monitoring. No automatic capacity monitor or journal pruning is supplied.
 - Root helper/executor and the stable recovery-controller cannot use coordinator self-update. Separate independently recoverable bootstrap maintenance is required; unsupported handoff is a blocker.
 - v1 control schema is format 1 only; no startup migration, automatic failover, lease-expiry takeover, reverse migration or atomic multi-host rollback is supplied. Unknown effects stay blocked for reconciliation.
-- Direct OCI retrieval supports configured mTLS registries. External bearer-auth registry negotiation and application-provided arbitrary command adapters are outside v1.
+- Direct OCI retrieval uses ordinary system-trusted HTTPS; client-certificate registry authentication is removed. External bearer-auth registry negotiation and application-provided arbitrary command adapters are outside v1.
 - Clock health is provisioned, with wall/monotonic drift detection. Secure configuration ancestors, Python interpreter, units, keys and persistent journal storage remain audited deployment prerequisites.
 - Web is served and API-tested with inert bundled assets. Interactive browser/accessibility acceptance on the deployment origin remains a live gate; no visual/browser certification is claimed.
 - Public documentation and release notes use portable examples. No production inventory, credentials, private hostnames or actual rollout are included.

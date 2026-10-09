@@ -2,6 +2,24 @@
 
 Updated: 2026-10-10 (JST).
 
+## Removal of private CA and client certificates
+
+Implemented from current main (PR #12 merged), independently of open PR #11.
+Removed client CA/certificate/key configuration from API clients, release and OCI
+fetching, the CLI and the host API. Owner services now use protected local Unix
+sockets and Linux OS peer identity; callers verify the Owner UID before sending.
+Host APIs bind loopback only for direct/tunneled connections and retain the
+helper's signed request/operation authorization. Public coordinator HTTPS,
+Web/session/CSRF, Bearer tokens and release/operation signatures remain.
+
+This changes Owner SDK/configuration compatibility. The seven application SDK
+pins/artifacts are not repinned here; current older artifacts need coordinated
+integration. The existing backup/recovery protocol and the initial-install/update
+connection are separate work. There is no automatic Updater bootstrap or tunnel
+manager; [transport](docs/TRANSPORT.md) documents actual installation steps/limits.
+
+Local verification: 162 tests passed; 2 PostgreSQL and 5 named-socket listener tests skipped due to environment limitations. Real socket-pair OS peer/operation/quota tests passed; GitHub CI runs the listener and PostgreSQL integrations. Ruff/format, documentation links, exported configuration schemas and both Updater/Core wheel/sdist builds passed. Built Core/Updater artifacts include the new local transport and no Owner client-PKI code. The first CI pass exposed omitted required null fields in initial Owner inspection; its serialization and a regression test are corrected. Loopback CLI calls preserve the configured public Host through `--public-origin`. [PR #13](https://github.com/flamoris-jp/flamoris-updater/pull/13) tracks exact-head CI. No real-host change, release publication or merge.
+
 ## Removal of unmanaged-deployment import
 
 Implemented on a dedicated branch from current main, separately from PR #11.

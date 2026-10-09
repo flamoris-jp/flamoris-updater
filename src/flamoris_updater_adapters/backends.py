@@ -2,45 +2,25 @@ import time
 import uuid
 from pathlib import Path
 
-import httpx
-
 from flamoris_update_core.contracts import OwnerResult
 from flamoris_update_core.errors import UpdateError
 from flamoris_update_core.inventory import Observation
-from flamoris_update_core.wire import decode, digest, dumps
+from flamoris_update_core.wire import decode, digest, dumps, loads
 
-from .artifacts import origin
 from .process import bounded_command
 
 
-class RemoteOwner:
-    def __init__(self, endpoint: str, client: httpx.Client):
-        origin(endpoint)
-        self.endpoint = endpoint.rstrip("/")
+class LocalOwner:
+    def __init__(self, client):
         self.client = client
 
     def _post(self, action: str, body: bytes):
         if len(body) > 1024 * 1024:
             raise UpdateError("invalid_input")
-        try:
-            with self.client.stream(
-                "POST",
-                self.endpoint + "/" + action,
-                content=body,
-                headers={"content-type": "application/json"},
-                follow_redirects=False,
-            ) as response:
-                if response.status_code != 200:
-                    raise UpdateError("outcome_unknown")
-                parts, size = [], 0
-                for chunk in response.iter_bytes(chunk_size=64 * 1024):
-                    size += len(chunk)
-                    if size > 256 * 1024:
-                        raise UpdateError("outcome_unknown")
-                    parts.append(chunk)
-                return b"".join(parts)
-        except httpx.HTTPError:
-            raise UpdateError("outcome_unknown", "Owner response is unavailable") from None
+        raw = dumps(self.client.call({"action": "/" + action, "body": loads(body)}))
+        if len(raw) > 256 * 1024:
+            raise UpdateError("outcome_unknown")
+        return raw
 
     def inspect(self, profile):
         nonce = "obs-" + uuid.uuid4().hex
@@ -155,7 +135,7 @@ class NativeDriver:
 
 
 class ApplicationBackend:
-    def __init__(self, owners: dict[str, RemoteOwner], drivers: dict, activation_signer=None):
+    def __init__(self, owners: dict[str, LocalOwner], drivers: dict, activation_signer=None):
         self.owners, self.drivers, self.activation_signer = owners, drivers, activation_signer
 
     def inspect(self, profile):

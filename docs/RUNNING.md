@@ -7,7 +7,7 @@ This is the source implementation procedure. No release, production credentials 
 1. Obtain current deployments, physical persistence identities, all writers and provider relationships through Server Manager and application owners. Record private details outside this repository. Match each physical namespace to one Resource and one owner. Borrowed resources share the owner's schema target; only the owner migrates/snapshots/restores them.
 2. Use an already recorded managed installation for updates. Unmanaged deployments cannot be imported. The migration runner handles application-owned schema changes, not entry into management. The new simple installation/setup workflow is separate work.
 3. Provision separate Ed25519 release, catalog, coordinator-authority, recovery-controller and host-receipt keys. Pin application/domain, purpose, channel and revocation state explicitly. Private signer files accept raw 32-byte or Ed25519 PEM; protect private files with owner-only permissions. Never put private keys in JSON, notes, browser assets or this repository.
-4. Provision approved HTTPS release/catalog origins and mTLS certificates/CA. Host receipt IDs must equal host IDs; all hosts participating in epoch handoff need the full receipt-key set. Each host pins both coordinator and stable controller public keys. Protect credential files and their ancestor directories against replacement by service users or unrelated accounts.
+4. Provision approved HTTPS release/catalog origins. Private CA and client certificates are not used; configure local Owner sockets and loopback host connections as described in [transport](TRANSPORT.md). Host receipt IDs must equal host IDs; all hosts participating in epoch handoff need the full receipt-key set. Each host pins both coordinator and stable controller public keys. Protect credential files and their ancestor directories against replacement by service users or unrelated accounts.
 5. Install independently pinned stable helper/controller binaries and state outside replaceable coordinator release directories. Configure root-owned service unit files, indexed artifacts, staging quotas, private local journals and fixed active pointers. A recovery controller must survive coordinator failure; merely installing its script inside the current coordinator bundle is insufficient.
 6. Supply exact JSON configs matching the exported schemas. Do not paste the illustrative contract digests into production. Derive `binding_revision` as SHA-256 of the canonical serialized Native/Docker binding (`wire.dumps(binding)`), and `physical_binding_digest` from the verified physical namespace identity. Both coordinator and local helper register the same approved resources/profiles. The application owner must report matching actual physical digests.
 
@@ -17,7 +17,7 @@ Export schemas with:
 python scripts/export_schemas.py --output dist/schemas
 ```
 
-`CoordinatorConfig`, `HelperConfig`, `HostAPIConfig`, `RecoveryConfig`, `DeploymentProfile`, `Resource`, `OwnerRequest` and `OwnerResult` are also readable in their source models. Unknown fields, ambiguous JSON and wrong protocol versions are rejected. Config and referenced TLS/signer files are fingerprinted; changed configuration blocks operations until an explicit reviewed restart/reconciliation. Provision and maintain clock synchronization, set `clock_healthy` from trusted operational evidence, and do not set it speculatively.
+`CoordinatorConfig`, `HelperConfig`, `HostAPIConfig`, `RecoveryConfig`, `DeploymentProfile`, `Resource`, `OwnerRequest` and `OwnerResult` are also readable in their source models. Unknown fields, ambiguous JSON and wrong protocol versions are rejected. Config and referenced public HTTPS server/signer files are fingerprinted; changed configuration blocks operations until an explicit reviewed restart/reconciliation. Provision and maintain clock synchronization, set `clock_healthy` from trusted operational evidence, and do not set it speculatively.
 
 Application Owners must use matching SDK contracts. `Observation` no longer
 accepts the removed import-evidence field, and plans no longer accept the import
@@ -30,15 +30,17 @@ convert an existing Owner/control database.
 | --- | --- |
 | `flamoris-updater serve --config <absolute-config>` | Unprivileged coordinator, dedicated Web and MCP |
 | `flamoris-updater-helper --config <absolute-config>` | Root, fixed allowlisted local effects; private peer-checked Unix socket |
-| `flamoris-updater-host --config <absolute-config>` | Separate unprivileged mandatory-mTLS host API forwarding to helper |
+| `flamoris-updater-host --config <absolute-config>` | Separate unprivileged loopback host API forwarding signed requests to helper |
 | `flamoris-updater-recovery ...` | Independently installed local operator recovery controller |
 | `flamoris-update-migration --factory-module <installed-module>` | Application-owned standalone migration factory; request JSON on stdin |
 
 Use audited service units with deployment-specific user/group/path bindings. This repository cannot provide correct production units without that inventory. The helper socket directory is root-owned and configured group-accessible; only `allowed_peer_uids` can dispatch. Host HTTP bodies and framed helper packets are bounded. Bind server TLS directly or use the explicit trusted loopback TLS proxy option for the coordinator; do not expose plaintext coordinator listeners remotely. Serve Web from its dedicated same origin.
 
+Application Owner connections use peer-checked local Unix sockets; their server configuration is also exported as `ServerConfiguration`.
+
 The **application owner API must remain available when the application unit/container is stopped**. Run it as an independent lifecycle owner, not as a route in the unit being updated. It verifies fresh inspection nonces/timestamps, actual schemas/resource identities, durable admission gates, drain/fencing, snapshots, isolated restore and domain acceptance. Production writes, notifications, billing/provider credentials and queues must stay inaccessible during isolated restore. Application-specific proof implementations and Server/GPU Manager integration remain owner integration work.
 
-Native execution checks the configured unit file digest and systemd FragmentPath/NeedDaemonReload, stages a verified read-only indexed tree, changes a fixed pointer and starts under maintenance. Docker uses the protected configured local daemon socket, pinned registry/repository/platform/config/layers, fixed non-root user/network/mounts, resource limits and restart policy. Image-declared anonymous volumes are rejected and image healthchecks disabled. v1 direct OCI fetching supports configured mTLS registries; external bearer-token registry negotiation is not implemented. No host source build or arbitrary shell is allowed.
+Native execution checks the configured unit file digest and systemd FragmentPath/NeedDaemonReload, stages a verified read-only indexed tree, changes a fixed pointer and starts under maintenance. Docker uses the protected configured local daemon socket, pinned registry/repository/platform/config/layers, fixed non-root user/network/mounts, resource limits and restart policy. Image-declared anonymous volumes are rejected and image healthchecks disabled. v1 direct OCI fetching uses ordinary system-trusted HTTPS; external bearer-token registry negotiation is not implemented. No host source build or arbitrary shell is allowed.
 
 ## Human and MCP authorization
 
@@ -54,11 +56,13 @@ Replace the sample paths/IDs with audited bindings. Token output must be a new a
 
 Web provides inventory, candidates, cumulative release notes, update/install planning, exact-plan authorization, execution, progress, history and cancellation. The MCP endpoint is **`/mcp`**, Streamable HTTP with Bearer authentication. Twelve typed tools use the same coordinator as `/api/v1/tools/<tool>`; current schemas come from `inputs.TOOLS` and schema export. The protected local recovery CLI is the mutating recovery route; normal adapters cannot switch protected control roles.
 
-CLI can call the same HTTPS API with a private token file and mTLS client binding:
+CLI can call the same ordinary HTTPS API with a private Bearer token file, without a client certificate. A literal loopback HTTP URL is also accepted for local/tunneled CLI connections:
 
 ```bash
-flamoris-updater call --url https://updater.example.invalid --token-file /absolute/token --ca /absolute/ca.pem --cert /absolute/client.pem --key /absolute/client.key --tool updater_update_plan --arguments /absolute/plan-request.json
+flamoris-updater call --url https://updater.example.invalid --token-file /absolute/token --tool updater_update_plan --arguments /absolute/plan-request.json
 ```
+
+For a loopback/tunneled CLI connection, replace `--url` with its local HTTP address and add `--public-origin https://updater.example.invalid` matching `CoordinatorConfig.public_origin`; the Host boundary stays enforced.
 
 Use the actual tool names shown by `flamoris-updater call --help` (the `updater_*` names in the exported schema are authoritative). A plan request specifies exact target Manifest digests and a stable request key. Review the returned plan/digest, call `grant` with `caller_id`, `plan_id`, `plan_digest`, then `updater_update_execute` with that authorization ID and a stable execution key. Query `updater_job_get` after a lost reply; one consumed plan cannot create another Job. Do not automatically create a fresh plan to work around unknown effects.
 
@@ -99,4 +103,4 @@ The manual `sign-release.yml` workflow requires main, an immutable matching `v<v
 
 Release owners review/publish the candidate at the approved origin, sign a monotonically increasing fresh catalog using a **separate catalog key**, and provision trust before managed update execution. The standalone `scripts/sign_release.py --help` supports exact release/catalog signing. A catalog maps one immutable application/release to one signed root; artifact platform selection never substitutes that root identity. Signature rotation may replace a valid signature on identical catalog bytes without changing sequence or release mapping. Existing release history remains readable when eligibility is withdrawn, but revoked signature keys invalidate trust.
 
-Application release packaging, application schema migrations and real systemd/Docker/mTLS/failure acceptance remain A1/A2/D1 in [integration](ADOPTION.md) and [acceptance](ACCEPTANCE.md).
+Application release packaging, application schema migrations and real systemd/Docker/local-IPC/tunnel/failure acceptance remain A1/A2/D1 in [integration](ADOPTION.md) and [acceptance](ACCEPTANCE.md).
