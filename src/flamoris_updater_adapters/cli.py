@@ -2,6 +2,7 @@ import argparse
 import getpass
 import sys
 from pathlib import Path
+from urllib.parse import urlsplit
 
 import httpx
 import uvicorn
@@ -9,6 +10,7 @@ import uvicorn
 from flamoris_update_core.errors import UpdateError
 from flamoris_update_core.wire import dumps, loads
 
+from .artifacts import origin
 from .config import Endpoint, protected_read
 from .inputs import TOOLS
 from .journal import durable_write, exclusive
@@ -26,6 +28,9 @@ def main(argv=None):
     call = commands.add_parser("call")
     call.add_argument("--url", required=True)
     call.add_argument("--token-file", required=True)
+    call.add_argument(
+        "--public-origin", help="Configured coordinator HTTPS origin for loopback/tunnel calls"
+    )
     call.add_argument("--tool", choices=list(TOOLS) + ["grant", "revoke-grant"], required=True)
     call.add_argument("--arguments", default="-", help="JSON file or stdin")
     for name in ("provision-user", "issue-token", "revoke-token", "disable-user"):
@@ -50,6 +55,11 @@ def main(argv=None):
                 else Path(args.arguments).read_bytes()
             )
             payload = loads(raw)
+            headers = {"Authorization": "Bearer " + token, "Content-Type": "application/json"}
+            if args.public_origin:
+                if origin(args.public_origin) != args.public_origin:
+                    raise UpdateError("untrusted_origin")
+                headers["Host"] = urlsplit(args.public_origin).netloc
             path = (
                 "/api/v1/grants"
                 if args.tool == "grant"
@@ -61,7 +71,7 @@ def main(argv=None):
                 "POST",
                 args.url.rstrip("/") + path,
                 content=dumps(payload),
-                headers={"Authorization": "Bearer " + token, "Content-Type": "application/json"},
+                headers=headers,
                 follow_redirects=False,
             ) as response:
                 parts, size = [], 0

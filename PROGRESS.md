@@ -18,7 +18,7 @@ integration. The existing backup/recovery protocol and the initial-install/updat
 connection are separate work. There is no automatic Updater bootstrap or tunnel
 manager; [transport](docs/TRANSPORT.md) documents actual installation steps/limits.
 
-Local verification: 160 tests passed; 2 PostgreSQL and 5 named-socket listener tests skipped due to environment limitations. Real socket-pair OS peer/operation/quota tests passed; GitHub CI runs the listener and PostgreSQL integrations. Ruff/format, documentation links, exported configuration schemas and both Updater/Core wheel/sdist builds passed. Built Core/Updater artifacts include the new local transport and no Owner client-PKI code. No real-host change, release publication or merge.
+Local verification: 162 tests passed; 2 PostgreSQL and 5 named-socket listener tests skipped due to environment limitations. Real socket-pair OS peer/operation/quota tests passed; GitHub CI runs the listener and PostgreSQL integrations. Ruff/format, documentation links, exported configuration schemas and both Updater/Core wheel/sdist builds passed. Built Core/Updater artifacts include the new local transport and no Owner client-PKI code. The first CI pass exposed omitted required null fields in initial Owner inspection; its serialization and a regression test are corrected. Loopback CLI calls preserve the configured public Host through `--public-origin`. [PR #13](https://github.com/flamoris-jp/flamoris-updater/pull/13) tracks exact-head CI. No real-host change, release publication or merge.
 
 ## Removal of unmanaged-deployment import
 

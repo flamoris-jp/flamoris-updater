@@ -48,7 +48,8 @@ def dispatch(owner, action, raw):
         or obj["profile_digest"] != digest(dumps(profile))
     ):
         raise UpdateError("forbidden")
-    return dumps(owner.inspect(obj["observation_id"]))
+    # A fresh Owner has required nullable release/manifest fields. Preserve nulls.
+    return dumps(owner.inspect(obj["observation_id"]).model_dump(mode="json"))
 
 
 def serve_connection(connection, owner, allowed_peer_uids, guard):

@@ -270,3 +270,63 @@ def test_owner_rejects_oversized_frames_without_reading_body(tmp_path):
         server.close()
         client.close()
         assert not thread.is_alive()
+
+
+def test_uninstalled_owner_inspection_round_trip_keeps_required_null_fields(tmp_path):
+    from flamoris_update_core.inventory import Observation
+    from flamoris_update_core.owner_cli import dispatch
+    from flamoris_update_core.wire import decode, digest, dumps
+
+    owner, _, _, _ = configured(tmp_path)
+    raw = dispatch(
+        owner,
+        "/inspect",
+        dumps(
+            dict(
+                contract_version=1,
+                observation_id="obs-initial",
+                deployment_id=owner.profile.id,
+                resource_ids=sorted(owner.profile.resources.values()),
+                profile_digest=digest(dumps(owner.profile)),
+            )
+        ),
+    )
+    result = decode(Observation, raw)
+    assert result.manifest_digest is None
+    assert result.release is None
+
+
+def test_cli_loopback_connection_keeps_public_origin_boundary(
+    environment, tmp_path, monkeypatch, capsys
+):
+    from flamoris_updater_adapters.auth import AuthStore
+    from flamoris_updater_adapters.web import create_app
+
+    e = environment
+    public = "https://updater.example.invalid"
+    auth = AuthStore(e.coordinator.journal, e.coordinator.authority, e.clock)
+    auth.user("operator", "isolated-test-password", ["read"], ["app"])
+    token = tmp_path / "token"
+    token.write_text(auth.issue_token("operator"))
+    token.chmod(0o600)
+    arguments = tmp_path / "arguments.json"
+    arguments.write_text("{}")
+    app = create_app(e.coordinator, auth, public, run_worker=False)
+    with TestClient(app, base_url="http://127.0.0.1:8765") as client:
+        monkeypatch.setattr(Endpoint, "client", lambda _: client)
+        main(
+            [
+                "call",
+                "--url",
+                "http://127.0.0.1:8765",
+                "--public-origin",
+                public,
+                "--token-file",
+                str(token),
+                "--tool",
+                "updater_inventory_list",
+                "--arguments",
+                str(arguments),
+            ]
+        )
+    assert loads(capsys.readouterr().out.encode()) == {"items": [], "next_cursor": None}

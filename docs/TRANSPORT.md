@@ -64,7 +64,7 @@ working deployment. Runtime deployment additionally needs protected configuratio
 state paths and execution permissions, service registration, and the existing
 operator/token provisioning described in [running](RUNNING.md). External Web/MCP
 access additionally needs ordinary HTTPS ingress or a suitable configured tunnel.
-The MCP endpoint is `/mcp`; no client certificate is used.
+The MCP endpoint is `/mcp`; no client certificate is used. When exposing it through MCP Hub or an external HTTPS tunnel, configure the actual incoming Host/origin and Bearer token; a tunnel does not supply Updater authorization. For CLI loopback/tunnel calls, pass `--public-origin` with the configured coordinator HTTPS origin so its Host boundary remains intact.
 
 A simpler installation experience would obtain a pinned release package/bundle,
 write minimal local configuration, register/start the service and then optionally

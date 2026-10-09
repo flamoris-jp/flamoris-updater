@@ -62,6 +62,8 @@ CLI can call the same ordinary HTTPS API with a private Bearer token file, witho
 flamoris-updater call --url https://updater.example.invalid --token-file /absolute/token --tool updater_update_plan --arguments /absolute/plan-request.json
 ```
 
+For a loopback/tunneled CLI connection, replace `--url` with its local HTTP address and add `--public-origin https://updater.example.invalid` matching `CoordinatorConfig.public_origin`; the Host boundary stays enforced.
+
 Use the actual tool names shown by `flamoris-updater call --help` (the `updater_*` names in the exported schema are authoritative). A plan request specifies exact target Manifest digests and a stable request key. Review the returned plan/digest, call `grant` with `caller_id`, `plan_id`, `plan_digest`, then `updater_update_execute` with that authorization ID and a stable execution key. Query `updater_job_get` after a lost reply; one consumed plan cannot create another Job. Do not automatically create a fresh plan to work around unknown effects.
 
 ## Independent inspection and recovery
