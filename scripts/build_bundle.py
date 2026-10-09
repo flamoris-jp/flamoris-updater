@@ -14,6 +14,7 @@ from pathlib import Path
 
 ENTRYPOINTS = {
     "flamoris-updater": "flamoris_updater_adapters.cli",
+    "flamoris-updater-service": "flamoris_updater_adapters.bootstrap_cli",
     "flamoris-updater-helper": "flamoris_updater_adapters.helper",
     "flamoris-updater-host": "flamoris_updater_adapters.host_api",
     "flamoris-updater-recovery": "flamoris_updater_adapters.recovery_cli",

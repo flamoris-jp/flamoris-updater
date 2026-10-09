@@ -1,20 +1,16 @@
-> Current transport: private CA/client certificates are removed; Owners use local OS peer identity and hosts use signed requests over loopback/tunnels. See [transport](TRANSPORT.md). Automatic Updater bootstrap and cross-application SDK repins remain separate work.
+# Current source and remaining integration
 
-# Roadmap
-
-The existing update/recovery implementation remains. Unmanaged-deployment import
-has been removed, including its CLI, registration APIs, authority role and
-transition evidence. No baseline transition or import work package remains.
-
-| Area | Current source | Remaining work |
+| Area | Implemented source | Separate evidence/work |
 | --- | --- | --- |
-| Release packages and verification | Models, artifacts, signatures, catalog and bundle tooling | Usable application candidates and distribution |
-| Managed updates | Planning, Native/Docker operations, application Owners | Connect new installation state/layout to subsequent updates |
-| Application schema changes | Common migration runner | Application-specific handlers; current Owner rejects schema changes |
-| First installation and setup | Separate work; not supplied by this removal | App selection, first setup and per-app installation records |
-| CLI/Web/MCP | Shared coordinator; twelve MCP tools | Connect the simple installation/update flow |
-| Recovery | Durable journals and protected controller | Verify supported recovery against real installations |
+| Updater bootstrap | Package/bundle launcher, dedicated Web account, two units, local peer helper, empty-app startup | Install reviewed artifact on a disposable/real host |
+| Web first setup | Expiring code, administrator, release source, displayed storage root | Browser/access/proxy deployment acceptance |
+| Per-app installation | Recipe settings, prebuilt Native/Docker, app-owned new DB initialization, `awaiting_setup` → verification | Real first setup for every app/external connection |
+| Updates | Same registry/Jobs, staged code, retained settings/data, declared compatibility/dependencies, switch/health | Real supported next-release acceptance |
+| Web/MCP/CLI | Same eight managed operations and durable status/history | Client/access operational acceptance |
+| Old versions | Current plus one previous; post-success executable/cache cleanup and explicit previous deletion | Actual host capacity/ownership verification |
+| Data changes | Standalone app-owned migration runner; no backup/restore prerequisite | App-specific new schema handlers and matching Owner SDK when needed |
+| Releases | Exact candidate builds, portable catalog generator, CI/manual artifacts | Maintainer review/distribution/publication |
 
-Public release and full real-host acceptance are outcomes of integration work,
-not prerequisites for beginning controlled installation tests. This change does
-not publish a release or modify an actual host. See [progress](../PROGRESS.md).
+No DB/system backup, unmanaged adoption, private CA or per-owner client certificate feature remains. PostgreSQL/external runtimes/models and Server Manager remain independent. Generation Controller is embedded in the Generation package.
+
+Publication and full-host certification are not prerequisites for controlled first-install tests. CI/source evidence must not be called live deployment. The old detailed design documents preserve design history; [running](RUNNING.md), [installation](INSTALL.md), exported models and [progress](../PROGRESS.md) define current behavior. Updater/root-helper self replacement is a separate reviewed maintenance operation, not app executable cleanup.

@@ -11,6 +11,7 @@ from flamoris_update_core.errors import UpdateError
 from flamoris_update_core.wire import dumps
 
 from .inputs import TOOLS, Facade
+from .managed import MANAGED_TOOLS
 
 
 class Verifier:
@@ -43,7 +44,11 @@ def create_mcp(coordinator, auth, origin):
                     openWorldHint=False,
                 ),
             )
-            for name, (model, description, kind) in TOOLS.items()
+            for name, (model, description, kind) in (
+                MANAGED_TOOLS
+                if hasattr(coordinator, "managed_invoke")
+                else {name: spec for name, spec in TOOLS.items() if name not in MANAGED_TOOLS}
+            ).items()
         ]
 
     @server.call_tool(validate_input=False)

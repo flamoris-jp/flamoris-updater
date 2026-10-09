@@ -177,10 +177,10 @@ def test_recovery_preview_verify_keeps_parent_blocks(environment, tmp_path):
     assert e.host.journal.get("parent_resolution", job["job_id"]) is None
 
 
-def test_linked_restore_uses_original_snapshot_and_atomic_resolution(environment, tmp_path):
+def test_linked_executable_recovery_keeps_data_and_atomic_resolution(environment, tmp_path):
     e = environment
     job = e.start()
-    e.backend.fail = "reopen_admission"
+    e.backend.fail = "stop"
     e.coordinator.run_job(job["job_id"])
     e.backend.fail = None
     rc, _, _, _ = controller(e, tmp_path)

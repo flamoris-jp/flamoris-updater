@@ -64,10 +64,8 @@ def manifest(
                 "admission_gate_required": True,
                 "validation_profiles": ["domain"],
             },
-            "backup_profile": {"id": "backup", "resource_classes": ["database"]},
             "recovery": {
-                "artifact_only": False,
-                "data_restore": True,
+                "artifact_only": True,
                 "previous_schema_constraints": {"database": ["db-1"]},
             },
             "initialization": {"supported": False},
@@ -90,9 +88,7 @@ def edge(identity="one-three", source="db-1", target="db-3"):
         "runner_profile": "migration",
         "reconcile_handler_id": identity + "-reconcile",
         "affected_resources": ["database"],
-        "backup_required": True,
         "retry_policy": "after_verified_not_applied",
-        "restore_profile": "restore",
     }
 
 
@@ -112,8 +108,6 @@ def profile(identity="app", host="host", application="example-app", resources=No
             "close_admission",
             "drain",
             "stop",
-            "snapshot",
-            "restore_verify",
             "apply_step",
             "initialize",
             "activate",
@@ -122,16 +116,11 @@ def profile(identity="app", host="host", application="example-app", resources=No
             "release",
             "inspect",
             "reconcile",
-            "restore",
-            "verify_restored_state",
         ],
         lifecycle_profile="lifecycle",
-        backup_profile="backup",
         runner_profiles=["migration"],
-        restore_profiles=["restore"],
         binding_revision=digest(b"bindings"),
         maintenance_startup=True,
-        isolated_restore=True,
     )
 
 
@@ -202,9 +191,6 @@ class FakeBackend:
             evidence=["evidence-" + r.operation],
             maintenance_epochs=self.epochs,
             proofs=proofs,
-            snapshot_digest=digest(b"snapshot")
-            if r.operation in {"snapshot", "restore_verify", "restore"}
-            else None,
         )
 
 
@@ -309,7 +295,6 @@ def environment(tmp_path):
             id="db",
             owner_deployment="app",
             writers=["app"],
-            backup_domain="backup",
             physical_binding_digest=digest(b"physical-db"),
             external_writers_fenced=True,
         )

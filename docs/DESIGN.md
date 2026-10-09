@@ -1,3 +1,5 @@
+> Historical design/integration record. The current simple flow is in [running](RUNNING.md) and [installation](INSTALL.md). Backup/restore, unmanaged import and client PKI requirements/examples below are superseded and are not accepted current contracts. Publication/full-host acceptance do not gate controlled installation tests.
+
 # FLAMORIS Updater design
 
 **State:** accepted basic direction with Updater-owned v1 source implemented; release/live acceptance pending. [Detailed draft 1](DETAILED_DESIGN.md) specifies proposed APIs, persistence, trust and failure semantics.

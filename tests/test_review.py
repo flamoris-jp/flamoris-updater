@@ -18,7 +18,7 @@ from flamoris_updater_adapters.journal import Journal, inspect_journal
 from flamoris_updater_adapters.signing import Key, Signer
 
 
-@pytest.mark.parametrize("removed", ["snapshot", "restore_verify", "validate", "stop"])
+@pytest.mark.parametrize("removed", ["close_admission", "drain", "validate", "stop"])
 def test_signed_plan_cannot_omit_safety_phase(environment, removed):
     e = environment
     plan, _ = e.coordinator.plan(e.plan()["plan_id"])
@@ -217,7 +217,7 @@ def test_self_inventory_survives_bootstrap_configuration(environment, tmp_path):
 def test_recovery_finalizing_crash_retries_only_publication(environment, tmp_path):
     e = environment
     job = e.start()
-    e.backend.fail = "reopen_admission"
+    e.backend.fail = "stop"
     e.coordinator.run_job(job["job_id"])
     e.backend.fail = None
     rc, _, _, _ = controller(e, tmp_path)
@@ -248,7 +248,7 @@ def test_recovery_finalizing_crash_retries_only_publication(environment, tmp_pat
     assert e.backend.calls == calls and rc.j.meta("epoch") == epoch
 
 
-def migration(tmp_path, crash=False, backup=True):
+def migration(tmp_path, crash=False, fenced=True):
     m, _, _, _ = manifest("1.2.0", "db-3", [edge()])
     p = profile()
     db_path = tmp_path / "application.sqlite"
@@ -265,8 +265,7 @@ def migration(tmp_path, crash=False, backup=True):
 
     app = SimpleNamespace(
         inspect=inspect,
-        fenced=lambda r: True,
-        snapshot_verified=lambda r: backup,
+        fenced=lambda r: fenced,
         validate=lambda r: {k: True for k in PROOFS[r.operation]},
     )
 
@@ -313,11 +312,11 @@ def test_standalone_runner_crash_does_not_replay_committed_database_change(tmp_p
     assert calls == ["step"]
 
 
-def test_standalone_runner_requires_verified_backup_before_intent(tmp_path):
-    runner, r, calls, _ = migration(tmp_path, backup=False)
+def test_standalone_runner_requires_fenced_writers_before_intent(tmp_path):
+    runner, r, calls, _ = migration(tmp_path, fenced=False)
     with pytest.raises(UpdateError) as err:
         runner.invoke(r)
-    assert err.value.code == "backup_unverified" and calls == []
+    assert err.value.code == "forbidden" and calls == []
     assert runner.journal.get("migration_operation", r.operation_id) is None
 
 
@@ -370,7 +369,6 @@ def test_shared_resource_migrates_only_at_owner_and_orders_writers():
         id="db",
         owner_deployment="owner",
         writers=["owner", "consumer"],
-        backup_domain="backup",
         physical_binding_digest=digest(b"physical-db"),
         external_writers_fenced=True,
     )
@@ -391,11 +389,7 @@ def test_shared_resource_migrates_only_at_owner_and_orders_writers():
     )
     plan = planner.build(*args)
     assert [s.deployment_id for s in plan.steps if s.operation == "apply_step"] == ["owner"]
-    assert all(
-        s.resources == ([] if s.deployment_id == "consumer" else ["db"])
-        for s in plan.steps
-        if s.operation in {"snapshot", "restore_verify"}
-    )
+    assert not any(s.operation in {"snapshot", "restore_verify"} for s in plan.steps)
     assert [s.deployment_id for s in plan.steps if s.operation == "stop"] == ["consumer", "owner"]
     assert [s.deployment_id for s in plan.steps if s.operation == "activate"] == [
         "owner",
@@ -541,44 +535,6 @@ def test_self_intent_atomically_gates_normal_admission_before_stop(environment, 
     rc.j.flush_export = export
     result = rc.self_update("operator", ids[1], "atomic-gate", preview["plan_digest"])
     assert result["state"] == "unknown" and driver.calls == ["prepare"]
-
-
-def test_restore_verification_cannot_substitute_another_owners_snapshot(environment):
-    e = environment
-    original = e.backend.perform
-
-    def perform(p, m, r):
-        result = original(p, m, r)
-        if r.operation == "restore_verify":
-            foreign = result.model_copy(
-                update={
-                    "operation": "snapshot",
-                    "deployment_id": "other-owner",
-                    "operation_id": "foreign-snapshot",
-                    "snapshot_digest": digest(b"foreign-snapshot"),
-                }
-            )
-            packet = e.host.signer.packet({"result": foreign.model_dump()})
-            with e.host.journal.transaction() as db:
-                db.execute(
-                    "INSERT INTO operations VALUES(?,?,?,?,?,?)",
-                    (
-                        "foreign-snapshot",
-                        r.job_id,
-                        digest(b"foreign-binding"),
-                        dumps({}),
-                        "verified",
-                        dumps(packet),
-                    ),
-                )
-            return result.model_copy(update={"snapshot_digest": foreign.snapshot_digest})
-        return result
-
-    e.backend.perform = perform
-    job = e.start()
-    e.coordinator.run_job(job["job_id"])
-    assert e.coordinator.job("operator", job["job_id"])["state"] == "unknown"
-    assert "apply_step" not in e.backend.calls
 
 
 def test_application_environment_bytes_are_part_of_configuration_guard(tmp_path):

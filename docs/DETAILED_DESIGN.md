@@ -1,3 +1,5 @@
+> Historical design/integration record. The current simple flow is in [running](RUNNING.md) and [installation](INSTALL.md). Backup/restore, unmanaged import and client PKI requirements/examples below are superseded and are not accepted current contracts. Publication/full-host acceptance do not gate controlled installation tests.
+
 # Detailed design: draft 1
 
 Date: 2026-10-08. **Reviewed v1 design; source implementation available, deployment acceptance pending.**

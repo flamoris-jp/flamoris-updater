@@ -1,0 +1,26 @@
+name: Initial installation candidates
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  candidate:
+    strategy:
+      fail-fast: false
+      matrix:
+        application: [flamoris-ai-agent, flamoris-studio, flamoris-intelligence-mcp, flamoris-generation-mcp, flamoris-mcp-hub, flamoris-gpu-node-manager]
+        platform:
+          - {runner: ubuntu-24.04, name: linux/amd64}
+          - {runner: ubuntu-24.04-arm, name: linux/arm64}
+    runs-on: ${{ matrix.platform.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install --constraint requirements-runtime.lock -e .
+      - run: python scripts/build_initial_candidate.py --application '${{ matrix.application }}' --platform '${{ matrix.platform.name }}' --output dist/candidate
+      - uses: actions/upload-artifact@v4
+        with:
+          name: initial-${{ matrix.application }}-${{ matrix.platform.runner }}
+          path: dist/candidate/

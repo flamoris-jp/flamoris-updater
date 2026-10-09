@@ -1,3 +1,5 @@
+> Historical design/integration record. The current simple flow is in [running](RUNNING.md) and [installation](INSTALL.md). Backup/restore, unmanaged import and client PKI requirements/examples below are superseded and are not accepted current contracts. Publication/full-host acceptance do not gate controlled installation tests.
+
 # Application migration contract v1
 
 **Reviewed v1 contract; common runner implemented.** Application-specific handlers remain owning-repository work. Actual contracts/models and [running](RUNNING.md) define executable fields.

@@ -33,15 +33,11 @@ class Planner:
         if action in {"update", "recover"}:
             while True:
                 before = set(selected)
-                domains = {
-                    self.resources[r].backup_domain
-                    for i in selected
-                    for r in self.profiles[i].resources.values()
-                }
-                for resource in self.resources.values():
-                    if resource.backup_domain in domains:
-                        selected.update(resource.writers)
-                        selected.add(resource.owner_deployment)
+                shared = {r for i in selected for r in self.profiles[i].resources.values()}
+                for resource_id in shared:
+                    resource = self.resources[resource_id]
+                    selected.update(resource.writers)
+                    selected.add(resource.owner_deployment)
                 for identity, profile in self.profiles.items():
                     if set(profile.providers.values()) & selected:
                         selected.add(identity)
@@ -152,25 +148,15 @@ class Planner:
                 raise UpdateError("stale_plan", "Deployment identity or profile disagrees")
             if obs.active_work or obs.unknown_work:
                 raise UpdateError("busy", "Application has active or unresolved work")
-            if not profile.maintenance_startup or (
-                profile.resources and not profile.isolated_restore
-            ):
+            if not profile.maintenance_startup:
                 raise UpdateError("quiescence_unavailable")
             if (
                 manifest.lifecycle_profile.id != profile.lifecycle_profile
-                or manifest.backup_profile.id != profile.backup_profile
                 or not manifest.lifecycle_profile.admission_gate_required
             ):
                 raise UpdateError("invalid_profile")
-            owned_classes = {
-                logical
-                for logical, physical in profile.resources.items()
-                if self.resources[physical].owner_deployment == identity
-            }
-            if set(profile.resources) != set(manifest.schema_targets) or not owned_classes <= set(
-                manifest.backup_profile.resource_classes
-            ):
-                raise UpdateError("backup_unverified", "Resource backup scope is incomplete")
+            if set(profile.resources) != set(manifest.schema_targets):
+                raise UpdateError("invalid_profile", "Resource schema scope disagrees")
             if any(
                 not self.resources[r].external_writers_fenced for r in profile.resources.values()
             ):
@@ -196,6 +182,14 @@ class Planner:
                     for logical, physical in profile.resources.items():
                         if self.resources[physical].owner_deployment != identity:
                             starting_schemas[logical] = shared_targets[physical]
+                if action == "recover" and (
+                    not manifest.recovery.artifact_only
+                    or starting_schemas != manifest.schema_targets
+                ):
+                    raise UpdateError(
+                        "unsupported_migration",
+                        "Previous executables cannot use current schemas; Updater never restores data",
+                    )
                 paths[identity] = [] if action == "recover" else route(manifest, starting_schemas)
                 if action == "verify_recovery" and paths[identity]:
                     raise UpdateError(
@@ -210,9 +204,6 @@ class Planner:
                         for logical in edge.affected_resources
                     )
                     or edge.runner_profile not in profile.runner_profiles
-                    or edge.restore_profile not in profile.restore_profiles
-                    or not edge.backup_required
-                    or not manifest.recovery.data_restore
                 ):
                     raise UpdateError("unsupported_migration")
             for dep in manifest.dependencies:
@@ -270,18 +261,7 @@ class Planner:
                         host_id=profile.host_id,
                         phase=phase_name,
                         operation=operation,
-                        resources=sorted(
-                            r
-                            for r in profile.resources.values()
-                            if operation
-                            not in {
-                                "snapshot",
-                                "restore_verify",
-                                "restore",
-                                "verify_restored_state",
-                            }
-                            or self.resources[r].owner_deployment == identity
-                        ),
+                        resources=sorted(profile.resources.values()),
                         predecessors=list(previous),
                         arguments=args,
                     )
@@ -303,27 +283,7 @@ class Planner:
             phase("quiescing", [(i, "drain", {}) for i in sorted(selected)])
             for identity in reversed(activation):
                 phase("quiescing", [(identity, "stop", {})])
-            backup_owners = sorted(
-                {
-                    self.resources[r].owner_deployment
-                    for i in selected
-                    for r in self.profiles[i].resources.values()
-                }
-            )
-            phase("backing_up", [(i, "snapshot", {}) for i in backup_owners])
-            phase("backing_up", [(i, "restore_verify", {}) for i in backup_owners])
-            if action == "recover":
-                phase(
-                    "migrating", [(i, "restore", {"parent_job_id": parent}) for i in backup_owners]
-                )
-                phase(
-                    "validating",
-                    [
-                        (i, "verify_restored_state", {"parent_job_id": parent})
-                        for i in backup_owners
-                    ],
-                )
-            else:
+            if action != "recover":
                 for identity in activation:
                     manifest = manifests[identity]
                     if action == "install":

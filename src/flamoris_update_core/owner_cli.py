@@ -52,7 +52,7 @@ def dispatch(owner, action, raw):
     return dumps(owner.inspect(obj["observation_id"]).model_dump(mode="json"))
 
 
-def serve_connection(connection, owner, allowed_peer_uids, guard):
+def serve_connection(connection, owner, allowed_peer_uids, guard, dispatch_fn=None):
     connection.settimeout(120)
     try:
         _, uid, _ = struct.unpack(
@@ -67,7 +67,7 @@ def serve_connection(connection, owner, allowed_peer_uids, guard):
         guard()
         if set(packet) != {"action", "body"} or not isinstance(packet["action"], str):
             raise UpdateError("invalid_input")
-        raw = dispatch(owner, packet["action"], dumps(packet["body"]))
+        raw = (dispatch_fn or dispatch)(owner, packet["action"], dumps(packet["body"]))
     except Exception as error:
         raw = dumps(
             error.public() if isinstance(error, UpdateError) else {"error": "outcome_unknown"}
@@ -77,7 +77,7 @@ def serve_connection(connection, owner, allowed_peer_uids, guard):
     connection.sendall(struct.pack("!I", len(raw)) + raw)
 
 
-def create_server(owner, cfg, guard):
+def create_server(owner, cfg, guard, dispatch_fn=None):
     path = Path(cfg.socket_path)
     # Peers may traverse the socket directory but must not replace its entries.
     if (
@@ -91,7 +91,7 @@ def create_server(owner, cfg, guard):
 
     class Handler(socketserver.BaseRequestHandler):
         def handle(self):
-            serve_connection(self.request, owner, cfg.allowed_peer_uids, guard)
+            serve_connection(self.request, owner, cfg.allowed_peer_uids, guard, dispatch_fn)
 
     class Server(socketserver.UnixStreamServer):
         request_queue_size = 8

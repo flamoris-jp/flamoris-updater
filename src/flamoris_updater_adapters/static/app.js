@@ -2,7 +2,7 @@
 const $=id=>document.getElementById(id);
 let generation=0;
 let session=null,csrf="",loginCsrf="",selectedPlan=null,selectedJob=null,poll=null,historyCursor="",notesCursor="",notesRequest=null;
-const phases={accepted:"受付済み",preparing:"準備中",prepared:"準備完了",quiescing:"受付停止・処理の終了待ち",backing_up:"バックアップ・復元確認",migrating:"データ移行",activating:"切替中",validating:"動作検証",reopening:"受付再開",finalizing:"完了の確定",succeeded:"完了",failed_safe:"安全な状態で失敗",cancelled_safe:"取消完了",recovery_required:"復旧が必要",unknown:"結果の照合が必要"};
+const phases={accepted:"受付済み",preparing:"準備中",prepared:"準備完了",quiescing:"受付停止・処理の終了待ち",migrating:"データ移行",activating:"切替中",validating:"動作検証",reopening:"受付再開",finalizing:"完了の確定",succeeded:"完了",failed_safe:"安全な状態で失敗",cancelled_safe:"取消完了",recovery_required:"復旧が必要",unknown:"結果の照合が必要"};
 function node(tag,text,cls){const element=document.createElement(tag);if(text!==undefined)element.textContent=text;if(cls)element.className=cls;return element;}
 function message(text){$("message").textContent=text;$("message").hidden=!text;}
 async function request(path,payload){const current=generation;const options={credentials:"same-origin",cache:"no-store"};if(payload!==undefined){options.method="POST";options.headers={"Content-Type":"application/json","X-CSRF-Token":csrf};options.body=JSON.stringify(payload);}const response=await fetch(path,options);const data=await response.json();if(current!==generation)throw new Error("ログイン状態が変わりました。");if(!response.ok||data.error)throw new Error(data.message||data.error||"応答を確認できませんでした。履歴を確認してください。");return data;}

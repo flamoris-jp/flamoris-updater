@@ -9,9 +9,6 @@ from .models import ID, Digest, Model, Op
 READ_RESULTS = {
     "inspect",
     "validate",
-    "snapshot",
-    "restore_verify",
-    "verify_restored_state",
     "prepare",
     "begin",
     "close_admission",
@@ -20,7 +17,6 @@ READ_RESULTS = {
     "activate",
     "reopen_admission",
     "release",
-    "restore",
 }
 OUTCOMES = {
     "apply_step": {"applied_verified", "not_applied", "partial_known", "unknown"},
@@ -31,22 +27,12 @@ PROOFS = {
     "close_admission": {"admission_closed", "durable_maintenance"},
     "drain": {"work_drained", "unknown_work_absent", "writers_fenced"},
     "stop": {"writers_fenced", "maintenance_startup"},
-    "snapshot": {"snapshot_consistent", "writers_fenced"},
-    "restore_verify": {
-        "isolated_restore",
-        "no_production_credentials",
-        "no_external_effects",
-        "permissions_preserved",
-        "domain_valid",
-    },
     "apply_step": {"domain_valid", "permissions_preserved"},
     "initialize": {"empty_verified", "domain_valid", "permissions_preserved"},
     "activate": {"artifact_verified", "maintenance_startup"},
     "validate": {"domain_valid", "permissions_preserved"},
     "reopen_admission": {"admission_open", "accepted_work_reconciled"},
     "release": {"safe_lifecycle", "release_safe"},
-    "restore": {"writers_fenced", "no_new_writes", "no_external_effects", "snapshot_verified"},
-    "verify_restored_state": {"domain_valid", "permissions_preserved"},
 }
 VALID_PROOFS = set().union(*PROOFS.values())
 
@@ -79,7 +65,6 @@ class OwnerResult(Model):
     evidence: list[ID] = Field(min_length=1, max_length=128)
     maintenance_epochs: dict[ID, int]
     proofs: dict[str, bool]
-    snapshot_digest: Digest | None = None
     observation: Observation | None = None
 
     @model_validator(mode="after")
@@ -113,15 +98,10 @@ def verified(request: OwnerRequest, result: OwnerResult):
     if any(result.proofs.get(p) is not True for p in PROOFS.get(request.operation, set())):
         raise UpdateError("outcome_unknown", "Required owner evidence is missing")
     if (
-        request.operation in {"validate", "apply_step", "initialize", "verify_restored_state"}
+        request.operation in {"validate", "apply_step", "initialize"}
         and result.schemas != request.expected_schemas
     ):
         raise UpdateError("recovery_required", "Owner schema result disagrees")
-    if (
-        request.operation in {"snapshot", "restore_verify", "restore"}
-        and result.snapshot_digest is None
-    ):
-        raise UpdateError("backup_unverified")
     if (
         request.operation != "close_admission"
         and request.maintenance_epochs

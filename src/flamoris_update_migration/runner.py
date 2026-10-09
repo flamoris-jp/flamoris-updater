@@ -14,7 +14,6 @@ from flamoris_update_core.wire import decode, digest, dumps
 class Application(Protocol):
     def inspect(self): ...
     def fenced(self, request: OwnerRequest) -> bool: ...
-    def snapshot_verified(self, request: OwnerRequest) -> bool: ...
     def empty_verified(self, request: OwnerRequest) -> bool: ...
     def validate(self, request: OwnerRequest) -> dict[str, bool]: ...
     def reconcile(self, request: OwnerRequest) -> OwnerResult: ...
@@ -84,16 +83,13 @@ class MigrationRunner:
                 edge = edges[0]
                 if (
                     edge.runner_profile not in p.runner_profiles
-                    or edge.restore_profile not in p.restore_profiles
-                    or not edge.backup_required
-                    or not self.application.snapshot_verified(r)
                     or any(
                         observed.schemas.get(k) != v
                         for k, v in {**edge.source, **edge.requires}.items()
                     )
                     or r.expected_schemas != {**observed.schemas, **edge.to}
                 ):
-                    raise UpdateError("backup_unverified")
+                    raise UpdateError("unsupported_migration")
                 handler = edge.handler_id
             else:
                 if (

@@ -1,18 +1,15 @@
-"""Application-owned file resources: bounded snapshots and isolated verification."""
+"""Application-owned file identity and bounded read-only inventory."""
 
 import hashlib
 import os
-import shutil
 import stat
-import tempfile
 from pathlib import Path
 
 from pydantic import Field
 
 from .errors import UpdateError
-from .journal import durable_write
-from .models import ID, Digest, Model
-from .wire import digest, dumps, loads
+from .models import ID, Model
+from .wire import digest, dumps
 
 
 class TreeBinding(Model):
@@ -168,76 +165,3 @@ class TreeResource:
                 item.update(kind="file", size=before.st_size, digest="sha256:" + hasher.hexdigest())
             result.append(item)
         return result
-
-    def snapshot(self, destination: Path):
-        expected = self.inventory()
-        if destination.exists() or destination.is_symlink():
-            raise UpdateError("operation_conflict")
-        destination.mkdir(mode=0o700)
-        tree = destination / "tree"
-        tree.mkdir(mode=0o700)
-        # Copy only members already inspected; never follow a changing link.
-        for item in expected:
-            target = tree / item["path"]
-            if item["kind"] == "directory":
-                target.mkdir(mode=0o700, exist_ok=True)
-            else:
-                fd = self._open(self.root, item["path"], os.O_RDONLY)
-                try:
-                    _regular(os.fstat(fd))
-                    with os.fdopen(fd, "rb", closefd=False) as incoming, target.open("xb") as out:
-                        copied = 0
-                        while chunk := incoming.read(1024 * 1024):
-                            copied += len(chunk)
-                            if copied > item["size"]:
-                                raise UpdateError("resource_changed")
-                            out.write(chunk)
-                        out.flush()
-                        os.fsync(out.fileno())
-                finally:
-                    os.close(fd)
-            if (item["uid"], item["gid"]) != (os.geteuid(), os.getegid()):
-                os.chown(target, item["uid"], item["gid"])
-        for item in reversed(expected):
-            fd = self._open(tree, item["path"], os.O_RDONLY)
-            try:
-                os.fchmod(fd, item["mode"])
-                os.fsync(fd)
-            finally:
-                os.close(fd)
-        if self.inventory(tree) != expected or self.inventory() != expected:
-            raise UpdateError("resource_changed")
-        raw = dumps({"resource": self.binding.id, "members": expected})
-        durable_write(destination / "index.json", raw)
-        return digest(raw)
-
-    def restore_verify(self, snapshot: Path, expected_digest: Digest):
-        raw = protected_read(snapshot / "index.json", private=True, limit=16 * 1024 * 1024)
-        if digest(raw) != expected_digest:
-            raise UpdateError("backup_unverified")
-        index = loads(raw, 16 * 1024 * 1024)
-        if (
-            index["resource"] != self.binding.id
-            or self.inventory(snapshot / "tree") != index["members"]
-        ):
-            raise UpdateError("backup_unverified")
-        with tempfile.TemporaryDirectory(prefix="restore-probe-", dir=snapshot.parent) as temporary:
-            isolated = Path(temporary) / "tree"
-            shutil.copytree(snapshot / "tree", isolated, symlinks=True)
-            for item in index["members"]:
-                target = isolated / item["path"]
-                if (item["uid"], item["gid"]) != (os.geteuid(), os.getegid()):
-                    os.chown(target, item["uid"], item["gid"])
-            # chown may clear setgid. Reapply the recorded modes only after
-            # ownership has been restored, using the same pinned traversal as
-            # snapshots. This also verifies that no link substitution occurred.
-            for item in reversed(index["members"]):
-                fd = self._open(isolated, item["path"], os.O_RDONLY)
-                try:
-                    os.fchmod(fd, item["mode"])
-                    os.fsync(fd)
-                finally:
-                    os.close(fd)
-            if self.inventory(isolated) != index["members"]:
-                raise UpdateError("backup_unverified")
-        return True

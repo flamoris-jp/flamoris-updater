@@ -13,7 +13,10 @@ from flamoris_updater_adapters.config import (
     RecoveryConfig,
 )
 from flamoris_updater_adapters.inputs import TOOLS
+from flamoris_updater_adapters.install import Configuration
+from flamoris_updater_adapters.managed import Catalog as InstallCatalog
 from flamoris_updater_adapters.releases import Catalog
+from flamoris_updater_adapters.setup import BootstrapConfig, SetupRequest
 
 
 def main():
@@ -36,10 +39,16 @@ def main():
         HostAPIConfig,
         RecoveryConfig,
         ServerConfiguration,
+        Configuration,
+        BootstrapConfig,
+        SetupRequest,
     ]:
         (root / (model.__name__ + ".schema.json")).write_text(
             json.dumps(model.model_json_schema(by_alias=True), indent=2) + "\n"
         )
+    (root / "InstallCatalog.schema.json").write_text(
+        json.dumps(InstallCatalog.model_json_schema(), indent=2) + "\n"
+    )
     (root / "mcp-tools.schema.json").write_text(
         json.dumps(
             {name: model.model_json_schema() for name, (model, _, _) in TOOLS.items()}, indent=2

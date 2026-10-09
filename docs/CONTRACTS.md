@@ -1,23 +1,14 @@
-# Contract design index
+# Current contract index
 
-**State:** reviewed design with executable v1 source/models, schema export and twelve MCP tools. See [running](RUNNING.md) and [implementation review](IMPLEMENTATION_REVIEW.md) for exact supported behavior and remaining integration work.
+Source models/exported schemas are authoritative. Historical backup/restore fields and operations are removed rather than accepted/ignored. Unmanaged import and client PKI remain unsupported.
 
-| Contract | Specification |
+| Contract | Current reference |
 | --- | --- |
-| Local transport, removed certificate fields and bootstrap limits | [Communication](TRANSPORT.md) |
-| Core/wrapper, identities and ports | [Detailed design](DETAILED_DESIGN.md) |
-| Release JSON fields, signatures/catalog and notes | [Release Manifest](RELEASE_MANIFEST.md) |
-| Resource/schema graph, standalone runner and reconciliation | [Migration contract](MIGRATION_CONTRACT.md) |
-| Plans, grants, journals, group updates, install and self recovery | [Execution and recovery](EXECUTION_RECOVERY.md) |
-| MCP tools, actor scopes, Jobs and errors | [MCP and operator API](MCP_API.md) |
-| Dedicated Updater Web, independent login/session and operator flow | [Web UI](WEB_UI.md) |
-| Source integration boundaries | [Source inventory](ADOPTION.md) |
-| Fault and acceptance scenarios | [Acceptance matrix](ACCEPTANCE.md) |
+| Bootstrap, access and services | [Running](RUNNING.md), [transport](TRANSPORT.md), `setup.BootstrapConfig` |
+| Catalog, settings and package recipes | [Installation](INSTALL.md), `managed.Catalog` / `Recipe` / exported InstallCatalog |
+| Managed jobs and shared interfaces | [MCP/API](MCP_API.md), [Web](WEB_UI.md), `managed.Start` / `Manager` |
+| App-owned schema migrations | Core schema graph and standalone migration runner; no backup/restore prerequisite |
+| Advanced signed coordinator/Owner | Current source schemas; matching SDK/profiles are separate integration |
+| Source, CI and live boundary | [Progress](../PROGRESS.md), [roadmap](ROADMAP.md) |
 
-The accepted ownership/version policy remains in [DESIGN.md](DESIGN.md). Shortened digest examples remain illustrative; actual source models and exported schemas define accepted fields/tool names.
-
-The common migration runner remains available for application-owned schema changes. Existing unmanaged deployment import and pre-entry transitions are not supported; no enrollment action or evidence contract remains.
-
-Review and implementation evidence must distinguish draft design, source completion, signed releases and live acceptance. Track actual state in [PROGRESS.md](../PROGRESS.md).
-
-The [2026-10-08 review/correction loop](REVIEW_LOOP_2026-10-08.md) records the reviewed contract changes and their future acceptance cases. It is documentation evidence only.
+The previous detailed manifest/execution/review documents are design history and are marked accordingly; their backup/restore examples must not be used as accepted configurations.

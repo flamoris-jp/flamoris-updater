@@ -31,7 +31,7 @@ def test_update_finishes_after_reopening_and_final_receipts(environment):
     outcome = e.coordinator.job("operator", job["job_id"])
     assert outcome["state"] == "succeeded", outcome
     assert (
-        e.backend.calls.index("restore_verify")
+        e.backend.calls.index("stop")
         < e.backend.calls.index("apply_step")
         < e.backend.calls.index("activate")
         < e.backend.calls.index("validate")
@@ -73,8 +73,6 @@ def test_operation_conflict_and_global_predecessor_enforcement(environment):
 @pytest.mark.parametrize(
     "operation",
     [
-        "snapshot",
-        "restore_verify",
         "apply_step",
         "activate",
         "validate",
@@ -111,9 +109,9 @@ def test_process_death_after_intent_is_not_replayed(environment):
     assert e.backend.calls.count("apply_step") == 1
 
 
-def test_missing_isolation_proof_blocks_migration(environment):
+def test_missing_fencing_proof_blocks_migration(environment):
     e = environment
-    e.backend.drop_proof = "no_production_credentials"
+    e.backend.drop_proof = "writers_fenced"
     job = e.start()
     e.coordinator.run_job(job["job_id"])
     assert e.coordinator.job("operator", job["job_id"])["state"] == "unknown"

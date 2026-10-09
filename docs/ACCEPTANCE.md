@@ -1,3 +1,5 @@
+> Historical design/integration record. The current simple flow is in [running](RUNNING.md) and [installation](INSTALL.md). Backup/restore, unmanaged import and client PKI requirements/examples below are superseded and are not accepted current contracts. Publication/full-host acceptance do not gate controlled installation tests.
+
 # Design acceptance matrix
 
 **Acceptance criteria with partial automated source coverage; live certification pending.** The original design task executed no runtime tests. The later implementation adds regression/protocol/artifact/recovery tests listed in [implementation review](IMPLEMENTATION_REVIEW.md) and [PROGRESS](../PROGRESS.md). Rows below remain requirements until their owning live acceptance is evidenced.

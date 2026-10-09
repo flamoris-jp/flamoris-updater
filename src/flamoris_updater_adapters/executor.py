@@ -205,21 +205,7 @@ class HostExecutor:
             or profile.role != "application"
             or step.operation not in profile.operations
             or plan.profile_digests[profile.id] != digest(dumps(profile))
-            or set(step.resources)
-            != {
-                r
-                for r in profile.resources.values()
-                if step.operation
-                not in {"snapshot", "restore_verify", "restore", "verify_restored_state"}
-                or self.resources is None
-                or self.resources[r].owner_deployment == profile.id
-            }
-        ):
-            raise UpdateError("forbidden")
-        if (
-            self.resources is not None
-            and step.operation in {"snapshot", "restore_verify", "restore", "verify_restored_state"}
-            and any(self.resources[r].owner_deployment != profile.id for r in step.resources)
+            or set(step.resources) != set(profile.resources.values())
         ):
             raise UpdateError("forbidden")
         if plan.action == "recover" and purpose != "controller":
@@ -441,7 +427,7 @@ class HostExecutor:
             ):
                 raise UpdateError("stale_plan")
             schemas.update(step.arguments["to"])
-        elif step.operation in {"validate", "initialize", "restore", "verify_restored_state"}:
+        elif step.operation in {"validate", "initialize"}:
             schemas = manifest.schema_targets
         if step.operation == "prepare" or (step.operation in {"begin", "release"} and read_only):
             return OwnerResult(
@@ -477,54 +463,4 @@ class HostExecutor:
         )
         result = self.backend.perform(profile, manifest, request)
         verified(request, result)
-        if step.operation == "restore_verify":
-            with self.journal.connection() as db:
-                snapshots = [
-                    loads(r[0])
-                    for r in db.execute(
-                        "SELECT result FROM operations WHERE job_id=? AND outcome='verified' AND result IS NOT NULL",
-                        (job_id,),
-                    )
-                ]
-            expected = [
-                open_packet(x, self.receipt_keys, self.domain, "receipt")["result"].get(
-                    "snapshot_digest"
-                )
-                for x in snapshots
-                if open_packet(x, self.receipt_keys, self.domain, "receipt")["result"]["operation"]
-                == "snapshot"
-                and open_packet(x, self.receipt_keys, self.domain, "receipt")["result"][
-                    "deployment_id"
-                ]
-                == profile.id
-            ]
-            if result.snapshot_digest not in expected:
-                raise UpdateError("backup_unverified")
-        if step.operation == "restore":
-            parent = plan.parent_job_id
-            frozen = self.journal.get("frozen_parent", parent)
-            with self.journal.connection() as db:
-                packets = [
-                    loads(row[0])
-                    for row in db.execute(
-                        "SELECT result FROM operations WHERE job_id=? AND result IS NOT NULL AND outcome='verified'",
-                        (parent,),
-                    )
-                ]
-            snapshots = [
-                open_packet(packet, self.receipt_keys, self.domain, "receipt") for packet in packets
-            ]
-            if (
-                not frozen
-                or result.snapshot_digest != step.arguments.get("snapshot_digest")
-                or not any(
-                    s["job_id"] == parent
-                    and s["plan_digest"] == frozen["plan_digest"]
-                    and s["result"]["operation"] == "snapshot"
-                    and s["result"]["deployment_id"] == profile.id
-                    and s["result"]["snapshot_digest"] == result.snapshot_digest
-                    for s in snapshots
-                )
-            ):
-                raise UpdateError("backup_unverified")
         return result

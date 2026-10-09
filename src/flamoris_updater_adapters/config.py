@@ -211,9 +211,9 @@ class CoordinatorConfig(Model):
     listen_port: int = Field(gt=0, lt=65536)
     server_tls: ServerTLS | None = None
     trusted_loopback_proxy: bool = False
-    profiles: list[DeploymentProfile] = Field(min_length=1, max_length=128)
+    profiles: list[DeploymentProfile] = Field(default_factory=list, max_length=128)
     resources: list[Resource] = Field(max_length=2048)
-    hosts: list[HostConnection] = Field(min_length=1, max_length=128)
+    hosts: list[HostConnection] = Field(default_factory=list, max_length=128)
     release_keys: list[PublicKey] = Field(min_length=1)
     receipt_keys: list[PublicKey] = Field(min_length=1)
     release_sources: list[ReleaseSource] = Field(default_factory=list)
@@ -248,9 +248,9 @@ class HelperConfig(Model):
     socket_group_id: int = Field(ge=0)
     allowed_peer_uids: list[int] = Field(min_length=1, max_length=16)
     staging_directory: str
-    profiles: list[DeploymentProfile] = Field(min_length=1, max_length=128)
+    profiles: list[DeploymentProfile] = Field(default_factory=list, max_length=128)
     resources: list[Resource] = Field(max_length=2048)
-    bindings: list[NativeBinding | DockerBinding] = Field(min_length=1, max_length=128)
+    bindings: list[NativeBinding | DockerBinding] = Field(default_factory=list, max_length=128)
     quota: Quota
     authorities: list[PublicKey] = Field(min_length=1)
     receipt_keys: list[PublicKey] = Field(min_length=1)

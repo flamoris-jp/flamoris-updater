@@ -4,6 +4,8 @@ from pydantic import Field
 
 from flamoris_update_core.models import ID, Digest, Model
 
+from .managed import MANAGED_TOOLS
+
 
 class Page(Model):
     cursor: str = Field(default="", max_length=128)
@@ -92,6 +94,7 @@ TOOLS = {
         "verify",
     ),
 }
+TOOLS.update(MANAGED_TOOLS)
 
 
 class Facade:
@@ -119,6 +122,12 @@ class Facade:
         except Exception:
             raise UpdateError("invalid_input", "Arguments do not match the tool contract") from None
         c = self.coordinator
+        if hasattr(c, "managed_invoke"):
+            return c.managed_invoke(subject, name, payload)
+        if name in MANAGED_TOOLS:
+            raise UpdateError(
+                "invalid_input", "Managed installation requires the bootstrap service"
+            )
         if name == "updater_inventory_list":
             result = c.inventory(subject, args.cursor, args.limit)
             if args.targets is not None:

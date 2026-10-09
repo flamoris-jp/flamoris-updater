@@ -9,7 +9,6 @@ class Resource(Model):
     id: ID
     owner_deployment: ID
     writers: list[ID] = Field(min_length=1, max_length=128)
-    backup_domain: ID
     physical_binding_digest: Digest
     external_writers_fenced: bool
 
@@ -26,12 +25,9 @@ class DeploymentProfile(Model):
     embedded_components: dict[ID, ID] = Field(default_factory=dict)
     operations: list[Op]
     lifecycle_profile: ID
-    backup_profile: ID
     runner_profiles: list[ID]
-    restore_profiles: list[ID]
     binding_revision: Digest
     maintenance_startup: bool
-    isolated_restore: bool
 
     @model_validator(mode="after")
     def aliases(self):
