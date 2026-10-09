@@ -10,14 +10,14 @@ from flamoris_updater.coordinator import Coordinator
 from .artifacts import Fetcher, NativeStore
 from .auth import AuthStore
 from .authority import Authority
-from .backends import ApplicationBackend, NativeDriver, RemoteOwner
+from .backends import ApplicationBackend, LocalOwner, NativeDriver
 from .config import Clock, CoordinatorConfig, HelperConfig, load, protected_read, signer
 from .docker import DockerDriver, OCIStore
 from .executor import HostExecutor
 from .journal import Journal
 from .releases import ReleaseStore
 from .sources import ReleaseSources
-from .transport import HTTPHost
+from .transport import HTTPHost, UnixClient
 
 
 def pinned_keys(configured):
@@ -41,7 +41,7 @@ def releases(journal, keys, sources, clock):
             catalog_signature_url=s.catalog_signature_url,
             origins=s.origins,
             tls_client=httpx.Client(
-                verify=s.tls.context(), timeout=60, trust_env=False, follow_redirects=False
+                verify=True, timeout=60, trust_env=False, follow_redirects=False
             ),
         )
         for s in sources
@@ -79,7 +79,6 @@ def credential_files(cfg):
                 if (
                     name
                     in {
-                        "ca_file",
                         "cert_file",
                         "key_file",
                         "signer_private_file",
@@ -171,7 +170,13 @@ def executor(path, root_only=True):
         if identity in physical:
             raise UpdateError("invalid_profile", "Execution-authority aliases are forbidden")
         physical.add(identity)
-        owners[p.id] = RemoteOwner(binding.owner.url, binding.owner.client())
+        owners[p.id] = LocalOwner(
+            UnixClient(
+                binding.owner.socket_path,
+                binding.owner.timeout_seconds,
+                binding.owner.expected_uid,
+            )
+        )
         if binding.kind == "native":
             sources = [s for s in cfg.release_sources if s.application_id == p.application_id]
             if len(sources) != 1:
@@ -179,9 +184,7 @@ def executor(path, root_only=True):
                     "invalid_profile", "Exactly one artifact-origin policy is required"
                 )
             source = sources[0]
-            client = httpx.Client(
-                verify=source.tls.context(), timeout=60, trust_env=False, follow_redirects=False
-            )
+            client = httpx.Client(verify=True, timeout=60, trust_env=False, follow_redirects=False)
             store = NativeStore(
                 Path(cfg.staging_directory),
                 Fetcher(source.origins, client),
@@ -203,7 +206,7 @@ def executor(path, root_only=True):
             fetcher = Fetcher(
                 [binding.registry_origin],
                 httpx.Client(
-                    verify=binding.registry_tls.context(),
+                    verify=True,
                     timeout=60,
                     trust_env=False,
                     follow_redirects=False,

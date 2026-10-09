@@ -1,10 +1,12 @@
 import base64
+import ipaddress
 import os
 import ssl
 import stat
 import time
 from pathlib import Path
 from typing import Literal
+from urllib.parse import urlsplit
 
 import httpx
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
@@ -43,38 +45,70 @@ def protected_read(filename: str, private=False, root_only=False, limit=1024 * 1
         raise UpdateError("unsafe_storage", "Protected file cannot be read") from None
 
 
-class TLS(Model):
-    ca_file: str
+class ServerTLS(Model):
+    """Optional ordinary HTTPS for the public coordinator, never client authentication."""
+
     cert_file: str
     key_file: str
 
     def context(self):
-        protected_read(self.ca_file)
         protected_read(self.cert_file)
         protected_read(self.key_file, private=True)
-        context = ssl.create_default_context(cafile=self.ca_file)
+        context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
         context.minimum_version = ssl.TLSVersion.TLSv1_2
         context.load_cert_chain(self.cert_file, self.key_file)
         return context
 
 
+def api_origin(url: str) -> str:
+    parsed = urlsplit(url)
+    if parsed.path not in {"", "/"} or parsed.query or parsed.fragment:
+        raise UpdateError("untrusted_origin")
+    if parsed.scheme == "https":
+        return origin(url)
+    try:
+        if (
+            parsed.scheme != "http"
+            or not ipaddress.ip_address(parsed.hostname).is_loopback
+            or parsed.username is not None
+            or parsed.password is not None
+        ):
+            raise ValueError("Only literal loopback HTTP is supported")
+        hostname = parsed.hostname
+        hostname = "[" + hostname + "]" if ":" in hostname else hostname
+        return "http://" + hostname + (":" + str(parsed.port) if parsed.port else "")
+    except (ValueError, TypeError):
+        raise UpdateError("untrusted_origin") from None
+
+
 class Endpoint(Model):
     url: str
-    tls: TLS
     timeout_seconds: int = Field(default=120, ge=1, le=3600)
 
     @model_validator(mode="after")
     def secure(self):
-        origin(self.url)
+        api_origin(self.url)
         return self
 
     def client(self):
         return httpx.Client(
-            verify=self.tls.context(),
+            verify=True,
             timeout=self.timeout_seconds,
             trust_env=False,
             follow_redirects=False,
         )
+
+
+class OwnerConnection(Model):
+    socket_path: str
+    expected_uid: int = Field(ge=0)
+    timeout_seconds: int = Field(default=120, ge=1, le=3600)
+
+    @model_validator(mode="after")
+    def local(self):
+        if not Path(self.socket_path).is_absolute():
+            raise ValueError("Owner socket path must be absolute")
+        return self
 
 
 class PublicKey(Model):
@@ -101,7 +135,6 @@ class ReleaseSource(Model):
     catalog_url: str
     catalog_signature_url: str
     origins: list[str] = Field(min_length=1, max_length=32)
-    tls: TLS
 
 
 class HostConnection(Model):
@@ -119,7 +152,7 @@ class Quota(Model):
 class NativeBinding(Model):
     kind: Literal["native"]
     deployment_id: ID
-    owner: Endpoint
+    owner: OwnerConnection
     unit: str
     unit_file: str
     unit_digest: Digest
@@ -151,11 +184,10 @@ class PortBinding(Model):
 class DockerBinding(Model):
     kind: Literal["docker"]
     deployment_id: ID
-    owner: Endpoint
+    owner: OwnerConnection
     container_name: ID
     registry_origin: str
     repository: str
-    registry_tls: TLS
     docker_config_directory: str
     daemon_socket: str
     daemon_data_directory: str
@@ -177,7 +209,7 @@ class CoordinatorConfig(Model):
     public_origin: str
     listen_host: str
     listen_port: int = Field(gt=0, lt=65536)
-    server_tls: TLS | None = None
+    server_tls: ServerTLS | None = None
     trusted_loopback_proxy: bool = False
     profiles: list[DeploymentProfile] = Field(min_length=1, max_length=128)
     resources: list[Resource] = Field(max_length=2048)
@@ -234,7 +266,12 @@ class HostAPIConfig(Model):
     helper_timeout_seconds: int = Field(ge=1, le=3600)
     listen_host: str
     listen_port: int = Field(gt=0, lt=65536)
-    server_tls: TLS
+
+    @model_validator(mode="after")
+    def local_listener(self):
+        if self.listen_host not in {"127.0.0.1", "::1"}:
+            raise ValueError("Host API must bind loopback; use a tunnel for remote access")
+        return self
 
 
 class Clock:

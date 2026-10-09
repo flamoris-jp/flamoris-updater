@@ -1,17 +1,18 @@
-"""A separate bounded mTLS owner endpoint; never served by the product UI."""
+"""Application-owned local socket service, authenticated by OS peer credentials."""
 
 import argparse
-import hashlib
-import ssl
-import threading
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+import os
+import socket
+import socketserver
+import struct
 from pathlib import Path
 
-from pydantic import Field
+from pydantic import Field, model_validator
 
 from .contracts import OwnerRequest
 from .errors import UpdateError
-from .models import Digest, Model
+from .local_transport import receive_exact
+from .models import Model
 from .owner import OwnerConfiguration
 from .resources import protected_read
 from .wire import decode, digest, dumps, loads
@@ -19,12 +20,15 @@ from .wire import decode, digest, dumps, loads
 
 class ServerConfiguration(Model):
     owner: OwnerConfiguration
-    listen_host: str = "127.0.0.1"
-    listen_port: int = Field(gt=0, lt=65536)
-    ca_file: str
-    cert_file: str
-    key_file: str
-    allowed_client_sha256: list[Digest] = Field(min_length=1, max_length=16)
+    socket_path: str
+    socket_group_id: int = Field(ge=0)
+    allowed_peer_uids: list[int] = Field(min_length=1, max_length=16)
+
+    @model_validator(mode="after")
+    def local(self):
+        if not Path(self.socket_path).is_absolute() or any(u < 0 for u in self.allowed_peer_uids):
+            raise ValueError("Absolute socket path and nonnegative peer UIDs are required")
+        return self
 
 
 def dispatch(owner, action, raw):
@@ -47,8 +51,69 @@ def dispatch(owner, action, raw):
     return dumps(owner.inspect(obj["observation_id"]))
 
 
+def serve_connection(connection, owner, allowed_peer_uids, guard):
+    connection.settimeout(120)
+    try:
+        _, uid, _ = struct.unpack(
+            "3i", connection.getsockopt(socket.SOL_SOCKET, socket.SO_PEERCRED, 12)
+        )
+        if uid not in allowed_peer_uids:
+            raise UpdateError("forbidden")
+        guard()
+        size = struct.unpack("!I", receive_exact(connection, 4))[0]
+        packet = loads(receive_exact(connection, size))
+        if set(packet) != {"action", "body"} or not isinstance(packet["action"], str):
+            raise UpdateError("invalid_input")
+        raw = dispatch(owner, packet["action"], dumps(packet["body"]))
+    except Exception as error:
+        raw = dumps(
+            error.public() if isinstance(error, UpdateError) else {"error": "outcome_unknown"}
+        )
+    if len(raw) > 1024 * 1024:
+        raw = dumps({"error": "quota_exceeded"})
+    connection.sendall(struct.pack("!I", len(raw)) + raw)
+
+
+def create_server(owner, cfg, guard):
+    path = Path(cfg.socket_path)
+    # Peers may traverse the socket directory but must not replace its entries.
+    if (
+        path.parent.is_symlink()
+        or path.parent.stat().st_uid != os.geteuid()
+        or path.parent.stat().st_mode & 0o027
+        or path.exists()
+        or path.is_symlink()
+    ):
+        raise UpdateError("unsafe_storage", "Provide an empty protected socket path")
+
+    class Handler(socketserver.BaseRequestHandler):
+        def handle(self):
+            serve_connection(self.request, owner, cfg.allowed_peer_uids, guard)
+
+    class Server(socketserver.UnixStreamServer):
+        request_queue_size = 8
+
+        def server_bind(self):
+            # Binding and permissions happen before the socket begins listening.
+            super().server_bind()
+            self.socket_identity = path.stat().st_ino
+            os.chown(path, os.geteuid(), cfg.socket_group_id)
+            os.chmod(path, 0o660)
+
+        def server_close(self):
+            super().server_close()
+            if path.is_socket() and path.stat().st_ino == getattr(self, "socket_identity", None):
+                path.unlink()
+
+        def handle_error(self, request, client_address):
+            # Lost replies remain unknown; do not emit packets or credentials.
+            pass
+
+    return Server(str(path), Handler)
+
+
 def serve(factory) -> None:
-    parser = argparse.ArgumentParser(description="Application-owned Updater endpoint (mTLS)")
+    parser = argparse.ArgumentParser(description="Application-owned Updater local socket service")
     parser.add_argument("--config", required=True)
     args = parser.parse_args()
     path = Path(args.config)
@@ -56,96 +121,13 @@ def serve(factory) -> None:
         raw = protected_read(path)
         cfg = decode(ServerConfiguration, raw)
         owner = factory(cfg.owner)
-        files = [
-            (path, False),
-            (Path(cfg.ca_file), False),
-            (Path(cfg.cert_file), False),
-            (Path(cfg.key_file), True),
-        ]
-        expected = {str(p): digest(protected_read(p, private=private)) for p, private in files}
+        expected = digest(raw)
 
         def guard():
-            if any(
-                digest(protected_read(p, private=private)) != expected[str(p)]
-                for p, private in files
-            ):
+            if digest(protected_read(path)) != expected:
                 raise UpdateError("policy_changed")
 
-        context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
-        context.minimum_version = ssl.TLSVersion.TLSv1_2
-        context.verify_mode = ssl.CERT_REQUIRED
-        context.load_verify_locations(cafile=cfg.ca_file)
-        context.load_cert_chain(cfg.cert_file, cfg.key_file)
-
-        class Server(ThreadingHTTPServer):
-            daemon_threads = True
-            request_queue_size = 8
-            slots = threading.BoundedSemaphore(8)
-
-            def get_request(self):
-                sock, address = super().get_request()
-                try:
-                    sock.settimeout(5)
-                    return context.wrap_socket(sock, server_side=True), address
-                except BaseException:
-                    sock.close()
-                    raise
-
-            def process_request(self, request, address):
-                if not self.slots.acquire(blocking=False):
-                    request.close()
-                    return
-                try:
-                    super().process_request(request, address)
-                except BaseException:
-                    self.slots.release()
-                    raise
-
-            def process_request_thread(self, request, address):
-                try:
-                    super().process_request_thread(request, address)
-                finally:
-                    self.slots.release()
-
-        class Handler(BaseHTTPRequestHandler):
-            def log_message(self, *_):
-                pass
-
-            def do_POST(self):
-                try:
-                    guard()
-                    peer = self.connection.getpeercert(binary_form=True)
-                    if (
-                        "sha256:" + hashlib.sha256(peer).hexdigest()
-                        not in cfg.allowed_client_sha256
-                    ):
-                        raise UpdateError("forbidden")
-                    values = self.headers.get_all("Content-Length", [])
-                    if (
-                        len(values) != 1
-                        or not values[0].isdigit()
-                        or self.headers.get("Transfer-Encoding")
-                    ):
-                        raise UpdateError("invalid_input")
-                    size = int(values[0])
-                    if size > 1024 * 1024:
-                        raise UpdateError("invalid_input")
-                    body = self.rfile.read(size)
-                    if len(body) != size:
-                        raise UpdateError("invalid_input")
-                    result, status = dispatch(owner, self.path, body), 200
-                except UpdateError as error:
-                    result, status = dumps({"error": error.code}), 409
-                except Exception:
-                    result, status = dumps({"error": "outcome_unknown"}), 500
-                self.send_response(status)
-                self.send_header("Content-Type", "application/json")
-                self.send_header("Content-Length", str(len(result)))
-                self.send_header("Cache-Control", "no-store")
-                self.end_headers()
-                self.wfile.write(result)
-
-        with Server((cfg.listen_host, cfg.listen_port), Handler) as server:
+        with create_server(owner, cfg, guard) as server:
             server.serve_forever()
     except (UpdateError, OSError, ValueError):
-        parser.exit(1, "Owner startup failed; check protected configuration locally.\n")
+        parser.exit(1, "Owner startup failed; check local configuration and socket permissions.\n")

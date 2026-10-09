@@ -10,7 +10,7 @@ Web, CLI and MCP are adapters over one coordinator, its exact-plan authorization
 
 Serve the Web backend and bundled static assets from the native Updater coordinator distribution. Assets are built in CI and bound to that signed release; no frontend build is performed on a managed host. The core's package remains UI/transport-neutral.
 
-Expose a dedicated operator origin over HTTPS through an approved reverse proxy or coordinator TLS binding. Private hostname, port and proxy bindings are deployment-profile inputs, not hardcoded public defaults. Use same-origin browser APIs; host mTLS and privileged helper sockets are never browser-facing.
+Expose a dedicated operator origin over HTTPS through an approved reverse proxy or coordinator TLS binding. Private hostname, port and proxy bindings are deployment-profile inputs, not hardcoded public defaults. Use same-origin browser APIs; host loopback APIs and local Owner/helper sockets are never browser-facing.
 
 Web can remain usable while Studio is stopped or being updated. If the coordinator itself is unavailable, Web, MCP and ordinary CLI operations are unavailable; the separate local recovery CLI/inspector in the independent controller bundle remains the recovery route. Do not imply a second always-available Web control authority.
 

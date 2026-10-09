@@ -1,3 +1,5 @@
+> Transport update: the separate Owner service now uses a peer-checked local Unix socket. Prior certificate/listener configuration is unsupported; see [transport](TRANSPORT.md). Application SDK pins/artifacts still require coordinated updates.
+
 # Application installation and update ownership
 
 Existing unmanaged applications cannot be imported into Updater management.

@@ -1,3 +1,5 @@
+> Current transport: private CA/client certificates are removed; Owners use local OS peer identity and hosts use signed requests over loopback/tunnels. See [transport](TRANSPORT.md). Automatic Updater bootstrap and cross-application SDK repins remain separate work.
+
 # Roadmap
 
 The existing update/recovery implementation remains. Unmanaged-deployment import

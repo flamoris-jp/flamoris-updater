@@ -4,6 +4,7 @@
 
 | Contract | Specification |
 | --- | --- |
+| Local transport, removed certificate fields and bootstrap limits | [Communication](TRANSPORT.md) |
 | Core/wrapper, identities and ports | [Detailed design](DETAILED_DESIGN.md) |
 | Release JSON fields, signatures/catalog and notes | [Release Manifest](RELEASE_MANIFEST.md) |
 | Resource/schema graph, standalone runner and reconciliation | [Migration contract](MIGRATION_CONTRACT.md) |

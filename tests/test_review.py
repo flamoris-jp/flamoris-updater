@@ -691,17 +691,15 @@ def test_docker_binding_rejects_unbounded_on_failure_restart_policy():
 
     from flamoris_updater_adapters.config import DockerBinding
 
-    tls = {"ca_file": "/ca", "cert_file": "/cert", "key_file": "/key"}
     with pytest.raises(ValidationError):
         DockerBinding.model_validate(
             {
                 "kind": "docker",
                 "deployment_id": "synthetic",
-                "owner": {"url": "https://owner.invalid", "tls": tls},
+                "owner": {"socket_path": "/run/synthetic/owner.sock", "expected_uid": 1000},
                 "container_name": "synthetic",
                 "registry_origin": "https://registry.invalid",
                 "repository": "synthetic",
-                "registry_tls": tls,
                 "docker_config_directory": "/docker-config",
                 "daemon_socket": "/docker.sock",
                 "daemon_data_directory": "/docker-data",

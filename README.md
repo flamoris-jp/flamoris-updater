@@ -56,7 +56,9 @@ flamoris-updater-recovery --help
 flamoris-update-migration --help
 ```
 
-Follow [running and release procedures](docs/RUNNING.md) for protected configuration, mTLS, identities, Web login, exact-plan authorization and independent recovery. There are no default credentials or production host bindings. Exported schemas and models define the actual accepted JSON fields; design examples with shortened digests remain illustrative.
+Follow [running and release procedures](docs/RUNNING.md) for protected configuration, local OS peer credentials, Web login, exact-plan authorization and independent recovery. There are no default credentials or production host bindings. Exported schemas and models define the actual accepted JSON fields; design examples with shortened digests remain illustrative.
+
+Private CA and client-certificate provisioning are removed. See [communication and bootstrap](docs/TRANSPORT.md) for the local socket / tunneled loopback transport and the current limits of Updater installation. A repository checkout plus a tunnel does not yet bootstrap a running installation.
 
 Coordinator self-update uses a separately installed stable recovery controller and preserves current control/auth/history state. Root helper/executor and recovery-controller replacement require a separate bootstrap maintenance procedure in v1; unsafe self replacement is blocked.
 

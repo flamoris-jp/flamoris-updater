@@ -1,6 +1,5 @@
 import argparse
 import asyncio
-import ssl
 
 import uvicorn
 from starlette.applications import Starlette
@@ -50,20 +49,15 @@ def create_host_app(client):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Unprivileged authenticated host front end")
+    parser = argparse.ArgumentParser(description="Loopback host front end for signed operations")
     parser.add_argument("--config", required=True)
     args = parser.parse_args()
     cfg = load(HostAPIConfig, args.config)
-    cfg.server_tls.context()
     app = create_host_app(UnixClient(cfg.socket_path, cfg.helper_timeout_seconds))
     uvicorn.run(
         app,
         host=cfg.listen_host,
         port=cfg.listen_port,
-        ssl_certfile=cfg.server_tls.cert_file,
-        ssl_keyfile=cfg.server_tls.key_file,
-        ssl_ca_certs=cfg.server_tls.ca_file,
-        ssl_cert_reqs=ssl.CERT_REQUIRED,
         proxy_headers=False,
         access_log=False,
     )

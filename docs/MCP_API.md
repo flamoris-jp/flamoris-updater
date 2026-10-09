@@ -6,7 +6,7 @@
 
 Expose Streamable HTTP through the existing MCP Hub arrangement when configured. Use the Python MCP SDK transport/JSON Schema handling; keep Core independent of MCP. Do not fork FLAMORIS .NET MCP Core into an unmaintained Python copy.
 
-Internal coordinator ↔ host JSON API uses HTTPS with mutual TLS and per-operation application authorization. Local privileged helpers use a protected Unix socket with OS peer identity and a typed allowlist. TLS proves peer identity; it does not authorize arbitrary operations.
+Internal coordinator ↔ host JSON API uses loopback HTTP, directly or through an authenticated tunnel, with signed per-operation authorization verified by the root helper. Application Owners and local privileged helpers use protected Unix sockets with OS peer identity and a typed allowlist. No private CA or client certificate is required. See [transport](TRANSPORT.md).
 
 MCP authenticates external callers through the configured ingress/Hub identity. Trust delegated principal/role only under an explicitly verified signed envelope; arbitrary JSON/header principal fields are not identity. Otherwise all requests use the configured connector service identity with its own limited scope.
 
