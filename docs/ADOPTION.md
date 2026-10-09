@@ -1,5 +1,9 @@
 # Adoption inventory and implementation boundaries
 
+> For current fresh-install behavior, use [INSTALL.md](INSTALL.md). The legacy
+> baseline-entry command is removed; the older transition gates below are
+> historical and do not require installing an old version before a fresh target.
+
 > Subsequent application adoption source is tracked in PR #6 and
 > [ADOPTION_REVIEW.md](ADOPTION_REVIEW.md). Earlier A1 status below is historical;
 > application source review/CI is complete, and live rollout remains pending.

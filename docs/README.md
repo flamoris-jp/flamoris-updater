@@ -4,6 +4,7 @@ Updater-owned v1 source is implemented. Models/exported schemas and [running pro
 
 | Document | Purpose |
 | --- | --- |
+| [Fresh installation](INSTALL.md) | Updater first, direct target versions, local administrator CLI |
 | [Running](RUNNING.md) | Setup, processes, authorization, protected recovery and release procedure |
 | [Implementation review](IMPLEMENTATION_REVIEW.md) | Source counterexamples, regression tests and verification limits |
 | [Basic design](DESIGN.md) | Accepted ownership, scope and entry versions |

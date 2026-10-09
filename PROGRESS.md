@@ -1,6 +1,29 @@
 # Progress
 
-Updated: 2026-10-08.
+Updated: 2026-10-09.
+
+### Direct initial installation
+
+The corrected rollout starts with Updater, then directly installs AI-side 1.0.0
+and native GPU Node Manager 1.2.0. The baseline-entry command, launcher and its
+tests are removed. The local `flamoris-updater install` route checks a protected
+host profile, empty application namespaces and immutable input hashes; creates
+new configuration/storage, installs Docker/offline native packages, initializes
+application-owned databases and confirms startup. It uses OS administrator
+authorization, with no Updater login, client certificate, running application
+Owner or Coordinator. There is no backup, adoption, deletion or uncertain replay.
+Controller 1.0.0 remains inside Generation's image.
+
+Local verification at this checkpoint: **145 passed, 4 skipped**, Ruff/format,
+schema export, documentation links and both wheel/sdist builds passed. CI adds
+root installer tests against disposable PostgreSQL and actual Generation Docker
+installation; their results are pending. A manual candidate build workflow pins
+public application sources and exports platform-specific digested archives or
+wheel sets without publishing releases. Local installation does not yet enroll
+into the existing remote update protocol, whose mTLS/Owner contracts remain
+separate. No production cleanup, service changes, release publication, enrollment
+or live initial installation has occurred. Older transition checkpoints below
+are historical and no longer define the fresh-install procedure.
 
 ## Current state
 

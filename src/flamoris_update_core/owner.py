@@ -284,7 +284,7 @@ class ApplicationOwner:
                         "plan_digest": r.plan_digest,
                         "artifact_digest": r.artifact_digest,
                         "config_revision": self.configuration_revision(domain),
-                        "entry": r.arguments.get("standalone_transition") is True,
+                        "entry": False,
                         "physical_bindings": {
                             k: resource.binding_digest() for k, resource in self.resources.items()
                         },
@@ -396,7 +396,7 @@ class ApplicationOwner:
                 "domain_valid": True,
             }
         elif r.operation == "activate":
-            job = self._job(r)
+            self._job(r)
             epochs = self._fenced(r)
             self._verify_snapshot(r)
             attestation = open_packet(
@@ -427,9 +427,7 @@ class ApplicationOwner:
                     {
                         "manifest_digest": root_digest,
                         "release": manifest.release,
-                        "entry_evidence": "standalone_transition"
-                        if job["entry"]
-                        else "verified_adoption",
+                        "entry_evidence": "verified_adoption",
                         "attestation": attestation,
                         "snapshot_job": r.job_id,
                     },

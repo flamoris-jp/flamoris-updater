@@ -46,7 +46,24 @@ Authenticate GitHub CLI first when needed. CI runs the checks and builds/verifie
 
 ## Running
 
-Six installed entry points are available:
+For a new environment, first install the Updater package or verified native bundle.
+Then use the local administrator's fresh-install command:
+
+```bash
+sudo flamoris-updater install --profile /absolute/private/install.json --check
+sudo flamoris-updater install --profile /absolute/private/install.json
+sudo flamoris-updater install --profile /absolute/private/install.json --status
+```
+
+This path installs AI applications directly at **1.0.0** and GPU Node Manager at
+**1.2.0**, without an existing application Owner, Coordinator, Hub, Updater account
+or client certificate. It creates only absent application resources, initializes
+Agent/Studio databases through their own SQL/Alembic, and verifies startup.
+Controller is embedded in Generation MCP. See [fresh installation](docs/INSTALL.md)
+for required package/configuration inputs and the source/live evidence boundary.
+The former `flamoris-updater-entry` baseline transition CLI has been removed.
+
+Five installed entry points are available:
 
 ```bash
 flamoris-updater --help
@@ -54,7 +71,6 @@ flamoris-updater-host --help
 flamoris-updater-helper --help
 flamoris-updater-recovery --help
 flamoris-update-migration --help
-flamoris-updater-entry --help
 ```
 
 Follow [running and release procedures](docs/RUNNING.md) for protected configuration, mTLS, identities, Web login, exact-plan authorization and independent recovery. There are no default credentials or production host bindings. Exported schemas and models define the actual accepted JSON fields; design examples with shortened digests remain illustrative.
@@ -69,7 +85,10 @@ Coordinator self-update uses a separately installed stable recovery controller a
 | GPU Node Manager | v1.1 | v1.2 |
 | Updater | New project | v1.0 |
 
-These are transition targets, not observed live versions. Applications independently migrate and validate entry versions before enrollment. Release labels and config/DB/data schema versions are independent; explicit edges can migrate schema 1 directly to 3.
+Baselines describe the historical update plan, not a prerequisite for fresh
+installation. New environments install the first managed releases directly.
+Existing data is not adopted or converted by the local installer. Release labels
+and config/DB/data schema versions remain independent.
 
 ## Evidence and adoption
 

@@ -21,6 +21,16 @@ def main(argv=None):
         description="FLAMORIS Updater dedicated coordinator and ordinary API client"
     )
     commands = parser.add_subparsers(dest="command", required=True)
+    install = commands.add_parser(
+        "install", help="Fresh local installation from a protected profile"
+    )
+    install.add_argument("--profile", required=True)
+    install.add_argument(
+        "--check", action="store_true", help="Check prerequisites without installation"
+    )
+    install.add_argument(
+        "--status", action="store_true", help="Read the recorded local installation result"
+    )
     serve = commands.add_parser("serve")
     serve.add_argument("--config", required=True)
     call = commands.add_parser("call")
@@ -44,6 +54,30 @@ def main(argv=None):
             command.add_argument("--token-file", required=True)
     args = parser.parse_args(argv)
     try:
+        if args.command == "install":
+            from .install import configured
+
+            try:
+                installer = configured(args.profile)
+                if args.check and args.status:
+                    raise UpdateError("invalid_input")
+                if args.status:
+                    from .journal import Journal
+
+                    result = Journal(Path(installer.cfg.state_directory)).get(
+                        "initial_install", "host"
+                    )
+                else:
+                    result = installer.preflight() if args.check else installer.apply()
+                print(dumps(result or {"phase": "not_started"}).decode())
+            except UpdateError:
+                raise
+            except Exception:
+                raise UpdateError(
+                    "outcome_unknown",
+                    "Installation failed; inspect its local status before proceeding",
+                ) from None
+            return
         if args.command == "call":
             client = Endpoint(
                 url=args.url, tls=TLS(ca_file=args.ca, cert_file=args.cert, key_file=args.key)

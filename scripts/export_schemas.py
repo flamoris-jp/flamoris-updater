@@ -12,6 +12,7 @@ from flamoris_updater_adapters.config import (
     RecoveryConfig,
 )
 from flamoris_updater_adapters.inputs import TOOLS
+from flamoris_updater_adapters.install import Configuration as InitialInstallConfiguration
 from flamoris_updater_adapters.releases import Catalog
 
 
@@ -34,8 +35,14 @@ def main():
         HelperConfig,
         HostAPIConfig,
         RecoveryConfig,
+        InitialInstallConfiguration,
     ]:
-        (root / (model.__name__ + ".schema.json")).write_text(
+        name = (
+            "InitialInstallConfiguration"
+            if model is InitialInstallConfiguration
+            else model.__name__
+        )
+        (root / (name + ".schema.json")).write_text(
             json.dumps(model.model_json_schema(by_alias=True), indent=2) + "\n"
         )
     (root / "mcp-tools.schema.json").write_text(

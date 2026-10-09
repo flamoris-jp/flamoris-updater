@@ -79,7 +79,7 @@ def run(owner, target, operation, **kwargs):
     return result
 
 
-def test_entry_cycle_requires_real_backup_host_attestation_and_boot(tmp_path):
+def test_update_cycle_requires_real_backup_host_attestation_and_boot(tmp_path):
     owner, target, host, root_digest = configured(tmp_path)
     for operation in [
         "prepare",
@@ -90,7 +90,7 @@ def test_entry_cycle_requires_real_backup_host_attestation_and_boot(tmp_path):
         "snapshot",
         "restore_verify",
     ]:
-        run(owner, target, operation, standalone_transition=True)
+        run(owner, target, operation)
     req = request(owner, target, "activate")
     activation = host.packet(
         dict(
@@ -116,7 +116,7 @@ def test_entry_cycle_requires_real_backup_host_attestation_and_boot(tmp_path):
     run(owner, target, "reopen_admission")
     run(owner, target, "release")
     assert not owner.gate.state()["closed"]
-    assert owner.inspect("fresh-observation").entry_evidence == "standalone_transition"
+    assert owner.inspect("fresh-observation").entry_evidence == "verified_adoption"
 
 
 def test_second_job_cannot_claim_prepared_application(tmp_path):

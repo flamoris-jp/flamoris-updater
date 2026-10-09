@@ -66,7 +66,7 @@ DB migration credentials differ from runtime DML credentials. Backup and restore
 
 ## Standalone pre-entry migration
 
-AI-side v0.1 → v1.0 and GPU Node Manager v1.1 → v1.2 are executed by their applications. The runner and journal contract is the same without a coordinator dependency. The standalone tool produces a standalone_transition receipt binding application/deployment/artifact identity, resource schemas, validation, backup/recovery evidence and operation history. Fresh signed installations use verified_installation evidence; already supported signed deployments may use verified_adoption inspection evidence under [enrollment rules](EXECUTION_RECOVERY.md#enrollment-evidence-and-control-state-compatibility).
+The former AI-side v0.1 → v1.0 and GPU Node Manager v1.1 → v1.2 baseline-entry tool has been removed. Fresh environments use [local initial installation](INSTALL.md) directly at the target releases. Normal application-owned schema migrations retain the runner/journal contract. Historical standalone_transition receipts remain readable; the local installer does not create those receipts or automatically enroll into the separate remote protocol. Already supported signed deployments may use verified_adoption inspection evidence under [enrollment rules](EXECUTION_RECOVERY.md#enrollment-evidence-and-control-state-compatibility).
 
 Enrollment does not accept a receipt alone: the host re-inspects actual artifact/config/resources and verifies journal continuity. Old receipts or evidence from another deployment cannot enroll it.
 
