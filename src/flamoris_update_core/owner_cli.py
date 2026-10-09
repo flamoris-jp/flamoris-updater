@@ -60,9 +60,11 @@ def serve_connection(connection, owner, allowed_peer_uids, guard):
         )
         if uid not in allowed_peer_uids:
             raise UpdateError("forbidden")
-        guard()
         size = struct.unpack("!I", receive_exact(connection, 4))[0]
         packet = loads(receive_exact(connection, size))
+        # Consume the bounded frame before returning a policy error. Otherwise
+        # closing with unread request bytes can turn a known rejection into a reset.
+        guard()
         if set(packet) != {"action", "body"} or not isinstance(packet["action"], str):
             raise UpdateError("invalid_input")
         raw = dispatch(owner, packet["action"], dumps(packet["body"]))
