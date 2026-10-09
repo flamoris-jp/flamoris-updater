@@ -3,7 +3,7 @@ from .errors import UpdateError
 
 def validate_execution_graph(plan):
     """Host-enforced minimum graph; a signed plan cannot omit safety phases or barriers."""
-    readonly = plan.action in {"enroll", "verify_recovery"}
+    readonly = plan.action == "verify_recovery"
     required = (
         ["prepare", "validate", "release"]
         if readonly

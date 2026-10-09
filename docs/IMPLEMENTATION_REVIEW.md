@@ -1,5 +1,9 @@
 # Implementation review and verification
 
+> Historical review evidence. Any entry-transition or unmanaged-registration
+> instructions below are obsolete; that feature has been removed. Use the
+> current [roadmap](ROADMAP.md) and [progress](../PROGRESS.md).
+
 Date: 2026-10-08. Scope: Updater-owned v1 source, deterministic tests, packaging/CI and dedicated Web. Reviewed the implemented source against the earlier [design review](REVIEW_LOOP_2026-10-08.md), then fixed counterexamples and added regression tests. No external reviewer or real-host certification is claimed.
 
 ## Round 1: execution and restoration

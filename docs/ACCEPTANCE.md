@@ -12,7 +12,7 @@
 | No schema change | Domain validation; no migration side effects |
 | Direct schema 1 → 3 with withdrawn release 2 | Target-bundled route; no intermediate installation |
 | Incompatible schema vector or ambiguous routes | Block plan; no arbitrary route selection |
-| Unsupported application entry version | Standalone transition required; no silent enrollment |
+| Unmanaged or unsupported application version | Reject managed update; no import or conversion path |
 | Source/package/tag/component version disagreement | Explicit mapping; no guessed installed release |
 | Existing or unreadable resource during install | Refuse initialization |
 | Shared DB with unknown writer | Refuse migration/restore until owner fencing verified |
@@ -54,12 +54,12 @@
 | Staged Native runner modified or writable loader path selected | Reject before execution/rollback; recheck sealed identity and trusted environment |
 | Oversized catalog/notes, duplicate mapping or escaping locator | Enforce streaming/parser/response budgets and confinement; paginate history |
 | Scratch restore validator attempts production credentials, timers or network effects | No production access/effects; unsupported isolated verification blocks update |
-| Enrollment from transition vs fresh install vs supported adoption | Reinspect the corresponding typed evidence; unsupported legacy/unknown state cannot enroll |
+| Removed entry command, registration tools/action/role or evidence field | Not packaged/listed; reject before a Job or physical effect |
 | Self rollback with newer auth/grant/trust/consumption state | Preserve all current control records and monotonic watermarks; no destructive routine store migration |
 | Recovery verify receives recover/self_update plan or runs over unsettled parent effects | Reject wrong action; return unknown for unstable observation; never acquire mutation rights or clear blockers |
 | Protected recovery interrupted during parent-to-child ownership transfer | No concurrent rights or parent resume; partial handoff stays blocked and is reconciled |
 | Unchanged incoming client or unrelated matching provider instance | Resolve exact deployment bindings; verify full affected graph and disclose additional scope before authorization |
-| Coordinator/executor target disguised as ordinary application alias | Resolve protected local role and reject normal Web/CLI/MCP update/install/enroll |
+| Coordinator/executor target disguised as ordinary application alias | Resolve protected local role and reject normal Web/CLI/MCP update/install |
 | Old coordinator after partial epoch handoff or executable rollback | Reject stale-epoch mutation; all managed host acknowledgements required; rollback uses a newer epoch |
 | Coordinator outage while operator uses ordinary CLI | Ordinary interfaces unavailable; independent recovery CLI can inspect and only perform protected authorized recovery |
 | Recovery planning repeated with a request key or changed requested action | Shared plan-creation deduplication; changed payload conflicts; verify_recovery/recover remain distinct |
@@ -68,6 +68,6 @@
 
 Documentation review verifies ownership, entry versions, protocol consistency, example shape, relative links and explicit source/release/live status.
 
-Implementation acceptance uses fake providers, isolated DB/resources and crash/duplicate/fault injection. Live enrollment requires actual deployment/artifact/schema/writer inventory and scoped restore/lifecycle validation.
+Implementation acceptance uses fake providers, isolated DB/resources and crash/duplicate/fault injection. Live managed updates require actual deployment/artifact/schema/writer inventory and scoped restore/lifecycle validation.
 
 No review checklist or green source CI alone declares a signed release, migration, deployed health or live production acceptance complete.

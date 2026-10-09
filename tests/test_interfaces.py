@@ -18,7 +18,7 @@ def web(environment):
     auth.user(
         "operator",
         "isolated-test-password",
-        ["read", "plan", "execute", "enroll", "cancel", "recover_verify", "operator", "recover"],
+        ["read", "plan", "execute", "cancel", "recover_verify", "operator", "recover"],
         ["app"],
     )
     app = create_app(environment.coordinator, auth, ORIGIN, run_worker=False)
@@ -217,3 +217,31 @@ def test_streamable_mcp_auth_catalog_and_strict_runtime_schema(web):
 def test_every_adapter_uses_strict_same_input_contract(environment, name):
     with pytest.raises(Exception):
         Facade(environment.coordinator).invoke("operator", name, {"command": "never-accepted"})
+
+
+@pytest.mark.parametrize("name", ["updater_enrollment_plan", "updater_enroll_execute"])
+def test_removed_import_tools_rejected_by_web_and_mcp(web, name):
+    client, auth, e = web
+    csrf = login(client)
+    response = client.post(
+        "/api/v1/tools/" + name,
+        json={"targets": {"app": e.target_id}, "request_key": "removed-import"},
+        headers={"Origin": ORIGIN, "X-CSRF-Token": csrf},
+    )
+    assert response.status_code == 409
+    assert response.json()["error"] == "invalid_input"
+    token = auth.issue_token("operator")
+    result = mcp_call(client, token, "tools/call", {"name": name, "arguments": {}}).json()["result"]
+    assert result["isError"]
+    assert not e.backend.calls
+    with e.coordinator.journal.connection() as db:
+        assert db.execute("SELECT COUNT(*) FROM jobs").fetchone()[0] == 0
+
+
+def test_mcp_catalog_contains_no_import_tools(web):
+    client, auth, _ = web
+    tools = mcp_call(client, auth.issue_token("operator"), "tools/list").json()["result"]["tools"]
+    names = {tool["name"] for tool in tools}
+    assert "updater_enrollment_plan" not in names
+    assert "updater_enroll_execute" not in names
+    assert {"updater_install_plan", "updater_update_plan", "updater_recovery_verify"} <= names

@@ -54,7 +54,7 @@ def configured(tmp_path):
     return owner, target, host, digest(raw)
 
 
-def request(owner, target, operation, *, job="entry-job", **arguments):
+def request(owner, target, operation, *, job="update-job", **arguments):
     epoch = owner.gate.state()["epoch"]
     return OwnerRequest(
         operation=operation,
@@ -79,7 +79,7 @@ def run(owner, target, operation, **kwargs):
     return result
 
 
-def test_entry_cycle_requires_real_backup_host_attestation_and_boot(tmp_path):
+def test_update_cycle_requires_real_backup_host_attestation_and_boot(tmp_path):
     owner, target, host, root_digest = configured(tmp_path)
     for operation in [
         "prepare",
@@ -90,7 +90,7 @@ def test_entry_cycle_requires_real_backup_host_attestation_and_boot(tmp_path):
         "snapshot",
         "restore_verify",
     ]:
-        run(owner, target, operation, standalone_transition=True)
+        run(owner, target, operation)
     req = request(owner, target, "activate")
     activation = host.packet(
         dict(
@@ -116,7 +116,8 @@ def test_entry_cycle_requires_real_backup_host_attestation_and_boot(tmp_path):
     run(owner, target, "reopen_admission")
     run(owner, target, "release")
     assert not owner.gate.state()["closed"]
-    assert owner.inspect("fresh-observation").entry_evidence == "standalone_transition"
+    assert owner.inspect("fresh-observation").manifest_digest == root_digest
+    assert owner.inspect("fresh-observation").release == "1.0.0"
 
 
 def test_second_job_cannot_claim_prepared_application(tmp_path):
@@ -165,4 +166,4 @@ def test_configuration_revision_cannot_change_during_claim(tmp_path):
     with pytest.raises(UpdateError):
         run(owner, target, "close_admission")
     assert owner.gate.state()["epoch"] == 0
-    assert owner.journal.get("application_claim", owner.profile.id)["job_id"] == "entry-job"
+    assert owner.journal.get("application_claim", owner.profile.id)["job_id"] == "update-job"

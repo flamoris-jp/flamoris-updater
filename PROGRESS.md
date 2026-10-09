@@ -1,6 +1,31 @@
 # Progress
 
-Updated: 2026-10-08.
+Updated: 2026-10-10 (JST).
+
+## Removal of unmanaged-deployment import
+
+Implemented on a dedicated branch from current main, separately from PR #11.
+Removed the `flamoris-updater-entry` command/module/bundle launcher, registration
+MCP/Web/CLI tools, the `enroll` plan action and authority role, transition evidence
+and the legacy-state inspection helpers used only by that command. Normal
+managed updates, installation contracts, application-owned schema migration and
+recovery remain. API/schema compatibility is intentionally changed: old import
+plans and evidence are not executable or automatically converted.
+
+Local verification: 146 tests passed, 2 PostgreSQL integration tests skipped
+(the existing dedicated CI job runs those integrations). Ruff/format, JavaScript
+syntax, documentation links and exported schema checks passed. Updater and Core
+wheel/sdist builds passed; the Updater artifacts contain five console commands
+and no entry module, and the exported MCP catalog contains twelve tools.
+
+The dedicated PR/CI is in preparation. No merge, release publication, real-host
+change, deletion of live applications or live install has occurred. The new simple installation/first-setup/update flow remains separate
+work; source deletion is not evidence that this flow is complete.
+
+## Historical checkpoints
+
+The records below describe prior source and CI work. Their import/entry rollout
+instructions are superseded and must not be used as the current procedure.
 
 ## Current state
 

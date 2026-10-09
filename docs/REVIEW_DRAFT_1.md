@@ -1,5 +1,9 @@
 # Draft 1 design review
 
+> Historical review evidence. Any entry-transition or unmanaged-registration
+> instructions below are obsolete; that feature has been removed. Use the
+> current [roadmap](ROADMAP.md) and [progress](../PROGRESS.md).
+
 > Historical design review before the later implementation authorization. Current source/testing/adoption state is in [PROGRESS](../PROGRESS.md) and [implementation review](IMPLEMENTATION_REVIEW.md). The implementation hold below describes that earlier task only.
 
 Date: 2026-10-08. **Documentation review, not runtime tests or deployment acceptance.**

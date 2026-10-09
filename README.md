@@ -17,7 +17,7 @@ Web, CLI and MCP share one coordinator. The **dedicated Updater Web UI** is incl
 | Source | Role |
 | --- | --- |
 | `src/flamoris_update_core` | Strict contracts, schema/dependency planning and host safety graph |
-| `src/flamoris_updater` | FLAMORIS entry policy and durable coordinator |
+| `src/flamoris_updater` | FLAMORIS installation/version policy and durable coordinator |
 | `src/flamoris_updater_adapters` | SQLite, signatures, bounded execution, recovery, HTTPS/CLI/MCP and Web |
 | `src/flamoris_update_migration` | Independently executable runner for application-owned handlers |
 | `tests` | Isolated protocol, failure, artifact and recovery tests |
@@ -46,7 +46,7 @@ Authenticate GitHub CLI first when needed. CI runs the checks and builds/verifie
 
 ## Running
 
-Six installed entry points are available:
+Five installed entry points are available:
 
 ```bash
 flamoris-updater --help
@@ -54,26 +54,28 @@ flamoris-updater-host --help
 flamoris-updater-helper --help
 flamoris-updater-recovery --help
 flamoris-update-migration --help
-flamoris-updater-entry --help
 ```
 
 Follow [running and release procedures](docs/RUNNING.md) for protected configuration, mTLS, identities, Web login, exact-plan authorization and independent recovery. There are no default credentials or production host bindings. Exported schemas and models define the actual accepted JSON fields; design examples with shortened digests remain illustrative.
 
 Coordinator self-update uses a separately installed stable recovery controller and preserves current control/auth/history state. Root helper/executor and recovery-controller replacement require a separate bootstrap maintenance procedure in v1; unsafe self replacement is blocked.
 
-## Management entry
+## Installation and managed updates
 
-| Target | Agreed baseline | First managed release |
-| --- | --- | --- |
-| Installed AI-side applications | v0.1 | v1.0 |
-| GPU Node Manager | v1.1 | v1.2 |
-| Updater | New project | v1.0 |
+AI applications target 1.0.0, GPU Node Manager 1.2.0 and Updater 1.0.0 directly.
+There is no command or API to convert an existing unmanaged deployment into an
+Updater-managed installation. An update requires a recorded managed installation;
+missing state is not permission to import files, configuration or databases.
 
-These are transition targets, not observed live versions. Applications independently migrate and validate entry versions before enrollment. Release labels and config/DB/data schema versions are independent; explicit edges can migrate schema 1 directly to 3.
+The removed entry CLI, enrollment tools/action/role and transition evidence are
+not supported. This is a breaking contract change, not an automatic migration of
+old control records. Ordinary schema migration and recovery remain separate.
+The simple fresh-install workflow is separate work; this removal does not claim
+that installation, first setup and the next update already work end to end.
 
-## Evidence and adoption
+## Evidence and integration
 
-[PROGRESS.md](PROGRESS.md) distinguishes source, tests/CI, release and live acceptance. [Implementation review](docs/IMPLEMENTATION_REVIEW.md) records corrected counterexamples and verification limits. Real application owners, key/profile provisioning, release publication and real-host rollout remain [adoption work](docs/ADOPTION.md).
+[PROGRESS.md](PROGRESS.md) distinguishes source, tests/CI, release and live acceptance. [Implementation review](docs/IMPLEMENTATION_REVIEW.md) records corrected counterexamples and verification limits. Real application owners, key/profile provisioning, release publication and real-host rollout remain [integration work](docs/ADOPTION.md).
 
 Start with [documentation](docs/README.md), [AGENTS.md](AGENTS.md), [CONTRIBUTING.md](CONTRIBUTING.md) and [SECURITY.md](SECURITY.md). Public documentation stays portable; private topology and operational evidence belong in restricted records.
 

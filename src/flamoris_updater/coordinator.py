@@ -11,7 +11,7 @@ from flamoris_updater_adapters.executor import receipt
 from flamoris_updater_adapters.journal import exclusive
 from flamoris_updater_adapters.signing import open_packet
 
-from .policy import verify_entry
+from .policy import verify_managed_release
 
 TERMINAL = {"succeeded", "failed_safe", "cancelled_safe", "recovery_required", "unknown"}
 
@@ -86,6 +86,8 @@ class Coordinator:
             return decode(Plan, row[1]), row[1]
 
     def create_plan(self, subject, action, targets, request_key, parent_job_id=None):
+        if action not in {"update", "install", "verify_recovery", "recover"}:
+            raise UpdateError("invalid_input")
         self.guard()
         payload = {"action": action, "targets": targets, "parent_job_id": parent_job_id}
         self.authority.require(subject, "plan", targets)
@@ -185,7 +187,7 @@ class Coordinator:
             )
         self.authority.require(subject, "plan", plan.targets)
         for identity in plan.targets:
-            verify_entry(self.profiles[identity], observed[identity], action)
+            verify_managed_release(self.profiles[identity], observed[identity], action)
             self.releases.get(plan.targets[identity])
         raw = dumps(plan)
         if len(raw) > 512 * 1024:

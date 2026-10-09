@@ -6,7 +6,7 @@
 
 ## Immutable plan
 
-A plan contains action (`update|install|enroll|recover|verify_recovery|self_update|executor_maintenance`), targets/host IDs, exact Manifest/artifact/component digests, input inventory/schema/config revisions, policy/trust epochs and minimum catalog sequence, resource/writer/group mapping, route/step IDs, dependency checks, ordered phases, admission/drain/validation/recovery profiles, backup/restore requirements, maximum step durations and latest admission time.
+A plan contains action (`update|install|recover|verify_recovery|self_update|executor_maintenance`), targets/host IDs, exact Manifest/artifact/component digests, input inventory/schema/config revisions, policy/trust epochs and minimum catalog sequence, resource/writer/group mapping, route/step IDs, dependency checks, ordered phases, admission/drain/validation/recovery profiles, backup/restore requirements, maximum step durations and latest admission time.
 
 Persist one authoritative UTF-8 JSON byte string for each plan and compute `plan_digest` over those exact bytes. Reject duplicate keys, non-finite/fractional numbers and invalid Unicode. Hosts verify the sealed bytes/digest before decoding; they never reserialize a projection to derive authorization. Human display summaries and local JSON formatting are not authorization content. Plan identity, actions, targets, normalized operations and relevant preconditions are in the sealed payload.
 
@@ -74,7 +74,7 @@ stateDiagram-v2
   unknown --> validating: Verified completed effects
 ```
 
-The diagram shows the principal path; any effect-bearing phase can become unknown. Skipped migration and backup phases require an explicit plan justification; updates with persistent resources always use required backup policy. Enrollment is inspect/validate/record only and does not take the mutation path.
+The diagram shows the principal path; any effect-bearing phase can become unknown. Skipped migration and backup phases require an explicit plan justification; updates with persistent resources always use required backup policy. Recovery verification is read-only and does not take the mutation path.
 
 ## Host admission and crash fencing
 
@@ -136,7 +136,7 @@ Manual scripts are produced as reviewable support artifacts outside the MCP exec
 
 ## Independent recovery and self-update
 
-Install a small recovery controller before enrolling Updater v1.0. It uses a stable local control protocol, pinned trusted versions, host journal format v1 and narrowly scoped privileged operations. It remains executable when coordinator/MCP dependencies fail.
+Install a small recovery controller before protected Updater self-update. It uses a stable local control protocol, pinned trusted versions, host journal format v1 and narrowly scoped privileged operations. It remains executable when coordinator/MCP dependencies fail.
 
 Self-update is a dedicated Job after all other mutations are idle. The stable controller holds coordinator ownership fencing, stages/verifies the new bundle, checkpoints journal/requests, stops the old coordinator, changes the active release pointer, starts the new version and checks read-only journal compatibility plus API readiness. The new coordinator starts maintenance-only until the controller commits handoff; it cannot admit application updates, issue grants/sessions or run startup migrations/background control-state writes during validation. The controller may record bounded handoff evidence in the stable journal.
 
@@ -152,11 +152,12 @@ Commit authoritative intent before effects, flush its recovery export before a d
 
 Bound request bodies to 1 MiB, runner result to 256 KiB and diagnostic error summaries to 8 KiB; host profiles set per-operation timeout and expanded artifact quota. Disk-full/journal-corruption checks fail before new mutations. Do not log request headers, credentials, arbitrary environment variables or application content.
 
-## Installation and enrollment
+## Installation
 
-Install explicitly proves every target resource absent using authoritative bindings; inaccessible/unknown/unmarked resources are not empty. Initialization runs behind the same fences, signed handlers and validation. Existing data rejects install and directs the operator to a standalone migration/enrollment path.
-
-Enroll verifies entry release or later supported release, signed artifact/component identities, actual schemas, local profiles, writer/backup contracts and typed entry evidence described below. It only commits inventory; it does not rewrite config, migrate DB, restart services or downgrade GPU Node Manager.
+Install explicitly proves target resources absent using authoritative bindings;
+inaccessible or unknown resources are not empty. Initialization is separate from
+normal schema migration. Existing data rejects installation. There is no import,
+conversion or registration fallback for an unmanaged deployment.
 
 ## Proposed journal records
 
@@ -164,7 +165,7 @@ These are data-model requirements, not DDL or a created database.
 
 | Record | Key / invariant | Essential fields |
 | --- | --- | --- |
-| `inventory` | Deployment ID | Host/app/component identities, observation revision/time, artifact/config/schema refs, enrolled state |
+| `inventory` | Deployment ID | Host/app/component identities, observation revision/time, artifact/config/schema refs, managed installation state |
 | `plans` | Plan ID; unique digest | Authoritative sealed JSON bytes, action, scope, preconditions, expiry |
 | `authorizations` | Grant ID | Plan digest, actor/delegation, roles/resources, policy epoch, admitted/revoked times |
 | `requests` | Unique principal/domain/action/key | Payload digest, admitted Job/plan ID and original outcome; permanent tombstone |
@@ -201,9 +202,11 @@ Host execution enforces a declared step graph: confirmed local predecessor recei
 
 Updating a host executor uses a dedicated protected handoff: no ordinary group may replace its active execution authority while that authority owns an unresolved operation. Stop/fence the previous executor, preserve its journal/epochs and let the stable recovery controller verify the replacement before resuming. Unsupported executor maintenance/handoff is a plan blocker.
 
-## Enrollment evidence and control-state compatibility
+## Control-state compatibility
 
-Enrollment supports typed evidence sources: standalone_transition for a pre-entry upgrade, verified_installation for a fresh signed initialization, or verified_adoption for an already supported signed entry-or-later deployment. Adoption inspects/validates actual state without transformation; it cannot adopt an unsupported legacy release or bypass unknown operations. Every evidence source is revalidated against local bindings, current artifact/schema/config and journal continuity before inventory commit.
+Unmanaged-deployment import is removed. The entry CLI, enrollment action and
+transition/installation/adoption evidence field are no longer accepted. Old
+records are not converted into a new managed installation or given a new identity.
 
 Routine self-update compatibility covers all control state, not only the Job journal: application/operator identities, Web auth/session schemas, grants/revocations, plan consumption, request/operation tombstones, trust keys/catalog watermarks and maintenance epochs. Candidate verification uses the read-only compatibility view first. A self-release cannot destructively transform any of these v1 stores during routine handoff. Previous-version recovery preserves current control records; it never resurrects old grants/accounts/trust state from a snapshot.
 
@@ -217,13 +220,12 @@ Plan action is enforced after protected deployment-role resolution, not inferred
 | --- | --- |
 | update | Application preparation/maintenance/backup/migration/activation/finalization |
 | install | Explicit absence proof and signed initialization, then validation/reopening/finalization |
-| enroll | Reinspect typed entry evidence and commit inventory only |
 | verify_recovery | Scoped inspection/validation and evidence publication only; no resource writes, restoration or blocker release |
 | recover | Protected recovery-controller plan; supported restoration/repair and finalization for a linked parent |
 | self_update | Protected coordinator handoff; never generic application execution |
 | executor_maintenance | Protected host execution-authority handoff |
 
-Local profiles classify coordinator/executor/recovery-controller roles. An alias or a multi-target group cannot route them through ordinary update/install/enroll execution. Recovery-controller/protocol/storage replacement remains a separate manual bootstrap operation.
+Local profiles classify coordinator/executor/recovery-controller roles. An alias or a multi-target group cannot route them through ordinary update/install execution. Recovery-controller/protocol/storage replacement remains a separate manual bootstrap operation.
 
 A read-only verify_recovery child may inspect under its parent's persistent block, respecting the resource owner's stable-observation contract. It acquires no independent mutation right; an unsettled/running parent effect returns unknown. Its evidence does not finalize the parent.
 

@@ -1,14 +1,10 @@
-# Adoption inventory and implementation boundaries
+# Source integration inventory
 
-> Subsequent application adoption source is tracked in PR #6 and
-> [ADOPTION_REVIEW.md](ADOPTION_REVIEW.md). Earlier A1 status below is historical;
-> application source review/CI is complete, and live rollout remains pending.
+This file records historical source inspection; it is not an unmanaged-deployment
+import procedure. The import feature and its work packages are removed. Current
+source behavior is defined by [running](RUNNING.md) and [progress](../PROGRESS.md).
 
-**Source inspection: 2026-10-08. No live infrastructure inspection or change.**
-
-This is a design input, not an assertion that repositories contain Updater-compatible releases. Live artifact identities, DB schemas, private deployment mappings and signing keys remain unverified. Use Server Manager when live state is required.
-
-## Inspected source
+## Historical inspected source
 
 | Repository | Pinned source checked | Design implication |
 | --- | --- | --- |
@@ -22,60 +18,13 @@ This is a design input, not an assertion that repositories contain Updater-compa
 | [Logging](https://github.com/flamoris-jp/flamoris-logging/blob/c2ef62c257c5b9a1bb76a8960f1c805630c1f320/README.md) | c2ef62c | .NET library; no direct Python package reuse |
 | [AI coordination](https://github.com/flamoris-jp/flamoris-ai/blob/ab16166d0711b0c7567c188aabedfe36dd4d27bc/PROGRESS.md) | ab16166 | Source/live evidence is explicitly separated; operational release history is not a current health probe |
 
-Agent/Studio and Controller package dependencies demonstrate why releases must describe embedded components independently of deployment units. This inspection does not infer the complete list of installed applications.
+These pins describe the inspected source at that checkpoint, not current live
+hosts. Use Server Manager for actual infrastructure observations. Application
+Owners and the common migration runner remain normal update infrastructure.
 
-The agreed GPU Node Manager baseline remains v1.1 and management entry remains v1.2. The checked core source package reports 1.0.0; a release tag, deployed core package and host-specific wrapper can have different versions. Resolve their mapping during enrollment rather than changing the user's entry policy or declaring the baseline wrong.
+## Remaining integration
 
-## Application work required before enrollment
-
-| Owner | Required contract/adoption work |
-| --- | --- |
-| Studio | Preserve user/session/history data and Alembic lineage; maintenance admission gate; runtime/migration roles; no Updater UI integration |
-| Agent | Preserve SQL history, principal/session/personality/continuation data; drain inference; fence retention/admin writers; scoped backup/restore |
-| Generation + Controller | One deployment owner; preserve recipes, ComfyWorkFlow definitions, inputs/assets, copies and unknown reservations; explicit maintenance fence |
-| Intelligence service | Signed deployable release and embedded-provider inventory; drain inference/unknown work; provider-safe health profile |
-| Hub | Stable external catalog revision/compatibility; gate routed writes during affected groups; signed config migration |
-| GPU Node Manager | Standalone v1.1 → v1.2 transition; preserve common locks and runtime evidence; maintenance coordination through the manager |
-| Host-specific wrappers | Declare exact embedded core and binding identities in restricted deployment profiles; preserve package/release separation |
-| AI Runtime, Observer and other services | Candidate later targets only after actual installation, scope and entry policy are verified |
-
-Current Controller API exposes health/reservation evidence, not a documented Updater-exclusive maintenance fence. Manager's existing lock does not by itself prove a cross-host update-maintenance contract. These gaps must be implemented in the owning applications before automatic updates; Updater must not fabricate drain endpoints or treat an idle snapshot as exclusivity.
-
-No owning repository is modified by this design. The seven-baseline-tag context is not used to guess seven independently restartable services.
-
-## Required private deployment inventory
-
-For each deployment record actual host/deployment/application IDs, release/artifact/component mapping, mode/platform, approved release sources, lifecycle bindings, config/secret references, persistent resource/schema ownership, all writers/timers, DB roles, backup/restore domains, entry-transition evidence and validation contracts.
-
-For each shared resource record the consistency group, external effects and all participants required to fence/restore. For each provider record supported drain/reconcile behavior; an unreachable or unknown job is a blocker.
-
-A portable public example uses fictitious IDs only. Do not publish private topology, actual hostpaths, secrets or operational receipts here.
-
-## Work packages and implementation boundary
-
-These are scoped backlog proposals, not created Issues or implementation authorization.
-
-| Work package | Owner | Depends on | Completion evidence |
-| --- | --- | --- | --- |
-| U1 Manifest/trust/catalog parser | Updater Core/adapters | Draft review | Strict validation, signatures, digest/platform selection and replay/revocation failures |
-| U2 Planner/schema graph/groups | Updater Core | U1 + verified resource contracts | Exact provider bindings, incoming consumers, deterministic schema route, blocked ambiguity and mixed-version scenarios |
-| U3 Journal/authorization/jobs | Updater Core/adapters | U2 | One consumed plan, immutable operations, durable maintenance/finalization and linked-recovery ownership evidence |
-| U4 Native host executor and Docker/Native profiles | Updater adapters | U3 + application maintenance contracts | Typed local privileges, no caller-selected commands/mounts, staging/activation tests |
-| U5 Backup/recovery/self-update controller | Updater + backup/app owners | U3/U4 | Side-effect-isolated restore, group failure, epoch handoff and all-control-state-preserving self rollback |
-| U6 MCP/operator interfaces | Updater adapters | U3/U5 | Catalog/schema/scope parity, authorized Job start and safe cancellation |
-| A1 Standalone entry migrations | Each application | Migration contract + live inventory | Preserved data/roles/history and enrollment receipts; independently executable |
-| A2 Release packaging/signing | Each application + release owners | U1 trust profile | CI-built immutable release, components, notes and matching signed Manifest |
-| D1 Initial Updater install/enrollment | Deployment owners | A1/A2 + U1–U6 | Verified current entry versions; private receipts and recovery bundle |
-| U7 Dedicated Updater Web | Updater adapters | Stable coordinator/operator contract | Independent auth/session/CSRF, safe summaries and same Job authority; no Studio dependency |
-
-No live acceptance, trusted signing keys or release-ready status is implied by this backlog.
-
-## Review-derived adoption gates
-
-Private profiles must resolve dependency providers/incoming consumers, physical resource aliases, one resource owner and all restart/timer paths enforcing durable maintenance epochs. Application startup must support controlled maintenance validation rather than automatically migrating or replaying jobs.
-
-Recovery-controller bootstrap provisions the normal coordinator epoch, outage-independent recovery CLI and supported executor handoff. Entry evidence is typed (transition, installation or supported adoption), and each is re-inspected before inventory commit. Missing contracts keep automatic updates blocked; this review adds no application implementation or live validation.
-
-## Source implementation checkpoint
-
-Updater-owned U1–U7 source is implemented and tested; see [roadmap](ROADMAP.md) and [implementation review](IMPLEMENTATION_REVIEW.md). The table above preserves package ownership and adoption gates. A1 application-specific contracts/entry handlers, A2 production keys/catalogs/publication and D1 real inventory/profile provisioning/rollout remain pending. No live system, other repository or production credential was modified by this implementation.
+Prepare usable application artifacts, first-install configuration/setup and a
+single installation record/layout consumed by later updates. No legacy baseline
+version, transition receipt or import operation is a prerequisite. Public release
+and live acceptance are separate outcomes; no host operation is performed here.

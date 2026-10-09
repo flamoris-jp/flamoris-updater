@@ -172,7 +172,7 @@ def create_app(coordinator, auth, origin, run_worker=True):
         subject = principal(request, mutation=True)
         args = decode(GrantRequest, await body(request))
         plan, _ = coordinator.plan(args.plan_id)
-        if plan.action not in {"update", "install", "enroll", "verify_recovery"}:
+        if plan.action not in {"update", "install", "verify_recovery"}:
             raise UpdateError("forbidden")
         result = coordinator.authorize(subject, args.caller_id, args.plan_id, args.plan_digest)
         return JSONResponse(result)

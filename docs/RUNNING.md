@@ -5,7 +5,7 @@ This is the source implementation procedure. No release, production credentials 
 ## Provision before starting
 
 1. Obtain current deployments, physical persistence identities, all writers and provider relationships through Server Manager and application owners. Record private details outside this repository. Match each physical namespace to one Resource and one owner. Borrowed resources share the owner's schema target; only the owner migrates/snapshots/restores them.
-2. Complete application-owned standalone transitions to entry versions and verify the preserved data. The shipped migration runner consumes a pinned installed factory module; it supplies the protocol/journal, not application data transformations.
+2. Use an already recorded managed installation for updates. Unmanaged deployments cannot be imported. The migration runner handles application-owned schema changes, not entry into management. The new simple installation/setup workflow is separate work.
 3. Provision separate Ed25519 release, catalog, coordinator-authority, recovery-controller and host-receipt keys. Pin application/domain, purpose, channel and revocation state explicitly. Private signer files accept raw 32-byte or Ed25519 PEM; protect private files with owner-only permissions. Never put private keys in JSON, notes, browser assets or this repository.
 4. Provision approved HTTPS release/catalog origins and mTLS certificates/CA. Host receipt IDs must equal host IDs; all hosts participating in epoch handoff need the full receipt-key set. Each host pins both coordinator and stable controller public keys. Protect credential files and their ancestor directories against replacement by service users or unrelated accounts.
 5. Install independently pinned stable helper/controller binaries and state outside replaceable coordinator release directories. Configure root-owned service unit files, indexed artifacts, staging quotas, private local journals and fixed active pointers. A recovery controller must survive coordinator failure; merely installing its script inside the current coordinator bundle is insufficient.
@@ -19,6 +19,11 @@ python scripts/export_schemas.py --output dist/schemas
 
 `CoordinatorConfig`, `HelperConfig`, `HostAPIConfig`, `RecoveryConfig`, `DeploymentProfile`, `Resource`, `OwnerRequest` and `OwnerResult` are also readable in their source models. Unknown fields, ambiguous JSON and wrong protocol versions are rejected. Config and referenced TLS/signer files are fingerprinted; changed configuration blocks operations until an explicit reviewed restart/reconciliation. Provision and maintain clock synchronization, set `clock_healthy` from trusted operational evidence, and do not set it speculatively.
 
+Application Owners must use matching SDK contracts. `Observation` no longer
+accepts the removed import-evidence field, and plans no longer accept the import
+action. This source change does not repin other application repositories or
+convert an existing Owner/control database.
+
 ## Processes and privilege
 
 | Entry point | Fixed responsibility |
@@ -31,7 +36,7 @@ python scripts/export_schemas.py --output dist/schemas
 
 Use audited service units with deployment-specific user/group/path bindings. This repository cannot provide correct production units without that inventory. The helper socket directory is root-owned and configured group-accessible; only `allowed_peer_uids` can dispatch. Host HTTP bodies and framed helper packets are bounded. Bind server TLS directly or use the explicit trusted loopback TLS proxy option for the coordinator; do not expose plaintext coordinator listeners remotely. Serve Web from its dedicated same origin.
 
-The **application owner API must remain available when the application unit/container is stopped**. Run it as an independent lifecycle owner, not as a route in the unit being updated. It verifies fresh inspection nonces/timestamps, actual schemas/resource identities, durable admission gates, drain/fencing, snapshots, isolated restore and domain acceptance. Production writes, notifications, billing/provider credentials and queues must stay inaccessible during isolated restore. Application-specific proof implementations and Server/GPU Manager integration remain owner adoption work.
+The **application owner API must remain available when the application unit/container is stopped**. Run it as an independent lifecycle owner, not as a route in the unit being updated. It verifies fresh inspection nonces/timestamps, actual schemas/resource identities, durable admission gates, drain/fencing, snapshots, isolated restore and domain acceptance. Production writes, notifications, billing/provider credentials and queues must stay inaccessible during isolated restore. Application-specific proof implementations and Server/GPU Manager integration remain owner integration work.
 
 Native execution checks the configured unit file digest and systemd FragmentPath/NeedDaemonReload, stages a verified read-only indexed tree, changes a fixed pointer and starts under maintenance. Docker uses the protected configured local daemon socket, pinned registry/repository/platform/config/layers, fixed non-root user/network/mounts, resource limits and restart policy. Image-declared anonymous volumes are rejected and image healthchecks disabled. v1 direct OCI fetching supports configured mTLS registries; external bearer-token registry negotiation is not implemented. No host source build or arbitrary shell is allowed.
 
@@ -40,14 +45,14 @@ Native execution checks the configured unit file digest and systemd FragmentPath
 Stop the coordinator before offline account changes; its process lock prevents competing administrative writes. Provision an operator with a prompted password of at least 12 characters and the required exact deployment IDs:
 
 ```bash
-flamoris-updater provision-user --config /absolute/coordinator.json --subject operator --roles read,plan,execute,enroll,cancel,recover_verify,operator,recover --targets app,updater
+flamoris-updater provision-user --config /absolute/coordinator.json --subject operator --roles read,plan,execute,cancel,recover_verify,operator,recover --targets app,updater
 flamoris-updater issue-token --config /absolute/coordinator.json --subject operator --output /absolute/new-private-token
 flamoris-updater serve --config /absolute/coordinator.json
 ```
 
 Replace the sample paths/IDs with audited bindings. Token output must be a new absolute path; it is written privately. The Web login uses these independent Updater accounts. Changed principal revisions invalidate old session/grant permissions; re-provisioning an account requires a reviewed offline operation. Offline `disable-user --config ... --subject ...` immediately removes that principal’s permissions; `revoke-token --config ... --subject ... --token-file ...` revokes the exact stored token. Both require the coordinator process lock and preserve history. Avoid exporting raw token values in logs or terminal history.
 
-Web provides inventory, candidates, cumulative release notes, update/install/enrollment planning, exact-plan authorization, execution, progress, history and cancellation. The MCP endpoint is **`/mcp`**, Streamable HTTP with Bearer authentication. Fourteen typed tools use the same coordinator as `/api/v1/tools/<tool>`; current schemas come from `inputs.TOOLS` and schema export. The protected local recovery CLI is the mutating recovery route; normal adapters cannot switch protected control roles.
+Web provides inventory, candidates, cumulative release notes, update/install planning, exact-plan authorization, execution, progress, history and cancellation. The MCP endpoint is **`/mcp`**, Streamable HTTP with Bearer authentication. Twelve typed tools use the same coordinator as `/api/v1/tools/<tool>`; current schemas come from `inputs.TOOLS` and schema export. The protected local recovery CLI is the mutating recovery route; normal adapters cannot switch protected control roles.
 
 CLI can call the same HTTPS API with a private token file and mTLS client binding:
 
@@ -55,7 +60,7 @@ CLI can call the same HTTPS API with a private token file and mTLS client bindin
 flamoris-updater call --url https://updater.example.invalid --token-file /absolute/token --ca /absolute/ca.pem --cert /absolute/client.pem --key /absolute/client.key --tool updater_update_plan --arguments /absolute/plan-request.json
 ```
 
-Use the actual tool names shown by `flamoris-updater call --help` (the `updater_*` names in the exported schema are authoritative). A plan request specifies exact target Manifest digests and a stable request key. Review the returned plan/digest, call `grant` with `caller_id`, `plan_id`, `plan_digest`, then `updater_update_execute` with that authorization ID and a stable execution key. `updater_enroll_execute` is separate. Query `updater_job_get` after a lost reply; one consumed plan cannot create another Job. Do not automatically create a fresh plan to work around unknown effects.
+Use the actual tool names shown by `flamoris-updater call --help` (the `updater_*` names in the exported schema are authoritative). A plan request specifies exact target Manifest digests and a stable request key. Review the returned plan/digest, call `grant` with `caller_id`, `plan_id`, `plan_digest`, then `updater_update_execute` with that authorization ID and a stable execution key. Query `updater_job_get` after a lost reply; one consumed plan cannot create another Job. Do not automatically create a fresh plan to work around unknown effects.
 
 ## Independent inspection and recovery
 
@@ -92,6 +97,6 @@ CI builds wheel/sdist/schemas and indexed Native bundles for amd64/arm64 using `
 
 The manual `sign-release.yml` workflow requires main, an immutable matching `v<version>` tag, protected **release-signing** Environment, approved `RELEASE_ORIGIN`/`RELEASE_KEY_ID` and `UPDATER_RELEASE_PRIVATE_KEY_BASE64`. It builds and verifies both platforms, prepares one exact Manifest with `artifact_variants`, signs exact bytes in the isolated signing job and uploads a reviewable candidate. It has read-only repository contents permissions and **does not publish a release or catalog**. No tag/key/Environment has been created by implementation work.
 
-Release owners review/publish the candidate at the approved origin, sign a monotonically increasing fresh catalog using a **separate catalog key**, and provision trust before enrollment. The standalone `scripts/sign_release.py --help` supports exact release/catalog signing. A catalog maps one immutable application/release to one signed root; artifact platform selection never substitutes that root identity. Signature rotation may replace a valid signature on identical catalog bytes without changing sequence or release mapping. Existing release history remains readable when eligibility is withdrawn, but revoked signature keys invalidate trust.
+Release owners review/publish the candidate at the approved origin, sign a monotonically increasing fresh catalog using a **separate catalog key**, and provision trust before managed update execution. The standalone `scripts/sign_release.py --help` supports exact release/catalog signing. A catalog maps one immutable application/release to one signed root; artifact platform selection never substitutes that root identity. Signature rotation may replace a valid signature on identical catalog bytes without changing sequence or release mapping. Existing release history remains readable when eligibility is withdrawn, but revoked signature keys invalidate trust.
 
-Application release packaging, baseline migrations and real systemd/Docker/mTLS/failure acceptance remain A1/A2/D1 in [adoption](ADOPTION.md) and [acceptance](ACCEPTANCE.md).
+Application release packaging, application schema migrations and real systemd/Docker/mTLS/failure acceptance remain A1/A2/D1 in [integration](ADOPTION.md) and [acceptance](ACCEPTANCE.md).

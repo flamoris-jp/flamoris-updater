@@ -153,19 +153,6 @@ class NativeDriver:
         ):
             raise UpdateError("outcome_unknown")
 
-    def source_state(self):
-        self.check_binding()
-        state = self.command(
-            ["/usr/bin/systemctl", "show", self.unit, "--property=ActiveState", "--value"]
-        ).strip()
-        if state not in {b"inactive", b"failed"} or not self.pointer.is_symlink():
-            raise UpdateError("legacy_not_quiescent")
-        return {
-            "unit_digest": self.unit_digest,
-            "pointer": str(self.pointer.resolve()),
-            "state": state.decode(),
-        }
-
 
 class ApplicationBackend:
     def __init__(self, owners: dict[str, RemoteOwner], drivers: dict, activation_signer=None):

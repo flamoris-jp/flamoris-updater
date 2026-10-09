@@ -21,7 +21,7 @@ The accepted boundaries in [DESIGN.md](DESIGN.md) remain fixed. The later implem
 | Groups | Prepared on all hosts, then ordered activation behind admission gates; no distributed transaction |
 | Recovery | Preserve known previous artifacts; unknown state requires verified reconciliation |
 | Self-update | Independent native recovery controller and stable storage format |
-| Bootstrap | Application-owned standalone migrations, then evidence-based enrollment |
+| Bootstrap | Direct fresh installation; unmanaged deployment import is unsupported |
 
 The repository now includes packaging, strict validators, CLI/host/helper/controller, CI and the dedicated Web UI. Production service units/configuration require audited deployment bindings.
 
@@ -107,7 +107,7 @@ A host does not initiate a new mutation when the coordinator is unreachable. It 
 
 ## Design completion boundary
 
-The draft specifies [release data](RELEASE_MANIFEST.md), [migration](MIGRATION_CONTRACT.md), [execution/recovery](EXECUTION_RECOVERY.md) and [MCP](MCP_API.md). [Adoption](ADOPTION.md) separates inspected source from pending live deployment inventory and implementation tasks.
+The draft specifies [release data](RELEASE_MANIFEST.md), [migration](MIGRATION_CONTRACT.md), [execution/recovery](EXECUTION_RECOVERY.md) and [MCP](MCP_API.md). [Source integration](ADOPTION.md) separates inspected source from pending live deployment inventory and implementation tasks.
 
 Actual trust-key provisioning, private host profiles, DB-role scopes, backup destinations and application-specific drain/health handlers require the owning deployment work. These are inputs to the design, not reasons to invent working defaults.
 
