@@ -200,6 +200,11 @@ class DockerApplication(Application):
                 "Studio's fixed wildcard listener requires loopback-published bridge networking"
             )
         roots = [Path(d.path) for d in self.directories]
+        if not any(
+            Path(self.environment_file).is_relative_to(d.path) and d.uid == 0 and not d.mode & 0o022
+            for d in self.directories
+        ):
+            raise ValueError("Runtime environment must stay in administrator-owned storage")
         for mount in self.mounts:
             if not mount.read_only and not any(
                 Path(mount.source).is_relative_to(root) for root in roots
@@ -304,6 +309,8 @@ class Configuration(Model):
 
 
 def run(argv, timeout=300):
+    if argv[0] == "/usr/bin/docker":
+        argv = [argv[0], "--host", "unix:///var/run/docker.sock", *argv[1:]]
     try:
         result = subprocess.run(
             argv,

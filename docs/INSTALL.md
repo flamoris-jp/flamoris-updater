@@ -53,6 +53,9 @@ Generation also requires `net.flamoris.components` containing
 package versions, source revisions, image IDs and archive hashes; it does not
 publish releases or mark them accepted for deployment.
 
+The installer pins Docker commands to the local Unix socket rather than the
+operator's selected Docker context. Keep the copied environment file root-owned,
+mode 0600, inside an administrator-owned storage root.
 All writable mounts must belong to newly declared application roots. External
 model/runtime storage can be mounted read-only and is never created, deleted or
 chowned. Declare writable output/thumbnail/state roots with UID/GID 10001 where

@@ -208,6 +208,32 @@ def test_environment_is_literal_and_duplicate_free():
         environment(b"A=1\nA=2\n")
 
 
+def test_runtime_environment_cannot_be_replaced_by_application_user(installation):
+    cfg, _, _, _ = installation
+    obj = cfg.model_dump()
+    obj["applications"][0]["directories"][0]["uid"] = 10001
+    with pytest.raises(ValidationError):
+        Configuration.model_validate(obj)
+
+
+def test_docker_uses_local_socket_even_with_another_selected_context(monkeypatch):
+    from types import SimpleNamespace
+
+    from flamoris_updater_adapters.install import run
+
+    calls = []
+
+    def execute(argv, **kwargs):
+        calls.append((argv, kwargs["env"]))
+        return SimpleNamespace(stdout=b"local-result")
+
+    monkeypatch.setattr("subprocess.run", execute)
+    monkeypatch.setenv("DOCKER_HOST", "tcp://unrelated.example.invalid:2376")
+    assert run(["/usr/bin/docker", "info"]) == b"local-result"
+    assert calls[0][0] == ["/usr/bin/docker", "--host", "unix:///var/run/docker.sock", "info"]
+    assert "DOCKER_HOST" not in calls[0][1]
+
+
 def test_real_database_creation_is_scoped_to_new_database(tmp_path):
     dsn = os.getenv("FLAMORIS_INSTALL_TEST_POSTGRES_DSN")
     if not dsn:
@@ -293,7 +319,12 @@ def test_real_docker_candidate_can_be_installed_and_become_ready(tmp_path):
                     "container_name": container,
                     "environment_file": str(roots["config"] / ".env"),
                     "directories": [
-                        {"path": str(root), "uid": 10001, "gid": 10001} for root in roots.values()
+                        {
+                            "path": str(root),
+                            "uid": 0 if name == "config" else 10001,
+                            "gid": 0 if name == "config" else 10001,
+                        }
+                        for name, root in roots.items()
                     ],
                     "files": [{"source": env, "destination": str(roots["config"] / ".env")}],
                     "mounts": [

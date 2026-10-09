@@ -17,7 +17,12 @@ Controller 1.0.0 remains inside Generation's image.
 Local verification at this checkpoint: **145 passed, 4 skipped**, Ruff/format,
 schema export, documentation links and both wheel/sdist builds passed. CI adds
 root installer tests against disposable PostgreSQL and actual Generation Docker
-installation; their results are pending. A manual candidate build workflow pins
+installation. All six CI jobs passed at `effc17f682ccdb86d4dcf78b54a1f3625f564299`
+([run 37942609333](https://github.com/flamoris-jp/flamoris-updater/actions/runs/37942609333)),
+including amd64/arm64 native bundles and isolated restore. The final review also
+pins Docker operations to the local Unix socket and requires administrator-owned
+runtime environment storage; checks at that follow-up revision are pending.
+A manual candidate build workflow pins
 public application sources and exports platform-specific digested archives or
 wheel sets without publishing releases. Local installation does not yet enroll
 into the existing remote update protocol, whose mTLS/Owner contracts remain
