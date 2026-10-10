@@ -1,6 +1,7 @@
 import argparse
 import getpass
 import sys
+import uuid
 from pathlib import Path
 from urllib.parse import urlsplit
 
@@ -23,6 +24,42 @@ def main(argv=None):
         description="FLAMORIS Updater dedicated coordinator and ordinary API client"
     )
     commands = parser.add_subparsers(dest="command", required=True)
+    for action in (
+        "install",
+        "update",
+        "apps",
+        "job",
+        "start-setup",
+        "complete-setup",
+        "delete-previous",
+    ):
+        command = commands.add_parser(action, help="Use the same managed operation as Web and MCP")
+        command.add_argument("--url", required=True)
+        command.add_argument("--token-file", required=True)
+        command.add_argument("--public-origin")
+        if action in {"install", "update", "start-setup", "complete-setup", "delete-previous"}:
+            command.add_argument("--application", required=True)
+        if action in {"install", "update"}:
+            command.add_argument("--release", required=True)
+            command.add_argument("--request-key", default=None)
+        if action == "install":
+            command.add_argument(
+                "--settings-file", help="Protected JSON settings, or use Web first setup"
+            )
+        if action == "job":
+            command.add_argument("--job-id", required=True)
+    init = commands.add_parser(
+        "bootstrap", help="Install Updater services and open Web first setup"
+    )
+    init.add_argument("--directory", default="/var/lib/flamoris-updater")
+    init.add_argument("--root", default="/srv/flamoris/apps")
+    init.add_argument("--port", type=int, default=8764)
+    init.add_argument("--public-origin")
+    install = commands.add_parser(
+        "install-profile", help="Administrator-only direct installation profile"
+    )
+    install.add_argument("--profile", required=True)
+    install.add_argument("--check", action="store_true")
     serve = commands.add_parser("serve")
     serve.add_argument("--config", required=True)
     call = commands.add_parser("call")
@@ -46,13 +83,70 @@ def main(argv=None):
             command.add_argument("--token-file", required=True)
     args = parser.parse_args(argv)
     try:
+        managed_arguments = None
+        if args.command in {
+            "install",
+            "update",
+            "apps",
+            "job",
+            "start-setup",
+            "complete-setup",
+            "delete-previous",
+        }:
+            names = {
+                "install": "updater_install",
+                "update": "updater_update",
+                "apps": "updater_apps_list",
+                "job": "updater_managed_job_get",
+                "start-setup": "updater_install_start",
+                "complete-setup": "updater_install_complete",
+                "delete-previous": "updater_previous_delete",
+            }
+            managed_arguments = {}
+            if hasattr(args, "application"):
+                managed_arguments["application_id"] = args.application
+            if hasattr(args, "release"):
+                managed_arguments.update(
+                    release=args.release, request_key=args.request_key or str(uuid.uuid4())
+                )
+            if args.command == "install" and args.settings_file:
+                managed_arguments["settings"] = loads(
+                    protected_read(args.settings_file, private=True)
+                )
+            if args.command == "apps":
+                managed_arguments["refresh"] = True
+            if args.command == "job":
+                managed_arguments["job_id"] = args.job_id
+            args.tool = names[args.command]
+            args.command = "call"
+        if args.command == "bootstrap":
+            from .setup import bootstrap
+
+            result = bootstrap(
+                Path(args.directory),
+                Path(args.root),
+                args.public_origin or f"http://127.0.0.1:{args.port}",
+                args.port,
+            )
+            print(dumps(result).decode())
+            return
+        if args.command == "install-profile":
+            from .install import configured
+
+            installer = configured(args.profile)
+            print(dumps(installer.preflight() if args.check else installer.apply()).decode())
+            return
         if args.command == "call":
             client = Endpoint(url=args.url).client()
             token = protected_read(args.token_file, private=True, limit=256).decode().strip()
             raw = (
-                sys.stdin.buffer.read(1024 * 1024 + 1)
-                if args.arguments == "-"
-                else Path(args.arguments).read_bytes()
+                dumps(managed_arguments)
+                if managed_arguments is not None
+                else (
+                    sys.stdin.buffer.read(1024 * 1024 + 1)
+                    if args.arguments == "-"
+                    else Path(args.arguments).read_bytes()
+                )
             )
             payload = loads(raw)
             headers = {"Authorization": "Bearer " + token, "Content-Type": "application/json"}

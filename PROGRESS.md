@@ -2,6 +2,62 @@
 
 Updated: 2026-10-10 (JST).
 
+## Simple installation and update — source and CI verified
+
+Current authorization covers the agreed source changes, tests/CI and a reviewable
+PR; no live host changes or release publication. PRs #12 and #13 are merged.
+[PR #11](https://github.com/flamoris-jp/flamoris-updater/pull/11) carries forward
+its direct-install source (`a049b990f872996e5c0c1a38891caac858cf57df`) on current
+main, without unmanaged import, client PKI or backup prerequisites.
+
+Implemented:
+
+- Removed DB/system backup and data-restore contracts and implementations.
+  App-owned migration/fencing remain in the advanced Core route.
+- Empty-host bootstrap installs two services, with unprivileged Web and a local
+  OS-peer-checked root manager. Web first setup consumes a one-time code and
+  configures the administrator and an ordinary HTTPS release catalog.
+- Per-app install allows later independent additions. Required providers and
+  installed consumers constrain only their real compatibility dependencies.
+- Web, MCP and CLI share eight managed operations, persistent jobs and history.
+  Install provisions stopped applications and waits for their first setup;
+  explicit start and verification finish installation.
+- Schema/settings-compatible updates stage new executables beside the current
+  version, retain installed settings, switch and verify. After success, keep one
+  previous executable and prune older recorded executables/package caches.
+  Failures/unknown outcomes block cleanup and replay. Web allows manual deletion
+  of the previous executable. Config/data/DB/shared infrastructure/external AI
+  runtimes and models are never cleanup targets.
+- Candidate/catalog recipe builders cover six deployment units. Updater package,
+  Native bundle launchers, schemas and run/setup documentation include this path.
+
+Local verification: **198 passed, 7 skipped**. The skips are actual PostgreSQL/
+Docker integrations and named Unix listeners unavailable in this environment;
+CI has dedicated real PostgreSQL and Generation Docker tests. Real offline
+Native wheel/venv staging, settings/data retention, socket-pair OS credentials,
+Web/MCP/CLI shared jobs, failures and path boundaries pass locally. Ruff/format,
+JavaScript syntax, documentation links, schema export and Updater/Core wheel/
+sdist builds pass. These results do not certify all app domains or real hosts.
+
+[CI run 37967458776](https://github.com/flamoris-jp/flamoris-updater/actions/runs/37967458776)
+on source commit `4e10f7837cba9118f063a060ed443d84c61e52fc` passed all five
+jobs: ordinary verification/build/schemas/docs, actual stopped Generation Docker
+provision/start/health, new PostgreSQL DB/role initialization plus managed flows,
+and amd64/arm64 indexed Native bundle verification. Its first predecessor run
+exposed the known OS-peer rejection/reset race; that was corrected and verified,
+not suppressed. The final documentation-only commit is also checked on PR #11.
+
+Limits: release candidates/catalogs are not published; six actual application
+first setups and external connections have not been accepted on real hosts.
+The simple route requires explicit schema/settings compatibility; new app schema
+handlers and older SDK pin integration remain separate app-owned work. Root
+helper/Updater self replacement remains reviewed maintenance. Direct HTTPS
+artifact locations are required; automatic tunnel management is not included.
+See [review evidence](docs/SIMPLE_REVIEW.md) and [running](docs/RUNNING.md).
+
+The sections below are historical checkpoints; their old backup/import/self
+integration status does not describe the current simple installation path.
+
 ## Removal of private CA and client certificates
 
 Implemented from current main (PR #12 merged), independently of open PR #11.

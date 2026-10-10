@@ -65,10 +65,8 @@ def main():
                 "admission_gate_required": True,
                 "validation_profiles": ["control-read-only-v1"],
             },
-            "backup_profile": {"id": "preserve-control-v1", "resource_classes": ["control"]},
             "recovery": {
                 "artifact_only": True,
-                "data_restore": False,
                 "previous_schema_constraints": {"control": ["updater-control-1"]},
             },
             "initialization": {"supported": False},

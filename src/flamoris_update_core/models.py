@@ -27,7 +27,6 @@ Phase = Literal[
     "preparing",
     "prepared",
     "quiescing",
-    "backing_up",
     "migrating",
     "activating",
     "validating",
@@ -45,8 +44,6 @@ Op = Literal[
     "close_admission",
     "drain",
     "stop",
-    "snapshot",
-    "restore_verify",
     "apply_step",
     "initialize",
     "activate",
@@ -55,8 +52,6 @@ Op = Literal[
     "release",
     "inspect",
     "reconcile",
-    "restore",
-    "verify_restored_state",
 ]
 
 
@@ -165,9 +160,7 @@ class Edge(Model):
     runner_profile: ID
     reconcile_handler_id: ID
     affected_resources: list[ID] = Field(min_length=1, max_length=128)
-    backup_required: bool
     retry_policy: Literal["never", "after_verified_not_applied"]
-    restore_profile: ID
 
     @model_validator(mode="after")
     def shape(self):
@@ -191,14 +184,8 @@ class LifecycleProfile(Model):
     validation_profiles: list[ID] = Field(min_length=1, max_length=32)
 
 
-class BackupProfile(Model):
-    id: ID
-    resource_classes: list[ID] = Field(max_length=128)
-
-
 class RecoveryPolicy(Model):
     artifact_only: bool
-    data_restore: bool
     previous_schema_constraints: dict[ID, list[Schema]]
 
 
@@ -265,7 +252,6 @@ class Manifest(Model):
     schema_targets: dict[ID, Schema]
     migrations: list[Edge] = Field(max_length=256)
     lifecycle_profile: LifecycleProfile
-    backup_profile: BackupProfile
     recovery: RecoveryPolicy
     initialization: Initialization
     release_notes: Notes

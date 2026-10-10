@@ -1,3 +1,5 @@
+> Historical design/integration record. The current simple flow is in [running](RUNNING.md) and [installation](INSTALL.md). Backup/restore, unmanaged import and client PKI requirements/examples below are superseded and are not accepted current contracts. Publication/full-host acceptance do not gate controlled installation tests.
+
 # Release Manifest v1 design
 
 **Reviewed v1 contract with strict loader implementation.** Shortened-digest JSON examples remain illustrative. Actual models/exported schemas and [running](RUNNING.md) define accepted fields.

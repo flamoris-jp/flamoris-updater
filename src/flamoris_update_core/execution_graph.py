@@ -38,17 +38,11 @@ def validate_execution_graph(plan):
             "close_admission": {"begin"},
             "drain": {"close_admission"},
             "stop": {"drain"},
-            "snapshot": {"stop"},
-            "restore_verify": {"snapshot"},
-            "apply_step": {"restore_verify", "stop"},
-            "initialize": {"restore_verify", "stop"},
-            "restore": {"restore_verify", "stop"},
-            "verify_restored_state": {"restore"},
+            "apply_step": {"stop"},
+            "initialize": {"stop"},
             "activate": {
-                "restore_verify",
                 "apply_step",
                 "initialize",
-                "verify_restored_state",
                 "stop",
             },
             "validate": {"activate"},
@@ -61,12 +55,6 @@ def validate_execution_graph(plan):
     if readonly and set(by_operation) - set(required):
         raise UpdateError("forbidden")
     if not readonly:
-        for operation in ["snapshot", "restore_verify"] + (
-            ["restore", "verify_restored_state"] if plan.action == "recover" else []
-        ):
-            covered = {r for s in by_operation.get(operation, []) for r in s.resources}
-            if covered != set(plan.resources):
-                raise UpdateError("backup_unverified")
         if plan.action == "recover" and any(
             op in by_operation for op in ["apply_step", "initialize"]
         ):

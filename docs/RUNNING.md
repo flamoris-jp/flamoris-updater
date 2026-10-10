@@ -1,106 +1,52 @@
-# Running and releasing v1
+# Running the simple Updater
 
-This is the source implementation procedure. No release, production credentials or real deployment is supplied. Linux/systemd, Python **3.12**, a local persistent filesystem and an audited application lifecycle owner are required. Use the [README](../README.md) setup for development.
+Linux/systemd and Python 3.12 are required. Docker apps use the local Docker daemon; Agent/Studio require reachable PostgreSQL and credentials to create their new app-owned database. These are real dependencies, not backup prerequisites.
 
-## Provision before starting
+## Updater package and bootstrap
 
-1. Obtain current deployments, physical persistence identities, all writers and provider relationships through Server Manager and application owners. Record private details outside this repository. Match each physical namespace to one Resource and one owner. Borrowed resources share the owner's schema target; only the owner migrates/snapshots/restores them.
-2. Use an already recorded managed installation for updates. Unmanaged deployments cannot be imported. The migration runner handles application-owned schema changes, not entry into management. The new simple installation/setup workflow is separate work.
-3. Provision separate Ed25519 release, catalog, coordinator-authority, recovery-controller and host-receipt keys. Pin application/domain, purpose, channel and revocation state explicitly. Private signer files accept raw 32-byte or Ed25519 PEM; protect private files with owner-only permissions. Never put private keys in JSON, notes, browser assets or this repository.
-4. Provision approved HTTPS release/catalog origins. Private CA and client certificates are not used; configure local Owner sockets and loopback host connections as described in [transport](TRANSPORT.md). Host receipt IDs must equal host IDs; all hosts participating in epoch handoff need the full receipt-key set. Each host pins both coordinator and stable controller public keys. Protect credential files and their ancestor directories against replacement by service users or unrelated accounts.
-5. Install independently pinned stable helper/controller binaries and state outside replaceable coordinator release directories. Configure root-owned service unit files, indexed artifacts, staging quotas, private local journals and fixed active pointers. A recovery controller must survive coordinator failure; merely installing its script inside the current coordinator bundle is insufficient.
-6. Supply exact JSON configs matching the exported schemas. Do not paste the illustrative contract digests into production. Derive `binding_revision` as SHA-256 of the canonical serialized Native/Docker binding (`wire.dumps(binding)`), and `physical_binding_digest` from the verified physical namespace identity. Both coordinator and local helper register the same approved resources/profiles. The application owner must report matching actual physical digests.
-
-Export schemas with:
+Consume a reviewed prebuilt wheel plus its complete offline wheelhouse, or an indexed Native bundle produced by CI. For a wheelhouse installation:
 
 ```bash
-python scripts/export_schemas.py --output dist/schemas
+sudo python3.12 -m venv /opt/flamoris-updater
+sudo /opt/flamoris-updater/bin/python -m pip install --no-index --find-links /absolute/wheelhouse flamoris-updater==1.0.0
+sudo /opt/flamoris-updater/bin/flamoris-updater bootstrap --root /srv/flamoris/apps
 ```
 
-`CoordinatorConfig`, `HelperConfig`, `HostAPIConfig`, `RecoveryConfig`, `DeploymentProfile`, `Resource`, `OwnerRequest` and `OwnerResult` are also readable in their source models. Unknown fields, ambiguous JSON and wrong protocol versions are rejected. Config and referenced public HTTPS server/signer files are fingerprinted; changed configuration blocks operations until an explicit reviewed restart/reconciliation. Provision and maintain clock synchronization, set `clock_healthy` from trusted operational evidence, and do not set it speculatively.
+The paths are portable examples. An indexed bundle has its own `bin/flamoris-updater` launcher and also supplies `flamoris-updater-service`; invoke bootstrap from that protected installation. Do not clone/build source into a production app directory.
 
-Application Owners must use matching SDK contracts. `Observation` no longer
-accepts the removed import-evidence field, and plans no longer accept the import
-action. This source change does not repin other application repositories or
-convert an existing Owner/control database.
+Bootstrap refuses existing state/services, provisions `flamoris-updater` as a system account, and generates `setup.json` rather than requiring manual JSON. Defaults: Web on `http://127.0.0.1:8764`, Web/helper journals under `/var/lib/flamoris-updater`, app namespaces under `/srv/flamoris/apps`. Public Web runs as the service account; the root manager exposes only a peer-checked Unix socket. systemd owns its temporary socket directory, so restart removes stale sockets. No application is needed to start Web.
 
-## Processes and privilege
+Use `--directory`, `--root`, `--port` for other local paths/ports. For an HTTPS proxy/tunnel, bootstrap with `--public-origin https://updater.example.invalid`; preserve that public Host and enforce HTTPS at the proxy. Updater does not connect a tunnel or issue certificates. For initial remote setup, an SSH forward to the loopback Web port also works without client certificates.
 
-| Entry point | Fixed responsibility |
-| --- | --- |
-| `flamoris-updater serve --config <absolute-config>` | Unprivileged coordinator, dedicated Web and MCP |
-| `flamoris-updater-helper --config <absolute-config>` | Root, fixed allowlisted local effects; private peer-checked Unix socket |
-| `flamoris-updater-host --config <absolute-config>` | Separate unprivileged loopback host API forwarding signed requests to helper |
-| `flamoris-updater-recovery ...` | Independently installed local operator recovery controller |
-| `flamoris-update-migration --factory-module <installed-module>` | Application-owned standalone migration factory; request JSON on stdin |
+Open the printed URL, enter the one-time setup code (expires after one hour), create the administrator and enter the HTTPS catalog URL. To renew a code before setup, run the installed `flamoris-updater-service token --config /var/lib/flamoris-updater/setup.json` as the Web service account. Setup cannot be rerun after completion. Passwords/tokens/settings never enter published release metadata or normal Job results.
 
-Use audited service units with deployment-specific user/group/path bindings. This repository cannot provide correct production units without that inventory. The helper socket directory is root-owned and configured group-accessible; only `allowed_peer_uids` can dispatch. Host HTTP bodies and framed helper packets are bounded. Bind server TLS directly or use the explicit trusted loopback TLS proxy option for the coordinator; do not expose plaintext coordinator listeners remotely. Serve Web from its dedicated same origin.
+## Applications
 
-Application Owner connections use peer-checked local Unix sockets; their server configuration is also exported as `ServerConfiguration`.
+Web displays six independently selectable deployment units and release-owned settings fields. Generation Controller ships in the Generation image. Agent/Studio create only their new database/roles and use application SQL/Alembic; PostgreSQL itself is not installed or backed up. A collision with existing files, containers, units or DB/roles stops installation. There is no import/adoption route.
 
-The **application owner API must remain available when the application unit/container is stopped**. Run it as an independent lifecycle owner, not as a route in the unit being updated. It verifies fresh inspection nonces/timestamps, actual schemas/resource identities, durable admission gates, drain/fencing, snapshots, isolated restore and domain acceptance. Production writes, notifications, billing/provider credentials and queues must stay inaccessible during isolated restore. Application-specific proof implementations and Server/GPU Manager integration remain owner integration work.
+Installation provisions executables, retained settings/data and stopped services/containers. It ends in `awaiting_setup`, not a claim of health. Start the staged application for its own first setup, then use **verify after initial setup**. This verifies its local health/running contract and promotes the same record to `succeeded`. Updater does not certify availability of an external model/runtime.
 
-Native execution checks the configured unit file digest and systemd FragmentPath/NeedDaemonReload, stages a verified read-only indexed tree, changes a fixed pointer and starts under maintenance. Docker uses the protected configured local daemon socket, pinned registry/repository/platform/config/layers, fixed non-root user/network/mounts, resource limits and restart policy. Image-declared anonymous volumes are rejected and image healthchecks disabled. v1 direct OCI fetching uses ordinary system-trusted HTTPS; external bearer-token registry negotiation is not implemented. No host source build or arbitrary shell is allowed.
+Updates require a succeeded managed record and an explicit compatible predecessor in the recipe. They stage immutable code, reuse installed settings/data, stop/switch/start, check health and runtime identity, then retain one previous generation. Native programs have per-release virtual environments; Docker retains a stopped old container/image. Cleanup removes older executable directories/containers/images and their package cache. It never deletes configuration, runtime profiles, databases, application data or external AI/model storage. Images used by other containers are retained; cleanup failure is recorded for inspection. **Delete retained previous** is available in Web/CLI/MCP only without active/unknown Jobs.
 
-## Human and MCP authorization
+Lost/partial effects persist `recovery_required`; they are not replayed or followed by cleanup. Inspect the Job, retained candidate and actual state before a manual, application-aware correction. No automatic DB restore or rollback after incompatible schema changes is provided. New schema handlers remain the application's responsibility; the separate Owner/migration integration requires matching contracts and is not automatically attached to a simple install.
 
-Stop the coordinator before offline account changes; its process lock prevents competing administrative writes. Provision an operator with a prompted password of at least 12 characters and the required exact deployment IDs:
+## Commands and MCP
+
+Create a 24-hour Bearer token with Web's **CLI/MCP token** button and save it in a mode-0600 absolute file. API clients use ordinary HTTPS/system trust, or a literal loopback HTTP endpoint through a trusted local/tunneled connection.
 
 ```bash
-flamoris-updater provision-user --config /absolute/coordinator.json --subject operator --roles read,plan,execute,cancel,recover_verify,operator,recover --targets app,updater
-flamoris-updater issue-token --config /absolute/coordinator.json --subject operator --output /absolute/new-private-token
-flamoris-updater serve --config /absolute/coordinator.json
+flamoris-updater apps --url http://127.0.0.1:8764 --token-file /absolute/private-token
+flamoris-updater install --url http://127.0.0.1:8764 --token-file /absolute/private-token --application flamoris-generation-mcp --release 1.0.0 --request-key initial-generation
+flamoris-updater start-setup --url http://127.0.0.1:8764 --token-file /absolute/private-token --application flamoris-generation-mcp
+flamoris-updater complete-setup --url http://127.0.0.1:8764 --token-file /absolute/private-token --application flamoris-generation-mcp
+flamoris-updater update --url http://127.0.0.1:8764 --token-file /absolute/private-token --application flamoris-generation-mcp --release 1.1.0 --request-key generation-update
+flamoris-updater job --url http://127.0.0.1:8764 --token-file /absolute/private-token --job-id job-REPLACE
 ```
 
-Replace the sample paths/IDs with audited bindings. Token output must be a new absolute path; it is written privately. The Web login uses these independent Updater accounts. Changed principal revisions invalidate old session/grant permissions; re-provisioning an account requires a reviewed offline operation. Offline `disable-user --config ... --subject ...` immediately removes that principal’s permissions; `revoke-token --config ... --subject ... --token-file ...` revokes the exact stored token. Both require the coordinator process lock and preserve history. Avoid exporting raw token values in logs or terminal history.
+Only select an available compatible release; example 1.1.0 is not a publication claim. CLI install may read settings from `--settings-file` (protected JSON); ordinary operators can supply them in Web instead. `--public-origin` preserves the public Host when calling a loopback tunnel behind an HTTPS origin. `delete-previous --application ...` uses the same cleanup as Web. Reuse request keys for a lost response; changed arguments under the same key are rejected.
 
-Web provides inventory, candidates, cumulative release notes, update/install planning, exact-plan authorization, execution, progress, history and cancellation. The MCP endpoint is **`/mcp`**, Streamable HTTP with Bearer authentication. Twelve typed tools use the same coordinator as `/api/v1/tools/<tool>`; current schemas come from `inputs.TOOLS` and schema export. The protected local recovery CLI is the mutating recovery route; normal adapters cannot switch protected control roles.
+MCP uses `/mcp` with the same Bearer token. See [MCP](MCP_API.md). [Installation](INSTALL.md) describes prebuilt candidates/catalogs. Public releases/full real-host acceptance are not prerequisites for controlled disposable installation tests.
 
-CLI can call the same ordinary HTTPS API with a private Bearer token file, without a client certificate. A literal loopback HTTP URL is also accepted for local/tunneled CLI connections:
+## Advanced compatibility boundary
 
-```bash
-flamoris-updater call --url https://updater.example.invalid --token-file /absolute/token --tool updater_update_plan --arguments /absolute/plan-request.json
-```
-
-For a loopback/tunneled CLI connection, replace `--url` with its local HTTP address and add `--public-origin https://updater.example.invalid` matching `CoordinatorConfig.public_origin`; the Host boundary stays enforced.
-
-Use the actual tool names shown by `flamoris-updater call --help` (the `updater_*` names in the exported schema are authoritative). A plan request specifies exact target Manifest digests and a stable request key. Review the returned plan/digest, call `grant` with `caller_id`, `plan_id`, `plan_digest`, then `updater_update_execute` with that authorization ID and a stable execution key. Query `updater_job_get` after a lost reply; one consumed plan cannot create another Job. Do not automatically create a fresh plan to work around unknown effects.
-
-## Independent inspection and recovery
-
-These read-only commands do not bootstrap or migrate the journal:
-
-```bash
-flamoris-updater-recovery inspect --state /absolute/coordinator-state
-flamoris-updater-recovery compatible --state /absolute/coordinator-state
-```
-
-Inspection reports current epoch/mode, claims, unsettled operations, bounded protected-operation summaries, counts and event/export integrity/lag. Inspect both coordinator and relevant host journals. Preserve `journal.sqlite` with its WAL and the independently readable `recovery.jsonl`; do not restore an old control DB, clear blockers, rewrite tombstones or rely on export lag as proof of no effects.
-
-For an unknown parent Job, reconcile actual owners first. Prepare a protected recovery plan:
-
-```bash
-flamoris-updater-recovery recover --config /absolute/recovery.json --operator operator --parent-job job-id --targets-file /absolute/previous-targets.json --request-key recovery-key
-```
-
-The first call gates/stops the coordinator, hands over authority and positively freezes the complete parent scope. It returns a reviewable plan and does not restore data. The second call with the **same arguments** plus `--approve-plan-digest sha256:<exact-returned-hash>` authorizes that plan. Restore targets must exactly equal recorded pre-update executables; verified original parent snapshots are required. Partial takeover, unknown owner state, missing ACKs or lost uncertain control effects leave the domain inactive/blocked. A `verify` command follows the same review process but retains parent ownership/blockers and does not restore. Read-only verification is not resolution.
-
-Successful linked restore verifies actual final inventory and all local receipts before one global transaction resolves the parent, publishes inventory and releases claims. A retry after a crash at final publication rechecks current authority/inventory and finishes that transaction without replaying application effects. Ordinary interrupted effects remain unknown. After confirmed resolution, `resume-coordinator --config ... --operator ... --request-key ...` starts the accepted coordinator under maintenance, checks readiness and reopens its domain. Retained host claims can block this conservative v1 resume path; do not clear them to bypass recovery.
-
-## Coordinator self-update
-
-Use `self-update --config ... --operator ... --target-manifest sha256:<trusted-root> --request-key ...` to prepare, then the same command with `--approve-plan-digest` to authorize. The stable controller requires an idle domain, current operator/recover scope/revision, exact policy/epoch/previous target and expiry. It stages/probes the candidate with the configured protected Python 3.12 interpreter, advances every host's authority epoch, switches and checks candidate version/epoch/journal readiness under maintenance before activation.
-
-Only control-store/journal/recovery format 1 and schema `{ "control": "updater-control-1" }` are supported. Startup/control-store migrations are prohibited during handoff. Current accounts, sessions, grants/revocations, request/operation tombstones and accepted inventory are preserved. A failed switch/readiness can restore the compatible known previous coordinator using another epoch; it never restores older auth/history state. A failed stage or uncertain handoff has a durable unknown self Job and is not replayed. Accepted coordinator identity is durable, overriding an older bootstrap config on later recovery.
-
-**Root helper/executor and the stable recovery-controller cannot replace themselves through this route.** They require a separate audited bootstrap maintenance/replacement procedure retaining stable inspection/authority paths; protected executor aliases are rejected. This is an explicit v1 blocker, not an unattended rolling upgrade guarantee.
-
-## Build and sign releases
-
-CI builds wheel/sdist/schemas and indexed Native bundles for amd64/arm64 using `requirements-runtime.lock` and binary wheel dependencies. Bundles carry exact file indexes, compatibility metadata, static assets and dependency/license metadata. `verify_bundle.py` uses the production stager and launches all five CLI `--help` paths. Build artifacts are test evidence, not automatically trusted releases.
-
-The manual `sign-release.yml` workflow requires main, an immutable matching `v<version>` tag, protected **release-signing** Environment, approved `RELEASE_ORIGIN`/`RELEASE_KEY_ID` and `UPDATER_RELEASE_PRIVATE_KEY_BASE64`. It builds and verifies both platforms, prepares one exact Manifest with `artifact_variants`, signs exact bytes in the isolated signing job and uploads a reviewable candidate. It has read-only repository contents permissions and **does not publish a release or catalog**. No tag/key/Environment has been created by implementation work.
-
-Release owners review/publish the candidate at the approved origin, sign a monotonically increasing fresh catalog using a **separate catalog key**, and provision trust before managed update execution. The standalone `scripts/sign_release.py --help` supports exact release/catalog signing. A catalog maps one immutable application/release to one signed root; artifact platform selection never substitutes that root identity. Signature rotation may replace a valid signature on identical catalog bytes without changing sequence or release mapping. Existing release history remains readable when eligibility is withdrawn, but revoked signature keys invalidate trust.
-
-Application release packaging, application schema migrations and real systemd/Docker/local-IPC/tunnel/failure acceptance remain A1/A2/D1 in [integration](ADOPTION.md) and [acceptance](ACCEPTANCE.md).
+The older explicit `serve --config CoordinatorConfig`, host/helper and recovery-controller commands remain for application-owned migration/signed multi-host integration. Their keys, Owner services and independent recovery controller are not required by bootstrap. Neither their plans nor Owner DBs are imported into simple management. Backup/restore operations and fields are removed from Core/Owner/planner/runner; old SDK/configs need a matched rebuild. Root manager/Updater replacement and database schema compatibility need a separately reviewed deployment procedure; do not pretend simple app cleanup provides system rollback.

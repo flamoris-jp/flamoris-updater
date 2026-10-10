@@ -5,6 +5,7 @@ from starlette.testclient import TestClient
 
 from flamoris_updater_adapters.auth import AuthStore
 from flamoris_updater_adapters.inputs import TOOLS, Facade
+from flamoris_updater_adapters.managed import MANAGED_TOOLS
 from flamoris_updater_adapters.web import create_app
 
 ORIGIN = "https://updater.example.invalid"
@@ -179,7 +180,7 @@ def test_streamable_mcp_auth_catalog_and_strict_runtime_schema(web):
     )
     assert initialized.status_code == 200, initialized.text
     result = mcp_call(client, token, "tools/list").json()["result"]["tools"]
-    assert {x["name"] for x in result} == set(TOOLS)
+    assert {x["name"] for x in result} == set(TOOLS) - set(MANAGED_TOOLS)
     assert (
         next(x for x in result if x["name"] == "updater_update_execute")["inputSchema"][
             "additionalProperties"

@@ -27,7 +27,6 @@ def configured(tmp_path):
     cfg = OwnerConfiguration(
         profile=p,
         state_directory=str(tmp_path / "state"),
-        snapshot_directory=str(tmp_path / "backups"),
         trees=[TreeBinding(id="database", path=str(root), max_files=10, max_bytes=4096)],
         postgres=[],
         release_files=[str(path)],
@@ -79,7 +78,7 @@ def run(owner, target, operation, **kwargs):
     return result
 
 
-def test_update_cycle_requires_real_backup_host_attestation_and_boot(tmp_path):
+def test_update_cycle_requires_host_attestation_and_boot(tmp_path):
     owner, target, host, root_digest = configured(tmp_path)
     for operation in [
         "prepare",
@@ -87,8 +86,6 @@ def test_update_cycle_requires_real_backup_host_attestation_and_boot(tmp_path):
         "close_admission",
         "drain",
         "stop",
-        "snapshot",
-        "restore_verify",
     ]:
         run(owner, target, operation)
     req = request(owner, target, "activate")
@@ -145,7 +142,7 @@ def test_failed_owner_operation_remains_unknown_across_restart(tmp_path):
 
 def test_reopen_without_verified_activation_is_rejected(tmp_path):
     owner, target, _, _ = configured(tmp_path)
-    for operation in ["begin", "close_admission", "drain", "snapshot", "restore_verify"]:
+    for operation in ["begin", "close_admission", "drain"]:
         run(owner, target, operation)
     with pytest.raises(UpdateError):
         run(owner, target, "reopen_admission")

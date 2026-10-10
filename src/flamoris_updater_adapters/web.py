@@ -89,6 +89,9 @@ def create_app(coordinator, auth, origin, run_worker=True):
     facade = Facade(coordinator)
     static = Path(__file__).parent / "static"
     mcp, manager = create_mcp(coordinator, auth, origin)
+    secure = urlsplit(origin).scheme == "https"
+    session_cookie = SESSION if secure else "updater-local-session"
+    login_cookie = LOGIN if secure else "updater-local-login"
 
     def principal(request: Request, mutation=False):
         authorization = request.headers.get("authorization")
@@ -96,7 +99,7 @@ def create_app(coordinator, auth, origin, run_worker=True):
             if not authorization.startswith("Bearer "):
                 raise UpdateError("unauthorized")
             return auth.bearer(authorization[7:])
-        session = auth.session(request.cookies.get(SESSION, ""))
+        session = auth.session(request.cookies.get(session_cookie, ""))
         if mutation and (
             request.headers.get("origin") != origin
             or not secrets.compare_digest(request.headers.get("x-csrf-token", ""), session["csrf"])
@@ -108,12 +111,18 @@ def create_app(coordinator, auth, origin, run_worker=True):
         token = secrets.token_urlsafe(32)
         response = JSONResponse({"csrf_token": token})
         response.set_cookie(
-            LOGIN, token, max_age=300, secure=True, httponly=True, samesite="strict", path="/"
+            login_cookie,
+            token,
+            max_age=300,
+            secure=secure,
+            httponly=True,
+            samesite="strict",
+            path="/",
         )
         return response
 
     async def login(request):
-        csrf = request.cookies.get(LOGIN, "")
+        csrf = request.cookies.get(login_cookie, "")
         if (
             request.headers.get("origin") != origin
             or not csrf
@@ -129,14 +138,22 @@ def create_app(coordinator, auth, origin, run_worker=True):
         )
         response = JSONResponse({"subject": args.username, "csrf_token": csrf})
         response.set_cookie(
-            SESSION, token, max_age=3600, secure=True, httponly=True, samesite="strict", path="/"
+            session_cookie,
+            token,
+            max_age=3600,
+            secure=secure,
+            httponly=True,
+            samesite="strict",
+            path="/",
         )
-        response.delete_cookie(LOGIN, path="/", secure=True, httponly=True, samesite="strict")
+        response.delete_cookie(
+            login_cookie, path="/", secure=secure, httponly=True, samesite="strict"
+        )
         return response
 
     async def session(request):
         subject = principal(request)
-        record = auth.session(request.cookies.get(SESSION, ""))
+        record = auth.session(request.cookies.get(session_cookie, ""))
         permissions = coordinator.authority.require(subject, "read", [])
         targets = [
             {"id": p.id, "application_id": p.application_id}
@@ -149,14 +166,17 @@ def create_app(coordinator, auth, origin, run_worker=True):
                 "csrf_token": record["csrf"],
                 "roles": permissions["roles"],
                 "targets": targets,
+                "managed": hasattr(coordinator, "managed_invoke"),
             }
         )
 
     async def logout(request):
         principal(request, mutation=True)
-        auth.logout(request.cookies.get(SESSION, ""))
+        auth.logout(request.cookies.get(session_cookie, ""))
         response = JSONResponse({"logged_out": True})
-        response.delete_cookie(SESSION, path="/", secure=True, httponly=True, samesite="strict")
+        response.delete_cookie(
+            session_cookie, path="/", secure=secure, httponly=True, samesite="strict"
+        )
         return response
 
     async def invoke(request):
@@ -184,7 +204,27 @@ def create_app(coordinator, auth, origin, run_worker=True):
         return JSONResponse({"revoked": True})
 
     async def index(request):
-        return FileResponse(static / "index.html", media_type="text/html")
+        return FileResponse(
+            static / ("managed.html" if hasattr(coordinator, "managed_invoke") else "index.html"),
+            media_type="text/html",
+        )
+
+    async def setup_status(request):
+        return JSONResponse(
+            coordinator.setup_status()
+            if hasattr(coordinator, "setup_status")
+            else {"setup_required": False}
+        )
+
+    async def setup(request):
+        if not hasattr(coordinator, "setup") or request.headers.get("origin") != origin:
+            raise UpdateError("forbidden")
+        return JSONResponse(await asyncio.to_thread(coordinator.setup, loads(await body(request))))
+
+    async def issue_token(request):
+        subject = principal(request, mutation=True)
+        coordinator.authority.require(subject, "operator", [])
+        return JSONResponse({"token": auth.issue_token(subject), "expires_seconds": 86400})
 
     async def health(request):
         return JSONResponse(
@@ -238,6 +278,9 @@ def create_app(coordinator, auth, origin, run_worker=True):
             Route("/", index),
             Route("/health", health),
             Route("/api/v1/bootstrap", bootstrap),
+            Route("/api/v1/setup", setup_status),
+            Route("/api/v1/setup", setup, methods=["POST"]),
+            Route("/api/v1/token", issue_token, methods=["POST"]),
             Route("/api/v1/login", login, methods=["POST"]),
             Route("/api/v1/session", session),
             Route("/api/v1/logout", logout, methods=["POST"]),

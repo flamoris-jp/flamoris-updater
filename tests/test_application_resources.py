@@ -1,5 +1,4 @@
 import os
-import stat
 
 import pytest
 
@@ -15,21 +14,8 @@ def resource(tmp_path, max_files=20):
     return TreeResource(TreeBinding(id="data", path=str(root), max_bytes=4096, max_files=max_files))
 
 
-def test_restore_preserves_bytes_and_permissions_without_touching_source(tmp_path):
-    owner = resource(tmp_path)
-    before = owner.inventory()
-    snapshot = tmp_path / "backup"
-    receipt = owner.snapshot(snapshot)
-    assert owner.restore_verify(snapshot, receipt)
-    assert owner.inventory() == before
-    (snapshot / "tree/conversation.json").write_bytes(b"changed")
-    with pytest.raises(UpdateError):
-        owner.restore_verify(snapshot, receipt)
-    assert owner.inventory() == before
-
-
 @pytest.mark.parametrize("kind", ["symlink", "hardlink", "fifo"])
-def test_snapshot_refuses_link_and_special_members_before_copy(tmp_path, kind):
+def test_inventory_refuses_link_and_special_members(tmp_path, kind):
     owner = resource(tmp_path)
     member = owner.root / "unsafe"
     if kind == "symlink":
@@ -39,7 +25,7 @@ def test_snapshot_refuses_link_and_special_members_before_copy(tmp_path, kind):
     else:
         os.mkfifo(member)
     with pytest.raises((UpdateError, OSError)):
-        owner.snapshot(tmp_path / "backup")
+        owner.inventory()
     assert not (tmp_path / "backup").exists()
 
 
@@ -56,23 +42,6 @@ def test_binding_changes_when_storage_permissions_change(tmp_path):
     old = owner.binding_digest()
     owner.root.chmod(0o750)
     assert owner.binding_digest() != old
-
-
-def test_setgid_directories_are_snapshotted_and_restore_verified(tmp_path):
-    owner = resource(tmp_path)
-    shared = owner.root / "shared"
-    shared.mkdir(mode=0o750)
-    shared.chmod(0o2750)
-    (shared / "retained.json").write_text('{"keep":true}')
-    before = owner.inventory()
-    assert next(item for item in before if item["path"] == "shared")["mode"] == 0o2750
-
-    snapshot = tmp_path / "backup"
-    receipt = owner.snapshot(snapshot)
-
-    assert owner.restore_verify(snapshot, receipt)
-    assert owner.inventory() == before
-    assert stat.S_IMODE((snapshot / "tree/shared").stat().st_mode) == 0o2750
 
 
 @pytest.mark.parametrize(

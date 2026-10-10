@@ -11,7 +11,7 @@ from .admission import CURRENT, Admission
 from .contracts import OwnerRequest, OwnerResult
 from .errors import UpdateError
 from .inventory import DeploymentProfile, Observation
-from .journal import exclusive, protected_dir
+from .journal import exclusive
 from .models import ID, Manifest, Model
 from .postgres import PostgresBinding, PostgresResource
 from .resources import TreeBinding, TreeResource, protected_read
@@ -35,7 +35,6 @@ class TrustKey(Model):
 class OwnerConfiguration(Model):
     profile: DeploymentProfile
     state_directory: str
-    snapshot_directory: str
     trees: list[TreeBinding] = Field(max_length=32)
     postgres: list[PostgresBinding] = Field(max_length=8)
     release_files: list[str] = Field(min_length=1, max_length=128)
@@ -69,20 +68,18 @@ class ApplicationOwner:
         )
         self.gate = Admission(Path(config.state_directory))
         self.journal = self.gate.journal
-        self.snapshots = Path(config.snapshot_directory)
-        protected_dir(self.snapshots)
         self.resources = {b.id: TreeResource(b) for b in config.trees}
         self.resources.update({b.id: PostgresResource(b) for b in config.postgres})
         if set(self.resources) != set(self.profile.resources) or len(self.resources) != len(
             config.trees
         ) + len(config.postgres):
             raise UpdateError("invalid_profile")
-        # State/backups must never be inside a backed-up application tree.
+        # Management state must stay outside application-owned data.
         for resource in self.resources.values():
             if isinstance(resource, TreeResource):
                 if any(
                     path == resource.root or resource.root in path.parents
-                    for path in (self.journal.directory.resolve(), self.snapshots.resolve())
+                    for path in (self.journal.directory.resolve(),)
                 ):
                     raise UpdateError("invalid_profile")
         self.keys = {k.id: k.key() for k in config.trust_keys}
@@ -246,7 +243,7 @@ class ApplicationOwner:
     def _perform(self, request):
         r = request
         root_digest, manifest = self.manifests[r.artifact_digest]
-        proofs, snapshot_digest = {}, None
+        proofs = {}
         epoch = self.gate.state()["epoch"]
         epochs = (
             {} if epoch == 0 else {identity: epoch for identity in self.profile.resources.values()}
@@ -263,9 +260,7 @@ class ApplicationOwner:
                 "unsupported_migration", "Use the application's explicit legacy schema procedure"
             )
         if r.operation == "prepare":
-            for resource in self.resources.values():
-                if isinstance(resource, PostgresResource):
-                    resource.restore_preflight()
+            pass
         elif r.operation == "begin":
             if self.gate.state()["closed"] and self.gate.state()["job_id"] not in {None, r.job_id}:
                 raise UpdateError("maintenance_conflict")
@@ -324,79 +319,9 @@ class ApplicationOwner:
                 "writers_fenced": True,
                 "maintenance_startup": self.profile.maintenance_startup,
             }
-        elif r.operation == "snapshot":
-            self._job(r)
-            epochs = self._fenced(r)
-            path = self.snapshots / r.job_id
-            path.mkdir(mode=0o700)
-            members = {
-                key: resource.snapshot(path / key) for key, resource in self.resources.items()
-            }
-            fingerprints = {
-                key: (
-                    resource.fingerprint()
-                    if isinstance(resource, PostgresResource)
-                    else digest(dumps(resource.inventory()))
-                )
-                for key, resource in self.resources.items()
-            }
-            snapshot_digest = digest(
-                dumps(
-                    {
-                        "job_id": r.job_id,
-                        "plan_digest": r.plan_digest,
-                        "members": members,
-                        "fingerprints": fingerprints,
-                        "permissions": {
-                            key: resource.fingerprint(include_data=False)
-                            for key, resource in self.resources.items()
-                            if isinstance(resource, PostgresResource)
-                        },
-                    }
-                )
-            )
-            with self.journal.transaction() as db:
-                self.journal.put(
-                    "application_snapshot",
-                    r.job_id,
-                    {
-                        "digest": snapshot_digest,
-                        "members": members,
-                        "fingerprints": fingerprints,
-                        "permissions": {
-                            key: resource.fingerprint(include_data=False)
-                            for key, resource in self.resources.items()
-                            if isinstance(resource, PostgresResource)
-                        },
-                        "verified": False,
-                    },
-                    db,
-                )
-            proofs = {"writers_fenced": True, "snapshot_consistent": True}
-        elif r.operation == "restore_verify":
-            self._job(r)
-            epochs = self._fenced(r)
-            snapshot = self.journal.get("application_snapshot", r.job_id)
-            if snapshot is None:
-                raise UpdateError("backup_unverified")
-            for key, resource in self.resources.items():
-                resource.restore_verify(self.snapshots / r.job_id / key, snapshot["members"][key])
-            snapshot_digest = snapshot["digest"]
-            with self.journal.transaction() as db:
-                self.journal.put(
-                    "application_snapshot", r.job_id, {**snapshot, "verified": True}, db
-                )
-            proofs = {
-                "isolated_restore": True,
-                "no_production_credentials": True,
-                "no_external_effects": True,
-                "permissions_preserved": True,
-                "domain_valid": True,
-            }
         elif r.operation == "activate":
             self._job(r)
             epochs = self._fenced(r)
-            self._verify_snapshot(r)
             attestation = open_packet(
                 r.arguments.get("host_activation"), self.keys, self.profile.host_id, "receipt"
             )
@@ -426,7 +351,6 @@ class ApplicationOwner:
                         "manifest_digest": root_digest,
                         "release": manifest.release,
                         "attestation": attestation,
-                        "snapshot_job": r.job_id,
                     },
                     db,
                 )
@@ -439,22 +363,10 @@ class ApplicationOwner:
                 raise UpdateError("entry_required")
             if r.arguments.get("read_only") is not True:
                 self._fenced(r)
-                self._verify_snapshot(r)
-            else:
-                snapshot = self.journal.get("application_snapshot", installed["snapshot_job"])
-                if snapshot is None or not snapshot["verified"]:
-                    raise UpdateError("backup_unverified")
-                for key, resource in self.resources.items():
-                    if (
-                        isinstance(resource, PostgresResource)
-                        and resource.fingerprint(include_data=False) != snapshot["permissions"][key]
-                    ):
-                        raise UpdateError("domain_invalid")
             proofs = {"domain_valid": True, "permissions_preserved": True}
         elif r.operation == "reopen_admission":
             self._job(r)
             epochs = self._fenced(r)
-            self._verify_snapshot(r)
             installed = self.journal.get("application_installation", self.profile.id)
             if installed is None or installed["manifest_digest"] != root_digest:
                 raise UpdateError("entry_required")
@@ -498,18 +410,4 @@ class ApplicationOwner:
             evidence=[r.operation_id],
             maintenance_epochs=epochs,
             proofs=proofs,
-            snapshot_digest=snapshot_digest,
         )
-
-    def _verify_snapshot(self, request):
-        snapshot = self.journal.get("application_snapshot", request.job_id)
-        if snapshot is None or not snapshot["verified"]:
-            raise UpdateError("backup_unverified")
-        for key, resource in self.resources.items():
-            actual = (
-                resource.fingerprint()
-                if isinstance(resource, PostgresResource)
-                else digest(dumps(resource.inventory()))
-            )
-            if actual != snapshot["fingerprints"][key]:
-                raise UpdateError("resource_changed")

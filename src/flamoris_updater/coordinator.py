@@ -153,38 +153,6 @@ class Coordinator:
                 raise UpdateError(
                     "forbidden", "Recovery requires the recorded previous executables"
                 )
-            snapshots = {}
-            for previous_step in parent_plan.steps:
-                if previous_step.operation == "snapshot":
-                    saved = self.journal.get("receipt", parent_job_id + "." + previous_step.id)
-                    if saved is None:
-                        raise UpdateError("backup_unverified")
-                    proof = receipt(
-                        saved["packet"],
-                        self.receipt_keys,
-                        self.domain,
-                        parent_job_id,
-                        digest(parent_raw),
-                        previous_step,
-                    )
-                    snapshots[previous_step.deployment_id] = proof["result"]["snapshot_digest"]
-            plan = plan.model_copy(
-                update={
-                    "steps": [
-                        s.model_copy(
-                            update={
-                                "arguments": {
-                                    **s.arguments,
-                                    "snapshot_digest": snapshots[s.deployment_id],
-                                }
-                            }
-                        )
-                        if s.operation == "restore"
-                        else s
-                        for s in plan.steps
-                    ]
-                }
-            )
         self.authority.require(subject, "plan", plan.targets)
         for identity in plan.targets:
             verify_managed_release(self.profiles[identity], observed[identity], action)
