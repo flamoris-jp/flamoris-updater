@@ -1,11 +1,12 @@
 import gzip
 import hashlib
 import os
+import re
 import shutil
 import tarfile
 import tempfile
 from pathlib import Path, PurePosixPath
-from urllib.parse import unquote, urlsplit
+from urllib.parse import unquote, urljoin, urlsplit
 
 import httpx
 
@@ -28,16 +29,18 @@ def relative(name: str) -> str:
 
 
 def origin(url: str) -> str:
-    parsed = urlsplit(url)
-    if (
-        parsed.scheme != "https"
-        or not parsed.hostname
-        or parsed.username
-        or parsed.password
-        or parsed.fragment
-    ):
+    if not isinstance(url, str) or "\\" in url or any(c.isspace() or ord(c) < 32 for c in url):
         raise UpdateError("untrusted_origin")
     try:
+        parsed = urlsplit(url)
+        if (
+            parsed.scheme != "https"
+            or not parsed.hostname
+            or parsed.username
+            or parsed.password
+            or parsed.fragment
+        ):
+            raise UpdateError("untrusted_origin")
         hostname = parsed.hostname.lower()
         hostname = "[" + hostname + "]" if ":" in hostname else hostname
         return "https://" + hostname + (":" + str(parsed.port) if parsed.port else "")
@@ -46,31 +49,91 @@ def origin(url: str) -> str:
 
 
 class Fetcher:
-    def __init__(self, origins: list[str], client: httpx.Client):
+    # Only public managed downloads opt in. Signed/coordinator/registry fetches
+    # retain their original no-redirect origin contract.
+    MAX_REDIRECTS = 5
+    GITHUB_ASSET_ORIGINS = {
+        "https://release-assets.githubusercontent.com",
+        "https://release-assets.githubusercontent.com:443",
+    }
+
+    def __init__(self, origins: list[str], client: httpx.Client, *, public_redirects=False):
         self.origins = {origin(x) for x in origins}
         self.client = client
+        self.public_redirects = public_redirects
+
+    def checked_origin(self, url):
+        result = origin(url)
+        if any(x in {".", ".."} for x in unquote(urlsplit(url).path).split("/")):
+            raise UpdateError("untrusted_origin")
+        return result
 
     def chunks(self, url: str, limit: int, headers=None):
-        if origin(url) not in self.origins or any(
-            x in {".", ".."} for x in unquote(urlsplit(url).path).split("/")
-        ):
+        initial_origin = self.checked_origin(url)
+        if initial_origin not in self.origins:
             raise UpdateError("untrusted_origin")
+        # Ordinary public HTTPS redirects stay on the selected origin. The
+        # sole cross-origin exception starts at an actual GitHub Release URL.
+        allowed = {initial_origin}
+        parsed = urlsplit(url)
+        if (
+            self.public_redirects
+            and parsed.hostname.lower() == "github.com"
+            and parsed.port in (None, 443)
+            and re.fullmatch(
+                r"/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+/releases/"
+                r"(?:download/[^/]+|latest/download)/[^/]+",
+                parsed.path,
+            )
+        ):
+            allowed |= self.GITHUB_ASSET_ORIGINS
         try:
-            with self.client.stream(
-                "GET", url, headers=headers or {}, follow_redirects=False
-            ) as response:
-                if response.status_code != 200:
-                    raise UpdateError("release_unavailable")
-                declared = response.headers.get("content-length")
-                if declared and (not declared.isdecimal() or int(declared) > limit):
-                    raise UpdateError("quota_exceeded")
-                used = 0
-                for chunk in response.iter_bytes(chunk_size=64 * 1024):
-                    used += len(chunk)
-                    if used > limit:
+            for hop in range(self.MAX_REDIRECTS + 1):
+                request = self.client.build_request("GET", url, headers=headers or {})
+                if self.public_redirects:
+                    # Public releases never need ambient client credentials.
+                    # build_request may inherit a cookie jar or default headers.
+                    for name in ("Authorization", "Proxy-Authorization", "Cookie"):
+                        request.headers.pop(name, None)
+                    request.headers["Host"] = request.url.netloc.decode("ascii")
+                options = {"auth": None} if self.public_redirects else {}
+                response = self.client.send(request, stream=True, follow_redirects=False, **options)
+                try:
+                    if response.status_code in {301, 302, 303, 307, 308}:
+                        if not self.public_redirects or hop == self.MAX_REDIRECTS:
+                            raise UpdateError("release_unavailable")
+                        location = response.headers.get("location")
+                        if (
+                            not location
+                            or len(location) > 8192
+                            or "\\" in location
+                            or any(c.isspace() or ord(c) < 32 for c in location)
+                            or any(
+                                x in {".", ".."}
+                                for x in unquote(urlsplit(location).path).split("/")
+                            )
+                        ):
+                            raise UpdateError("untrusted_origin")
+                        target = urljoin(str(request.url), location)
+                        if self.checked_origin(target) not in allowed:
+                            raise UpdateError("untrusted_origin")
+                        url = target
+                        continue
+                    if response.status_code != 200:
+                        raise UpdateError("release_unavailable")
+                    declared = response.headers.get("content-length")
+                    if declared and (not declared.isdecimal() or int(declared) > limit):
                         raise UpdateError("quota_exceeded")
-                    yield chunk
-        except httpx.HTTPError:
+                    used = 0
+                    for chunk in response.iter_bytes(chunk_size=64 * 1024):
+                        used += len(chunk)
+                        if used > limit:
+                            raise UpdateError("quota_exceeded")
+                        yield chunk
+                    return
+                finally:
+                    response.close()
+        except (httpx.HTTPError, httpx.InvalidURL, ValueError):
             raise UpdateError("release_unavailable", "Approved release fetch failed") from None
 
     def bytes(self, url: str, limit: int, headers=None) -> bytes:

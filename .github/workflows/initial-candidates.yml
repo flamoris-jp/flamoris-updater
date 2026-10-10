@@ -3,7 +3,7 @@ on:
   workflow_dispatch:
     inputs:
       base_url:
-        description: 'Direct HTTPS directory for immutable assets (must return 200 without redirects)'
+        description: 'HTTPS directory for immutable assets (GitHub Releases require the corrected Updater)'
         type: string
         required: true
 permissions:

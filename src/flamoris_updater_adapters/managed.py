@@ -12,6 +12,7 @@ import shutil
 import socket
 import threading
 import time
+from itertools import chain
 from pathlib import Path
 from string import Template
 from typing import Literal
@@ -24,6 +25,7 @@ from flamoris_update_core.errors import UpdateError
 from flamoris_update_core.models import ID, Digest, Model, VersionRange
 from flamoris_update_core.wire import decode, digest, dumps, loads, version
 
+from .artifacts import Fetcher, origin
 from .diagnostics import (
     LayoutRequest,
     Log,
@@ -223,15 +225,13 @@ class Manager:
 
     def _download(self, url, limit, destination=None, expected=None):
         https(url)
-        count, h, parts = 0, hashlib.sha256(), []
-        with self.client.stream("GET", url) as response:
-            if response.status_code != 200:
-                raise UpdateError("release_unavailable")
+        h, parts = hashlib.sha256(), []
+        fetcher = Fetcher([origin(url)], self.client, public_redirects=True)
+        chunks = fetcher.chunks(url, limit)
+        try:
+            first = next(chunks, None)
             with destination.open("xb") if destination else _Memory() as stream:
-                for chunk in response.iter_bytes(65536):
-                    count += len(chunk)
-                    if count > limit:
-                        raise UpdateError("quota_exceeded")
+                for chunk in chain(() if first is None else (first,), chunks):
                     h.update(chunk)
                     if destination:
                         stream.write(chunk)
@@ -240,6 +240,8 @@ class Manager:
                 if destination:
                     stream.flush()
                     os.fsync(stream.fileno())
+        finally:
+            chunks.close()
         if expected and "sha256:" + h.hexdigest() != expected:
             raise UpdateError("artifact_mismatch")
         return b"".join(parts)

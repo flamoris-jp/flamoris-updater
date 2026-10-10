@@ -77,11 +77,15 @@ proxy/tunnel. Web's **MCP integration keys** issues a persistent read-only or
 read/execute key; store it in the client's protected credential configuration.
 The MCP URL is `<public-origin><base-path>/mcp` (`base-path` defaults to empty). Never paste keys into public logs/documents.
 
-For ongoing app/self updates, use a catalog whose artifact endpoints return the
-file directly: Updater deliberately rejects redirects. A GitHub release download
-URL is therefore suitable for this manual download step, but must not be copied
-unchanged into an automated update catalog. Direct HTTPS hosting is separate
-operator work; this distribution changes no network/download trust policy.
+The already-published v1.0.1 package rejects automated-download redirects and
+requires direct-200 HTTPS endpoints. Current source adds bounded same-origin
+HTTPS redirects and an exact GitHub Release-to-release-assets host exception for
+catalogs, app payloads and supervisor bundles; see [installation](INSTALL.md).
+This correction is not present in the v1.0.1 assets linked above. A corrected
+package and administrator maintenance of all three services, including the pinned
+supervisor, are needed before an existing installation uses GitHub Release URLs
+for automated app/self downloads. Merely replacing Web/manager leaves the old
+supervisor downloader. Publication and real-host maintenance remain separate.
 
 If Updater itself stops, its MCP cannot inspect/recover it. Use an independent
 administrator channel, preserve its journals and private diagnostic exports,

@@ -48,6 +48,19 @@ jobs:
       - run: ruff check src tests scripts
       - run: ruff format --check src tests scripts
       - run: pytest -q
+      - name: Verify real GitHub Release download with bounded redirects
+        run: |
+          python - <<'PY'
+          import httpx
+          from flamoris_update_core.wire import digest
+          from flamoris_updater_adapters.artifacts import Fetcher
+          with httpx.Client(verify=True, trust_env=False, timeout=30) as client:
+              raw = Fetcher(["https://github.com"], client, public_redirects=True).bytes(
+                  "https://github.com/flamoris-jp/flamoris-updater/releases/download/v1.0.1/SHA256SUMS", 65536
+              )
+          assert digest(raw) == "sha256:c90ff0ecf4367872bc5654c22e7a7ffa79223c929634ae2d8c0fe305229a70ea"
+          print("Public GitHub Release download and SHA-256 verified")
+          PY
       - run: python -m build
       - run: python -m build packages/update-core --outdir dist/sdk
       - run: python scripts/export_schemas.py --output dist/schemas

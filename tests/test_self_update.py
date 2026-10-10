@@ -117,6 +117,15 @@ def updater(tmp_path, monkeypatch, request):
     auth = AuthStore(web, authority, lambda: 100)
     key = auth.integration("operator", "persistent automation")
     release, blob = bundle()
+    release = release.model_copy(
+        update={
+            "artifact": release.artifact.model_copy(
+                update={
+                    "locator": "https://github.com/example/updater/releases/download/v1.1.0/updater.tar.gz"
+                }
+            )
+        }
+    )
     candidate = tmp_path / "releases" / release.artifact.digest.removeprefix("sha256:")
     wanted = dict(
         version="1.1.0",
@@ -124,9 +133,22 @@ def updater(tmp_path, monkeypatch, request):
         integration_auth_version=1,
         runtime_root=str(candidate / "site-packages"),
     )
-    calls, fail = [], {}
+    calls, fail, requests = [], {}, []
 
     def http(request):
+        requests.append(str(request.url))
+        if request.url.host == "github.com":
+            return httpx.Response(
+                302,
+                headers={
+                    "Location": fail.get(
+                        "redirect",
+                        "https://release-assets.githubusercontent.com/github-production-release-asset/1/updater.tar.gz",
+                    )
+                },
+            )
+        if request.url.host == "release-assets.githubusercontent.com":
+            return httpx.Response(200, content=b"tampered" if fail.get("tampered") else blob)
         if request.url.path == "/catalog.json":
             return httpx.Response(
                 200,
@@ -166,11 +188,26 @@ def updater(tmp_path, monkeypatch, request):
         candidate=candidate,
         original=original,
         pinned=pinned,
+        requests=requests,
     )
 
 
 def accept(e):
     return e.manager.invoke("updater_self_update", dict(release="1.1.0", request_key="self-update"))
+
+
+@pytest.mark.parametrize(
+    "fault,code", [("redirect", "untrusted_origin"), ("tampered", "untrusted_release")]
+)
+def test_self_update_redirect_or_digest_failure_precedes_service_changes(updater, fault, code):
+    e = updater
+    e.fail[fault] = "https://evil.invalid/updater.tar.gz" if fault == "redirect" else True
+    with pytest.raises(UpdateError) as error:
+        e.supervisor.candidate(e.release)
+    assert error.value.code == code
+    assert not e.calls
+    assert all("evil.invalid" not in url for url in e.requests)
+    assert not e.candidate.exists()
 
 
 def test_updates_both_services_preserves_credentials_history_and_pinned_supervisor(updater):
