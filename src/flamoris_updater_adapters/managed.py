@@ -290,7 +290,7 @@ class Manager:
     def _download(self, url, limit, destination=None, expected=None):
         https(url)
         h, parts = hashlib.sha256(), []
-        fetcher = Fetcher([origin(url)], self.client, public_redirects=True)
+        fetcher = Fetcher([origin(url)], self.client, public_redirects=True, github_releases=True)
         chunks = fetcher.chunks(url, limit)
         try:
             first = next(chunks, None)

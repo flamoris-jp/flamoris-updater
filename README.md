@@ -27,6 +27,8 @@ sudo /absolute/installation/bin/flamoris-updater bootstrap
 
 DB・システムバックアップ、未管理アプリの取り込み、任意シェルの実行は提供しません。アプリ固有のDB移行は各アプリが所有します。既存の高度なCore/Owner移行・署名付き協調処理は内部統合用で、通常のWeb/CLI/MCPには公開しません。
 
+PrivateなGitHub Releaseにも対応しています。既存のGitHub CLI認証または実行環境のGitHubトークンを使い、カタログ・配布物を元のリポジトリから取得します。[設定方法](docs/GITHUB_RELEASES.md)を参照してください。
+
 **Source status:** この構成のソース実装とテスト結果は[PROGRESS.md](PROGRESS.md)に記載しています。v1.0.4と1.0.3からの自己更新カタログ、各アプリのリポジトリ所有の配布物・カタログは公開済みです。[カタログ一覧と初回設定](catalogs/README.md)を参照してください。公開の確認と実機反映は別です。
 
 ## Development

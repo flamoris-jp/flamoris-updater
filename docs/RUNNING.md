@@ -20,6 +20,8 @@ Open the screen and register each repository's HTTPS catalog URL. A catalog can 
 
 Registering another catalog requires only that new source to be available. Refresh checks each source independently, displays errors and keeps the last checked snapshot for failed sources. Removing a catalog leaves its installed apps/settings/data/history intact. Conflicting descriptions of the same immutable app/release/platform are rejected.
 
+Private GitHub Release catalogs/assets use existing operator GitHub access in the manager's OS context; select the normal user's GitHub CLI login or an existing service environment token as described in [private repository access](GITHUB_RELEASES.md). Updater does not provision or persist those credentials.
+
 Choose an app and release, enter its settings and install. Start the staged app for its own setup, then verify it. Installation ends at `awaiting_setup`, becoming `succeeded` only after verification. Updates stage new code beside old, retain settings/data, stop/switch/start and verify. Only after success are older executables removed, keeping current plus one previous. Unknown/interrupted Jobs stop at `recovery_required` without replay. DB/schema transformations remain application-owned. Existing unmanaged applications are not imported.
 
 ## CLI and MCP

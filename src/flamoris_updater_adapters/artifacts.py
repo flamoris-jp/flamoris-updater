@@ -48,6 +48,10 @@ def origin(url: str) -> str:
         raise UpdateError("untrusted_origin") from None
 
 
+class _GitHubNotFound(Exception):
+    pass
+
+
 class Fetcher:
     # Only public managed downloads opt in. Signed/coordinator/registry fetches
     # retain their original no-redirect origin contract.
@@ -57,10 +61,18 @@ class Fetcher:
         "https://release-assets.githubusercontent.com:443",
     }
 
-    def __init__(self, origins: list[str], client: httpx.Client, *, public_redirects=False):
+    def __init__(
+        self,
+        origins: list[str],
+        client: httpx.Client,
+        *,
+        public_redirects=False,
+        github_releases=False,
+    ):
         self.origins = {origin(x) for x in origins}
         self.client = client
         self.public_redirects = public_redirects
+        self.github_releases = github_releases
 
     def checked_origin(self, url):
         result = origin(url)
@@ -69,12 +81,25 @@ class Fetcher:
         return result
 
     def chunks(self, url: str, limit: int, headers=None):
+        try:
+            yield from self._chunks(url, limit, headers)
+        except _GitHubNotFound:
+            if self.public_redirects and self.github_releases:
+                from .github_releases import private_chunks
+
+                yield from private_chunks(self.client, url, limit)
+            else:
+                raise UpdateError("release_unavailable") from None
+
+    def _chunks(self, url, limit, headers=None, *, api_token=None, api_asset=False):
         initial_origin = self.checked_origin(url)
         if initial_origin not in self.origins:
             raise UpdateError("untrusted_origin")
         # Ordinary public HTTPS redirects stay on the selected origin. The
         # sole cross-origin exception starts at an actual GitHub Release URL.
         allowed = {initial_origin}
+        if api_asset:
+            allowed = self.GITHUB_ASSET_ORIGINS
         parsed = urlsplit(url)
         if (
             self.public_redirects
@@ -96,11 +121,17 @@ class Fetcher:
                     for name in ("Authorization", "Proxy-Authorization", "Cookie"):
                         request.headers.pop(name, None)
                     request.headers["Host"] = request.url.netloc.decode("ascii")
+                    if api_token and hop == 0:
+                        request.headers["Authorization"] = "Bearer " + api_token
                 options = {"auth": None} if self.public_redirects else {}
                 response = self.client.send(request, stream=True, follow_redirects=False, **options)
                 try:
                     if response.status_code in {301, 302, 303, 307, 308}:
-                        if not self.public_redirects or hop == self.MAX_REDIRECTS:
+                        if (
+                            not self.public_redirects
+                            or hop == self.MAX_REDIRECTS
+                            or (api_token and not api_asset)
+                        ):
                             raise UpdateError("release_unavailable")
                         location = response.headers.get("location")
                         if (
@@ -119,6 +150,14 @@ class Fetcher:
                             raise UpdateError("untrusted_origin")
                         url = target
                         continue
+                    if (
+                        response.status_code == 404
+                        and hop == 0
+                        and self.public_redirects
+                        and parsed.hostname.lower() == "github.com"
+                        and not api_token
+                    ):
+                        raise _GitHubNotFound
                     if response.status_code != 200:
                         raise UpdateError("release_unavailable")
                     declared = response.headers.get("content-length")
