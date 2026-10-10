@@ -2,6 +2,41 @@
 
 Updated: 2026-10-10 (JST).
 
+## Public release redirect correction
+
+The operator authorized correcting Updater's download limitation rather than
+requiring a deployment-specific mirror. Current source shares one checked
+streaming fetcher across first/refresh catalog retrieval, managed app payloads
+and the independent supervisor's native-bundle download. Public mode permits
+at most five same-origin HTTPS redirects and an exact GitHub Release download
+URL-to-`release-assets.githubusercontent.com` exception. Every hop is checked
+before sending; no HTTP downgrade, URL credentials, fragments, traversal,
+unrelated host, ambient authentication or cookie forwarding is allowed.
+Final size limits, SHA-256/index checks, sealed content and immutable recipe
+identity bindings remain enforced. The advanced signed/coordinator/registry
+path still opts into no redirects by default.
+
+Local verification: **323 passed, 7 skipped**; Ruff lint/format, workflow YAML
+and documentation links pass. Latest CI is recorded in the preparing PR.
+CI additionally downloads the immutable published v1.0.1 SHA256SUMS asset using
+the corrected fetcher/system trust and compares its GitHub-reported SHA-256.
+Tests cover real HTTPX
+redirect chains, inherited authentication/cookies, URL/host/port rejection,
+request-count and byte budgets, sanitized transport failures, catalog/app digest
+acceptance and supervised update staging/faults. Existing self-update fixtures
+now acquire their indexed bundle through a GitHub/CDN redirect. Test systemd
+effects remain isolated; the CI download does not certify deployment on a real
+host or application publication.
+
+The already-published 1.0.1 artifacts are unchanged and do not contain this fix.
+A corrected distribution and explicit administrator maintenance of the pinned
+supervisor as well as Web/manager remain necessary. Ordinary self-update does
+not replace that supervisor. No real host, service binding, journal or credential
+is changed by this source work. Application builds/publication and Web first
+setup remain pending; direct hosting is no longer a product requirement for the
+corrected download path. The mirror proposal at the earlier checkpoint below
+was a workaround for the published package, not the accepted product direction.
+
 ## Initial application catalog distribution preparation
 
 The operator authorized preparation of application payloads and the catalog

@@ -16,7 +16,7 @@ Distribute that catalog and its candidate files at the selected direct HTTPS loc
 ### Complete initial distribution
 
 The manual **Initial installation candidates** workflow takes `base_url`, the
-chosen immutable direct HTTPS directory. It builds all six applications on
+chosen immutable HTTPS directory. It builds all six applications on
 amd64/arm64, validates the complete matrix and uploads an
 `initial-install-distribution` artifact containing `catalog.json`, flat uniquely
 named payload files, `application-distribution.json` and `SHA256SUMS`. It has
@@ -39,11 +39,27 @@ installed schema and one-MiB catalog budget. Assembly metadata records
 Future releases need a separately reviewed matrix rather than bypassing these
 initial identity checks.
 
-Updater 1.0.1's managed downloader accepts HTTP 200 without following redirects.
-GitHub Release attachment URLs therefore cannot be used directly in this catalog.
-Serve the assembled directory at the selected ordinary HTTPS location and verify
-that the catalog and every payload return 200 directly with system trust and
-matching checksums before Web setup. An Actions artifact is a build output, not
+The corrected managed downloader in current source accepts at most five HTTPS
+redirects for catalogs, app payloads and supervisor self-update bundles. Redirects
+stay on the initial origin, with one explicit exception: a
+`https://github.com/<owner>/<repo>/releases/download/<tag>/<asset>` or
+`.../releases/latest/download/<asset>` URL can reach
+`https://release-assets.githubusercontent.com` (default HTTPS port only).
+The exception uses exact hosts, not wildcards or host suffix matching. HTTP,
+credentials in URLs, fragments, traversal and unrelated hosts are rejected before
+the next request. Ambient Authorization/Proxy-Authorization headers, Cookies and
+client authentication are excluded from public release requests. Every response
+is closed; final byte budgets, SHA-256/index validation and immutable recipe
+bindings remain enforced. The separate signed/coordinator/registry fetcher keeps
+its strict no-redirect contract.
+
+Publish the assembled assets and catalog together at the selected HTTPS location
+and verify every download and checksum before Web setup. GitHub Release download
+URLs can be used with a package containing this correction; the already-published
+1.0.1 package rejects redirects. Existing installations need administrator
+maintenance of the pinned supervisor as well as Web/manager; updating only those
+two services leaves the old self-update downloader in place. No live maintenance
+is performed by this source change. An Actions artifact is a build output, not
 a release source. The example domain above is not a published catalog. Do not
 change URLs or content for a published app/release/platform identity; the manager
 binds the entire recipe immutably. Hosting/proxy provisioning remains separate.

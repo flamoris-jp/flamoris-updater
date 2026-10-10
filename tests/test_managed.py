@@ -36,6 +36,75 @@ from flamoris_updater_adapters.web import create_app
 pytestmark = pytest.mark.skipif(
     os.geteuid() != 0, reason="Protected administrator filesystem flow runs in root CI"
 )
+
+
+@pytest.mark.parametrize("tampered", [False, True])
+def test_github_catalog_and_app_payload_follow_checked_redirects(tmp_path, tampered):
+    base = "https://github.com/example/apps/releases/download/initial"
+    cdn = "https://release-assets.githubusercontent.com/github-production-release-asset/1/"
+    candidate = recipe()
+    candidate["downloads"]["image.tar"]["url"] = base + "/image.tar"
+    catalog = Catalog.model_validate({"catalog_version": 1, "recipes": [candidate]})
+    requests = []
+
+    def serve(request):
+        requests.append(str(request.url))
+        filename = request.url.path.rsplit("/", 1)[-1]
+        if request.url.host == "github.com":
+            return httpx.Response(302, headers={"Location": cdn + filename})
+        assert request.url.host == "release-assets.githubusercontent.com"
+        raw = (
+            dumps(catalog) if filename == "catalog.json" else b"tampered" if tampered else b"image"
+        )
+        return httpx.Response(200, content=raw)
+
+    manager = Manager(
+        tmp_path / "state",
+        tmp_path / "apps",
+        client=httpx.Client(transport=httpx.MockTransport(serve)),
+    )
+    manager.configure(base + "/catalog.json")
+    assert manager.catalog() == catalog
+    assert manager.catalog(refresh=True) == catalog
+    item = catalog.recipes[0].downloads["image.tar"]
+    destination = tmp_path / "image.tar"
+    if tampered:
+        with pytest.raises(UpdateError) as error:
+            manager._download(item.url, 1024, destination, item.digest)
+        assert error.value.code == "artifact_mismatch"
+    else:
+        manager._download(item.url, 1024, destination, item.digest)
+        assert destination.read_bytes() == b"image"
+    assert requests == [
+        base + "/catalog.json",
+        cdn + "catalog.json",
+        base + "/catalog.json",
+        cdn + "catalog.json",
+        base + "/image.tar",
+        cdn + "image.tar",
+    ]
+
+
+def test_managed_rejected_redirect_does_not_create_payload(tmp_path):
+    requests = []
+    url = "https://github.com/example/apps/releases/download/initial/image.tar"
+
+    def serve(request):
+        requests.append(str(request.url))
+        return httpx.Response(302, headers={"Location": "http://evil.invalid/file"})
+
+    manager = Manager(
+        tmp_path / "state",
+        tmp_path / "apps",
+        client=httpx.Client(transport=httpx.MockTransport(serve)),
+    )
+    destination = tmp_path / "image.tar"
+    with pytest.raises(UpdateError):
+        manager._download(url, 1024, destination, digest(b"image"))
+    assert requests == [url]
+    assert not destination.exists()
+
+
 APP = "flamoris-generation-mcp"
 ORIGIN = "http://127.0.0.1:8764"
 

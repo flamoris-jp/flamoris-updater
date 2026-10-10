@@ -210,7 +210,7 @@ class Supervisor:
     def candidate(self, release):
         store = self.store or NativeStore(
             path(str(self.state.parent / "releases")),
-            Fetcher([origin(release.artifact.locator)], self.client),
+            Fetcher([origin(release.artifact.locator)], self.client, public_redirects=True),
         )
         directory = store.prepare(release.artifact)
         store.verify(directory, release.artifact)

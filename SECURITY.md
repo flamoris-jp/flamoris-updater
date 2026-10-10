@@ -24,6 +24,17 @@ paths and immutable release mappings constrain executable staging. Initial
 GitHub distribution downloads use trusted HTTPS and published SHA-256 checksums;
 this distribution is not an independently signed Core catalog.
 
+Current source's public managed fetcher follows at most five HTTPS redirects,
+confined to the selected initial origin. An exact GitHub Release download URL
+may additionally reach `release-assets.githubusercontent.com` over default-port
+HTTPS. Each hop is checked before sending; URL credentials, HTTP downgrade,
+fragments, traversal, unrelated hosts and ambient authentication/cookies are
+refused. Final response and expanded-content budgets, SHA-256/index checks and
+immutable recipe bindings still apply. The advanced signed/coordinator/registry
+fetcher remains strict and does not follow redirects. Published v1.0.1 does not
+contain this correction; the pinned supervisor needs explicit administrator
+maintenance, outside ordinary Web/manager self-update, to use the new downloader.
+
 Web runs unprivileged on loopback. Exact Host/Origin, CSP, Argon2 passwords,
 CSRF/session protection and login/request limits apply. Public access needs an
 external HTTPS proxy/tunnel. The root manager admits only the Web service's OS

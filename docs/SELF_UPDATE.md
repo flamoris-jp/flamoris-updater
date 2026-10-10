@@ -13,6 +13,14 @@ so stopping/replacing the first two does not stop the update controller. Never
 delete that installation. Updating the pinned supervisor itself remains explicit
 bootstrap maintenance; this is not a claim to replace every privileged component.
 
+Current source applies the checked public-release redirect policy described in
+[installation](INSTALL.md) to supervisor bundle downloads as well as manager
+catalog/app downloads. The published 1.0.1 supervisor does not contain that
+correction. Replacing Web/manager alone cannot enable GitHub Release downloads
+for it; install a corrected distribution through explicit administrator bootstrap
+maintenance with current Job/journal/binding inspection. This source work does
+not modify a live pinned unit or discard the original installation.
+
 The catalog's `updater_releases` bind release, platform, explicit compatible
 predecessors, HTTPS Native archive digest/index/budget and supervisor protocol 1.
 Maintainers can include a bundle with:
