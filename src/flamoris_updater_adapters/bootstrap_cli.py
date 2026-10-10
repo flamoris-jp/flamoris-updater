@@ -51,7 +51,9 @@ def main(argv=None):
                 print(token)
             else:
                 uvicorn.run(
-                    create_app(c, c.auth, cfg.public_origin, run_worker=False),
+                    create_app(
+                        c, c.auth, cfg.public_origin, run_worker=False, base_path=cfg.base_path
+                    ),
                     host=cfg.listen_host,
                     port=cfg.listen_port,
                     proxy_headers=False,

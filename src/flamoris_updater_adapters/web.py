@@ -8,7 +8,7 @@ from urllib.parse import urlsplit
 from pydantic import Field
 from starlette.applications import Starlette
 from starlette.requests import Request
-from starlette.responses import FileResponse, JSONResponse, Response
+from starlette.responses import HTMLResponse, JSONResponse, Response
 from starlette.routing import Mount, Route
 from starlette.staticfiles import StaticFiles
 
@@ -20,6 +20,8 @@ from .inputs import Facade, GrantRequest
 from .journal import exclusive
 from .mcp import create_mcp
 from .self_update import runtime_identity
+from .webpaths import Prefix
+from .webpaths import base_path as checked_base_path
 
 SESSION = "__Host-updater-session"
 LOGIN = "__Host-updater-login"
@@ -91,7 +93,8 @@ async def body(request: Request):
     return await request.body()
 
 
-def create_app(coordinator, auth, origin, run_worker=True):
+def create_app(coordinator, auth, origin, run_worker=True, *, base_path=""):
+    base_path = checked_base_path(base_path)
     facade = Facade(coordinator)
     static = Path(__file__).parent / "static"
     mcp, manager = create_mcp(coordinator, auth, origin)
@@ -210,9 +213,9 @@ def create_app(coordinator, auth, origin, run_worker=True):
         return JSONResponse({"revoked": True})
 
     async def index(request):
-        return FileResponse(
-            static / ("managed.html" if hasattr(coordinator, "managed_invoke") else "index.html"),
-            media_type="text/html",
+        filename = "managed.html" if hasattr(coordinator, "managed_invoke") else "index.html"
+        return HTMLResponse(
+            (static / filename).read_text().replace("__UPDATER_BASE_PATH__", base_path)
         )
 
     async def setup_status(request):
@@ -330,4 +333,4 @@ def create_app(coordinator, auth, origin, run_worker=True):
         exception_handlers={UpdateError: failure, Exception: failure},
         lifespan=lifespan,
     )
-    return Boundary(app, origin)
+    return Boundary(Prefix(app, base_path), origin)

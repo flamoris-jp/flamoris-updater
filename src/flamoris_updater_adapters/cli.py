@@ -17,6 +17,7 @@ from .inputs import TOOLS
 from .journal import durable_write, exclusive
 from .runtime import coordinator
 from .web import create_app
+from .webpaths import base_path
 
 
 def main(argv=None):
@@ -57,6 +58,9 @@ def main(argv=None):
     init.add_argument("--root", default="/srv/flamoris/apps")
     init.add_argument("--port", type=int, default=8764)
     init.add_argument("--public-origin")
+    init.add_argument(
+        "--base-path", type=base_path, default="", help="Public Web/API/MCP prefix, e.g. /updater"
+    )
     install = commands.add_parser(
         "install-profile", help="Administrator-only direct installation profile"
     )
@@ -133,6 +137,7 @@ def main(argv=None):
                 Path(args.root),
                 args.public_origin or f"http://127.0.0.1:{args.port}",
                 args.port,
+                base_path=args.base_path,
             )
             print(dumps(result).decode())
             return

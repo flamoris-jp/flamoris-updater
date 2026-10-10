@@ -8,7 +8,7 @@
 
 1. Install a reviewed prebuilt Updater wheel/runtime or indexed Native bundle (Linux amd64/arm64, Python 3.12, systemd).
 2. Run `sudo /absolute/path/bin/flamoris-updater bootstrap`. It provisions a dedicated Web account, three systemd services (Web, manager, pinned supervisor), private journals and a peer-checked local helper. It prints the Web URL and an expiring setup code.
-3. Open Web setup, enter the code, create the administrator, and select the ordinary HTTPS release catalog. `--root`, `--directory`, `--port` and `--public-origin` select deployment paths/access during bootstrap; no application JSON profile or private CA is required.
+3. Open Web setup, enter the code, create the administrator, and select the ordinary HTTPS release catalog. `--root`, `--directory`, `--port`, `--public-origin` and `--base-path` select deployment paths/access during bootstrap; no application JSON profile or private CA is required.
 4. Select each application and enter its displayed settings. Installation stages its package and services, then reports **initial setup pending**. Start it for its own setup, and verify afterward.
 5. Update an installed app: download/stage beside the old version, reuse installed settings/data, stop/switch/start and verify. Successful updates keep **current plus one previous version**; older executable versions are removed. Failed/unknown updates retain old versions and require inspection.
 
@@ -51,4 +51,4 @@ Apache License 2.0. External applications, models and media retain their own lic
 
 ## v1.0.0 distribution
 
-The [release](https://github.com/flamoris-jp/flamoris-updater/releases/tag/v1.0.0) supplies Linux amd64/arm64 indexed installation bundles, wheel/source, Core SDK, schemas and checksums. Follow the [distribution guide](docs/DISTRIBUTION.md). Python 3.12/systemd and external access/app catalogs are separate prerequisites; release publication does not certify live deployment.
+The [release](https://github.com/flamoris-jp/flamoris-updater/releases/tag/v1.0.1) supplies Linux amd64/arm64 indexed installation bundles, wheel/source, Core SDK, schemas and checksums. Follow the [distribution guide](docs/DISTRIBUTION.md). Python 3.12/systemd and external access/app catalogs are separate prerequisites; release publication does not certify live deployment.

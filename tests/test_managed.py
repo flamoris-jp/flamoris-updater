@@ -524,8 +524,9 @@ def test_manager_socket_peer_checks_precede_configuration_or_operations(managed)
         )
 
 
+@pytest.mark.parametrize("prefix", ["", "/updater"])
 def test_bootstrap_writes_only_new_services_with_unprivileged_web_and_local_helper(
-    tmp_path, monkeypatch
+    tmp_path, monkeypatch, prefix
 ):
     monkeypatch.setattr(os, "chown", lambda *_: None)
     units = tmp_path / "units"
@@ -548,10 +549,12 @@ def test_bootstrap_writes_only_new_services_with_unprivileged_web_and_local_help
         account=SimpleNamespace(pw_uid=10002, pw_gid=10002),
         executable=str(executable),
         unit_directory=str(units),
+        base_path=prefix,
     )
-    assert result["url"] == ORIGIN
+    assert result["url"] == ORIGIN + (prefix + "/" if prefix else "")
     assert "User=10002" in (units / "flamoris-updater.service").read_text()
     cfg = json.loads((base / "setup.json").read_bytes())
+    assert cfg["base_path"] == prefix
     assert cfg["listen_host"] == "127.0.0.1" and cfg["service_uid"] == 10002
     assert not any(result["setup_token"] in arg for call in calls for arg in call)
     with pytest.raises(UpdateError):
@@ -829,3 +832,35 @@ def test_interrupted_intent_keeps_timeline_and_is_not_replayed(managed):
     entries = read_all_logs(e.manager, job)
     assert entries[0]["outcome"] == "intent"
     assert entries[1]["operation"] == "job.interrupted" and entries[1]["outcome"] == "unknown"
+
+
+def test_prefixed_first_setup_login_and_persistent_mcp_key(managed):
+    c = coordinator(managed)
+    with TestClient(
+        create_app(c, c.auth, ORIGIN, run_worker=False, base_path="/updater"), base_url=ORIGIN
+    ) as client:
+        assert "Updaterをセットアップ" in client.get("/updater/").text
+        for asset in ["managed.js", "style.css"]:
+            assert client.get("/updater/static/" + asset).status_code == 200
+        assert client.get("/updater/api/v1/setup").json()["setup_required"]
+        setup = client.post(
+            "/updater/api/v1/setup",
+            json={
+                "setup_token": "isolated-setup-token",
+                "username": "operator",
+                "password": "isolated-test-password",
+                "catalog_url": "https://releases.example.invalid/catalog.json",
+            },
+            headers={"Origin": ORIGIN},
+        )
+        assert setup.status_code == 200
+        csrf = client.get("/updater/api/v1/bootstrap").json()["csrf_token"]
+        login = client.post(
+            "/updater/api/v1/login",
+            json={"username": "operator", "password": "isolated-test-password"},
+            headers={"Origin": ORIGIN, "X-CSRF-Token": csrf},
+        )
+        assert login.status_code == 200
+        key = c.auth.integration("operator", "persistent automation")
+        assert mcp_call(client, key["token"], "tools/list", path="/updater/mcp").status_code == 200
+        assert client.get("/api/v1/setup").status_code == 404

@@ -2,7 +2,7 @@
 
 ## Supported release boundary
 
-Updater v1.0.0's initial-install distribution targets Linux/systemd with Python
+Updater v1.0.x's initial-install distribution targets Linux/systemd with Python
 3.12; native binaries are built/tested on Ubuntu 24.04 amd64/arm64. The release
 pipeline validates both bundles before publication. CI is not real-host or
 external-client certification. No guaranteed individual support is offered.

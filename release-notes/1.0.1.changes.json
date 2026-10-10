@@ -1,0 +1,46 @@
+{
+  "format_version": 1,
+  "application_id": "flamoris-updater",
+  "release": "1.0.1",
+  "entries": [
+    {
+      "category": "feature",
+      "summary": "Explicit public base paths for first setup, browser assets, API, CLI and MCP behind a path-preserving HTTPS proxy",
+      "affected": [
+        "bootstrap",
+        "web",
+        "cli",
+        "mcp"
+      ],
+      "breaking": false
+    },
+    {
+      "category": "security",
+      "summary": "Preserve exact Host/Origin, CSRF, bearer authentication and loopback-only listeners with prefixed routes",
+      "affected": [
+        "web",
+        "auth"
+      ],
+      "breaking": false
+    },
+    {
+      "category": "feature",
+      "summary": "Retain configured public paths in self-update health probes and MCP deployment evidence",
+      "affected": [
+        "self-update",
+        "diagnostics"
+      ],
+      "breaking": false
+    },
+    {
+      "category": "known_issue",
+      "summary": "HTTPS proxy provisioning and cross-host relay remain external operator work; an unavailable Updater requires an independent human recovery channel",
+      "affected": [
+        "deployment"
+      ],
+      "breaking": false
+    }
+  ],
+  "restart_required": true,
+  "recovery_conditions": "Preserve control journals, authentication and diagnostic evidence. Unknown effects stop without replay. When Updater is unavailable, use an independent administrator channel for human recovery; inspect queued Jobs before service restart."
+}

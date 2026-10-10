@@ -11,7 +11,7 @@ from types import SimpleNamespace
 from typing import Literal
 from urllib.parse import urlsplit
 
-from pydantic import Field, model_validator
+from pydantic import Field, field_validator, model_validator
 
 from flamoris_update_core.errors import UpdateError
 from flamoris_update_core.local_transport import UnixClient
@@ -25,6 +25,7 @@ from .install import VERSIONS, path, run
 from .journal import Journal, durable_write, exclusive
 from .managed import MANAGED_TARGETS, MANAGED_TOOLS, Manager, https
 from .self_update import SELF, runtime_identity, unit_contents
+from .webpaths import base_path
 
 
 class BootstrapConfig(Model):
@@ -36,10 +37,16 @@ class BootstrapConfig(Model):
     service_uid: int = Field(ge=1)
     service_gid: int = Field(ge=1)
     public_origin: str
+    base_path: str = ""
     listen_host: str = "127.0.0.1"
     listen_port: int = Field(default=8764, ge=1, le=65535)
     bootstrap_executable: str | None = None
     unit_directory: str = "/etc/systemd/system"
+
+    @field_validator("base_path")
+    @classmethod
+    def prefix(cls, value):
+        return base_path(value)
 
     @model_validator(mode="after")
     def origin(self):
@@ -204,6 +211,7 @@ def bootstrap(
     account=None,
     executable=None,
     unit_directory="/etc/systemd/system",
+    base_path="",
 ):
     if os.geteuid() != 0:
         raise UpdateError(
@@ -244,6 +252,7 @@ def bootstrap(
         service_uid=account.pw_uid,
         service_gid=account.pw_gid,
         public_origin=origin,
+        base_path=base_path,
         listen_port=port,
         bootstrap_executable=executable,
         unit_directory=str(unit_directory),
@@ -288,4 +297,8 @@ def bootstrap(
         durable_write(Path(unit_directory) / name, content.encode(), mode=0o644)
     command(["/usr/bin/systemctl", "daemon-reload"])
     command(["/usr/bin/systemctl", "enable", "--now", *units])
-    return {"url": origin, "setup_token": token, "token_expires_seconds": 3600}
+    return {
+        "url": origin + base_path + ("/" if base_path else ""),
+        "setup_token": token,
+        "token_expires_seconds": 3600,
+    }

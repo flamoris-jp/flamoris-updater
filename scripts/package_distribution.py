@@ -22,8 +22,11 @@ def assemble(inputs, output, release, revision, root):
     if not re.fullmatch(r"[0-9a-f]{40}", revision):
         raise ValueError("An exact source revision is required")
     package = tomllib.loads((root / "pyproject.toml").read_text())["project"]
-    if release != "1.0.0" or package["version"] != release:
+    if release not in {"1.0.0", "1.0.1"} or package["version"] != release:
         raise ValueError("Distribution and package versions disagree")
+    core_version = tomllib.loads((root / "packages/update-core/pyproject.toml").read_text())[
+        "project"
+    ]["version"]
     notes = (root / "release-notes" / (release + ".md")).read_bytes()
     changes = (root / "release-notes" / (release + ".changes.json")).read_bytes()
     if loads(changes)["release"] != release:
@@ -74,15 +77,15 @@ def assemble(inputs, output, release, revision, root):
             stage = store.prepare(artifact)
             store.verify(stage, artifact)
     required = {
-        "flamoris_updater-1.0.0-py3-none-any.whl",
-        "flamoris_updater-1.0.0.tar.gz",
-        "flamoris_update_core-1.0.0-py3-none-any.whl",
-        "flamoris_update_core-1.0.0.tar.gz",
-        "flamoris-updater-1.0.0-schemas.zip",
+        f"flamoris_updater-{release}-py3-none-any.whl",
+        f"flamoris_updater-{release}.tar.gz",
+        f"flamoris_update_core-{core_version}-py3-none-any.whl",
+        f"flamoris_update_core-{core_version}.tar.gz",
+        f"flamoris-updater-{release}-schemas.zip",
     }
     expected = required | {
-        "flamoris-updater-1.0.0-linux-amd64.tar.gz",
-        "flamoris-updater-1.0.0-linux-arm64.tar.gz",
+        f"flamoris-updater-{release}-linux-amd64.tar.gz",
+        f"flamoris-updater-{release}-linux-arm64.tar.gz",
         "bundle-digests-linux-amd64.json",
         "bundle-digests-linux-arm64.json",
     }
@@ -97,7 +100,7 @@ def assemble(inputs, output, release, revision, root):
         shutil.copyfile(p, output / p.name)
     (output / "release-notes.md").write_bytes(notes)
     (output / "changes.json").write_bytes(changes)
-    shutil.copyfile(root / "docs/DISTRIBUTION.md", output / "INSTALL-v1.0.0.md")
+    shutil.copyfile(root / "docs/DISTRIBUTION.md", output / ("INSTALL-v" + release + ".md"))
     metadata = {
         "distribution_version": 1,
         "application_id": "flamoris-updater",
