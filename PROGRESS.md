@@ -4,7 +4,9 @@ Updated: 2026-10-10 (JST).
 
 ## Updater self-update and MCP continuity — source verified
 
-Implemented on the direct-install source (PR #11); review PR/CI is tracked separately.
+Implemented on the direct-install source (PR #11) in
+[PR #14](https://github.com/flamoris-jp/flamoris-updater/pull/14), targeting that
+feature branch so the two authorized additions can be reviewed independently.
 Authorized scope is Web/root-manager self-update and persistent MCP credentials,
 plus investigation of existing logs. No external software installation, failure
 recovery, DB/journal migration, ordinary app log feature, release or live change.
@@ -31,7 +33,12 @@ recovery, DB/journal migration, ordinary app log feature, release or live change
 
 Local suite: **216 passed, 7 skipped**. Ruff/format, JavaScript syntax, docs links,
 schema export, Updater/Core wheel/sdist builds and actual amd64 indexed bundle
-runtime identity/entrypoints pass. GitHub CI is pending. Self Job tests use actual indexed staging and
+runtime identity/entrypoints pass. [CI run 38010234118](https://github.com/flamoris-jp/flamoris-updater/actions/runs/38010234118)
+on implementation commit `d7f5f427a287b29a36aa19f527e795c1d3c8e921` passed all
+five jobs: ordinary verification/build/docs/schemas, root managed/self flows with
+real PostgreSQL initialization, actual Generation Docker install/start/health,
+and amd64/arm64 indexed bundle/runtime identity checks.
+Self Job tests use actual indexed staging and
 read-only SQLite probes with controlled systemd/runtime identity commands.
 Web/MCP tests cover expiry/restart, scope, secret redaction, rotation/revocation
 and owner invalidation. Bundle CI adds actual packaged runtime identity checks
