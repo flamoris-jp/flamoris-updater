@@ -1,6 +1,6 @@
-# Installing the Updater v1.0.2 distribution
+# Installing the Updater v1.0.3 distribution
 
-The release is at <https://github.com/flamoris-jp/flamoris-updater/releases/tag/v1.0.2>.
+The release is at <https://github.com/flamoris-jp/flamoris-updater/releases/tag/v1.0.3>.
 The two indexed native bundles contain Updater and its Python dependencies; the
 system Python interpreter is not bundled. Requires Linux/systemd, **Python 3.12
 at `/usr/bin/python3.12`** and administrator privileges. Built/tested on Ubuntu
@@ -10,8 +10,8 @@ remain external work.
 
 ## Select and verify
 
-- x86_64: `flamoris-updater-1.0.2-linux-amd64.tar.gz`.
-- aarch64: `flamoris-updater-1.0.2-linux-arm64.tar.gz`.
+- x86_64: `flamoris-updater-1.0.3-linux-amd64.tar.gz`.
+- aarch64: `flamoris-updater-1.0.3-linux-arm64.tar.gz`.
 
 Download the selected archive and `SHA256SUMS` from the release into a normal
 working directory under `~/tmp/`. Before generating host-specific commands,
@@ -36,10 +36,10 @@ Choose an unused protected installation directory. The following is an example
 for amd64; substitute the arm64 filename on that architecture:
 
 ```bash
-sudo install -d -m 0755 /opt/flamoris-updater/1.0.2
-sudo tar --extract --gzip --file flamoris-updater-1.0.2-linux-amd64.tar.gz --directory /opt/flamoris-updater/1.0.2 --no-same-owner
-sudo chmod -R a-w /opt/flamoris-updater/1.0.2
-sudo /opt/flamoris-updater/1.0.2/bin/flamoris-updater bootstrap --root /srv/flamoris/apps
+sudo install -d -m 0755 /opt/flamoris-updater/1.0.3
+sudo tar --extract --gzip --file flamoris-updater-1.0.3-linux-amd64.tar.gz --directory /opt/flamoris-updater/1.0.3 --no-same-owner
+sudo chmod -R a-w /opt/flamoris-updater/1.0.3
+sudo /opt/flamoris-updater/1.0.3/bin/flamoris-updater bootstrap --root /srv/flamoris/apps
 ```
 
 Use only a verified archive. Do not extract over an existing installation or
@@ -58,7 +58,7 @@ Bootstrap creates:
 | Applications | `/srv/flamoris/apps` |
 | Initial Web | `http://127.0.0.1:8764` |
 
-Keep `/opt/flamoris-updater/1.0.2`: the supervisor remains there after later
+Keep `/opt/flamoris-updater/1.0.3`: the supervisor remains there after later
 self-updates. Bootstrap options `--directory`, `--root`, `--port` and
 `--public-origin` select alternate deployment bindings. `--base-path /updater`
 serves Web, API and MCP below that prefix. Keep `--public-origin` as a pure
@@ -77,10 +77,12 @@ proxy/tunnel. Web's **MCP integration keys** issues a persistent read-only or
 read/execute key; store it in the client's protected credential configuration.
 The MCP URL is `<public-origin><base-path>/mcp` (`base-path` defaults to empty). Never paste keys into public logs/documents.
 
-Version 1.0.2 supports at most five checked same-origin HTTPS redirects and an
+Version 1.0.3 supports at most five checked same-origin HTTPS redirects and an
 exact GitHub Release-to-`release-assets.githubusercontent.com` exception for
 catalogs, app payloads and supervisor bundles; see [installation](INSTALL.md).
-The earlier 1.0.1 package rejects automated-download redirects. Existing 1.0.1
+The earlier 1.0.1 package rejects automated-download redirects. Version 1.0.3
+also prevents privileged launcher imports from writing unindexed bytecode caches;
+1.0.2 lacks that packaging correction. Existing 1.0.1
 installations require explicit administrator maintenance of all three services,
 including the pinned supervisor, with current Job/journal/binding inspection.
 Replacing Web/manager alone leaves the old supervisor downloader. Preserve the
@@ -90,10 +92,10 @@ existing installation. Publication does not certify real-host maintenance.
 If Updater itself stops, its MCP cannot inspect/recover it. Use an independent
 administrator channel, preserve its journals and private diagnostic exports,
 and check queued Jobs before service restart. The full guide is
-[diagnostics](https://github.com/flamoris-jp/flamoris-updater/blob/v1.0.2/docs/DIAGNOSTICS.md).
+[diagnostics](https://github.com/flamoris-jp/flamoris-updater/blob/v1.0.3/docs/DIAGNOSTICS.md).
 
-Further contracts: [running](https://github.com/flamoris-jp/flamoris-updater/blob/v1.0.2/docs/RUNNING.md),
-[application release preparation](https://github.com/flamoris-jp/flamoris-updater/blob/v1.0.2/docs/INSTALL.md).
+Further contracts: [running](https://github.com/flamoris-jp/flamoris-updater/blob/v1.0.3/docs/RUNNING.md),
+[application release preparation](https://github.com/flamoris-jp/flamoris-updater/blob/v1.0.3/docs/INSTALL.md).
 
 ## HTTPS below a public path
 

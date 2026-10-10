@@ -22,6 +22,17 @@ ENTRYPOINTS = {
 }
 
 
+def launcher(module, interpreter):
+    # Root can write despite mode 0555. Disable cache generation before importing
+    # any bundle module so execution never adds unindexed files to sealed content.
+    return (
+        f"#!{interpreter} -I\nimport sys\nsys.dont_write_bytecode=True\n"
+        "from pathlib import Path\n"
+        "sys.path.insert(0,str(Path(__file__).resolve().parent.parent/'site-packages'))\n"
+        f"from {module} import main\nmain()\n"
+    ).encode()
+
+
 def encoded(obj):
     return json.dumps(obj, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()
 
@@ -66,11 +77,9 @@ def build(wheelhouse, output, target, version, interpreter):
         shutil.rmtree(root / "bin", ignore_errors=True)
         (root / "bin").mkdir()
         for name, module in ENTRYPOINTS.items():
-            launcher = (
-                f"#!{interpreter} -I\nimport sys\nfrom pathlib import Path\nsys.path.insert(0,str(Path(__file__).resolve().parent.parent/'site-packages'))\nfrom {module} import main\nmain()\n"
-            ).encode()
+            script = launcher(module, interpreter)
             path = root / "bin" / name
-            path.write_bytes(launcher)
+            path.write_bytes(script)
             path.chmod(0o555)
         metadata = {
             "compatibility_version": 1,
