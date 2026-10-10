@@ -67,8 +67,9 @@ origin (for example `https://updater.example.invalid`); do not include the path.
 Open the printed URL and register each repository's catalog. Current source needs no setup code, administrator, login or MCP key. MCP is `<public-origin><base-path>/mcp`. External proxy/tunnel access is configured separately. Application repositories publish their own catalogs and payloads.
 
 Version 1.0.4 removes Updater account/code/key setup. Published v1.0.3 retains
-its former workflow; use its existing screen to register the self-update catalog
-and update, rather than rerunning bootstrap. The new Release asset is
+its former workflow and cannot replace an already configured catalog in the
+screen. Perform the [one-time catalog switch](UPGRADE_103.md), then use its
+existing self-update screen. Do not rerun bootstrap. The new Release asset is
 `https://github.com/flamoris-jp/flamoris-updater/releases/download/v1.0.4/catalog.json`.
 It declares 1.0.3 as the compatible predecessor and describes only Updater.
 Application catalogs and artifacts remain in their owning repositories.

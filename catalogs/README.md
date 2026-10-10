@@ -2,11 +2,11 @@
 
 The application repositories own their builds, Releases, payloads and installer definitions. This directory contains reference metadata only. The dated catalog is an initial-install snapshot; it does not copy or rebuild any application payload.
 
-Initial-install catalog (after this change reaches main):
+Published initial-install catalog:
 
 `https://raw.githubusercontent.com/flamoris-jp/flamoris-updater/main/catalogs/flamoris-20261011.json`
 
-It includes Updater 1.0.4 with an explicit 1.0.3 self-update predecessor, and the six runnable services for Linux amd64/arm64. Existing 1.0.3 can register this one catalog and select its self-update first. After updating, register the repository's `latest` catalog URLs for independently published future versions. The dated snapshot remains immutable; remove its registration if no longer needed. Registration removal preserves installed applications and their data/history.
+It includes Updater 1.0.4 with an explicit 1.0.3 self-update predecessor, and the six runnable services for Linux amd64/arm64. An unconfigured 1.0.3 can use this catalog during its existing setup. An already configured 1.0.3 needs the [one-time catalog switch](../docs/UPGRADE_103.md), then selects self-update from its existing screen. After updating, register the repository's `latest` catalog URLs for independently published future versions. The dated snapshot remains immutable; remove its registration if no longer needed. Registration removal preserves installed applications and their data/history.
 
 | Repository | Published release | Catalog for future release checks |
 | --- | --- | --- |

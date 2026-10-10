@@ -1,3 +1,8 @@
+## 2026-10-11 — Already configured 1.0.3 catalog handoff
+
+- Corrected the earlier screen-registration instructions: published 1.0.3 permits only first catalog configuration. Added a one-time root operator script using the installed original packages and the exact public snapshot digest; after catalog handoff, the existing supervisor self-update path selects 1.0.4.
+- The isolated regression checks cover preserved installation/settings/history, read-only preflight, unfinished Job rejection and atomic immutable-binding conflict rejection. No live services, control stores or app installations were changed.
+
 # Published repository catalogs — 2026-10-11
 
 Updater 1.0.4 and its explicit 1.0.3 self-update catalog are published after PR #23 and successful CI/publication. Each application repository now owns its builds, Release assets and complete installation recipe: Agent, Generation, Intelligence, Hub and Studio 1.0.1; GPU Node Manager Native 1.2.1. Controller publishes its 1.0.0 library separately; it remains embedded in the single Generation MCP process. All owning repository PRs, normal CI and per-platform packaging/profile verification passed; all publication jobs succeeded.
