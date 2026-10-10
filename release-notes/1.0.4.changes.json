@@ -1,0 +1,38 @@
+{
+  "format_version": 1,
+  "application_id": "flamoris-updater",
+  "release": "1.0.4",
+  "entries": [
+    {
+      "category": "feature",
+      "summary": "Manage independent repository catalogs and per-application release downloads in one screen",
+      "affected": [
+        "catalogs",
+        "web",
+        "cli",
+        "mcp"
+      ],
+      "breaking": false
+    },
+    {
+      "category": "change",
+      "summary": "Remove Updater user authentication and central cross-repository distribution workflows by explicit operator instruction",
+      "affected": [
+        "authentication",
+        "distribution"
+      ],
+      "breaking": true
+    },
+    {
+      "category": "feature",
+      "summary": "Publish a verified self-update catalog for Linux amd64 and arm64 with an explicit 1.0.3 predecessor",
+      "affected": [
+        "self-update",
+        "publication"
+      ],
+      "breaking": false
+    }
+  ],
+  "restart_required": true,
+  "recovery_conditions": "Preserve settings, data, Jobs, journals and the original pinned supervisor runtime. Inspect active work and actual versions before updating. Unknown effects stop without replay; recover through an independent administrator channel."
+}
