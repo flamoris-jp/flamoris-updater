@@ -14,7 +14,9 @@ to an empty path. External nginx/TLS/relay provisioning remains separate.
 Local verification: **265 passed, 7 skipped**; Ruff lint/format, documentation
 links, JavaScript syntax, workflow YAML/Bash syntax and whitespace checks pass.
 Root and prefixed routes cover browser setup/login, static assets, MCP bearer
-authorization and supervised self-update success/fault cases.
+authorization and supervised self-update success/fault cases. Self-update
+fixtures use the actually installed initial package version rather than assuming
+1.0.0, so an editable 1.0.1 install exercises compatibility admission correctly.
 
 Updater is 1.0.1; the independently versioned Core SDK remains 1.0.0. The scoped
 publication workflow builds both native platforms, tests them and verifies the

@@ -22,10 +22,13 @@ from flamoris_updater_adapters.self_update import (
     SELF,
     SelfRelease,
     Supervisor,
+    runtime_identity,
     unit_contents,
 )
 from flamoris_updater_adapters.setup import BootstrapConfig, LocalCoordinator, dispatch
 from flamoris_updater_adapters.web import create_app
+
+INITIAL_VERSION = runtime_identity()["version"]
 
 pytestmark = pytest.mark.skipif(os.geteuid() != 0, reason="Protected supervisor runs in root CI")
 
@@ -68,7 +71,7 @@ def bundle():
     blob = output.getvalue()
     release = SelfRelease(
         release="1.1.0",
-        compatible_from=["1.0.0"],
+        compatible_from=[INITIAL_VERSION],
         artifact=dict(
             kind="native",
             platform="linux/amd64",
@@ -191,7 +194,7 @@ def test_updates_both_services_preserves_credentials_history_and_pinned_supervis
     ]
     assert (
         e.manager.invoke("updater_self_status", {})["installation"]["previous"]["release"]
-        == "1.0.0"
+        == INITIAL_VERSION
     )
     for name in unit_contents(e.cfg, e.original, e.config):
         assert str(e.candidate) in (Path(e.cfg.unit_directory) / name).read_text()
@@ -395,7 +398,7 @@ def test_self_update_layout_and_effect_logs_share_read_api(updater):
     assert sum(r["operation"] == "unit.write" and r["outcome"] == "completed" for r in records) == 2
     layout = e.manager.invoke("updater_managed_layout_get", {"application_id": "flamoris-updater"})
     assert layout["current"]["release"] == "1.1.0"
-    assert layout["candidate"]["previous_layout"]["release"] == "1.0.0"
+    assert layout["candidate"]["previous_layout"]["release"] == INITIAL_VERSION
     assert layout["current"]["bootstrap_executable"] == e.cfg.bootstrap_executable
     assert layout["current"]["configuration_file"] == str(e.config)
     assert layout["current"]["manager_socket"] == e.cfg.socket_path
