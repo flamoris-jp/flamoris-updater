@@ -2,6 +2,21 @@
 
 Updated: 2026-10-10 (JST).
 
+## PR #11 merged; PR #14 reconciled with main
+
+PR #11 was squash-merged into main at
+`c21ef02794ab8c3917a20539e4cf253e1d936136`. Its complete Git tree is identical
+to the reviewed PR #11 head `1b12c503630eff29fa394674967578d709c1ce3f`
+(`6d4e1247456d77cc5fb94d08f287e5531a07b06f`). The subsequent PR #14 conflict
+was caused by changed ancestry, not different installation source contents.
+
+PR #14 now targets main and incorporates that main commit with a merge commit,
+preserving the already validated self-update, continuing MCP credentials and
+diagnostic/layout source. No application code, configuration or test behavior is
+changed by this reconciliation. Documentation links are checked locally; latest
+CI and mergeability evidence are recorded in PR #14. PR #14 remains reviewable;
+no release publication or real-host changes are performed.
+
 ## AI-readable diagnostics — implemented and locally verified
 
 The user's additional authorization covers structured evidence for AI recovery
