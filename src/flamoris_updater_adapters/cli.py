@@ -1,22 +1,17 @@
 import argparse
-import getpass
 import sys
 import uuid
 from pathlib import Path
 from urllib.parse import urlsplit
 
 import httpx
-import uvicorn
 
 from flamoris_update_core.errors import UpdateError
 from flamoris_update_core.wire import dumps, loads
 
 from .artifacts import origin
 from .config import Endpoint, protected_read
-from .inputs import TOOLS
-from .journal import durable_write, exclusive
-from .runtime import coordinator
-from .web import create_app
+from .managed import MANAGED_TOOLS
 from .webpaths import base_path
 
 
@@ -38,7 +33,6 @@ def main(argv=None):
     ):
         command = commands.add_parser(action, help="Use the same managed operation as Web and MCP")
         command.add_argument("--url", required=True)
-        command.add_argument("--token-file", required=True)
         command.add_argument("--public-origin")
         if action in {"install", "update", "start-setup", "complete-setup", "delete-previous"}:
             command.add_argument("--application", required=True)
@@ -70,23 +64,11 @@ def main(argv=None):
     serve.add_argument("--config", required=True)
     call = commands.add_parser("call")
     call.add_argument("--url", required=True)
-    call.add_argument("--token-file", required=True)
     call.add_argument(
         "--public-origin", help="Configured coordinator HTTPS origin for loopback/tunnel calls"
     )
-    call.add_argument("--tool", choices=list(TOOLS) + ["grant", "revoke-grant"], required=True)
+    call.add_argument("--tool", choices=list(MANAGED_TOOLS), required=True)
     call.add_argument("--arguments", default="-", help="JSON file or stdin")
-    for name in ("provision-user", "issue-token", "revoke-token", "disable-user"):
-        command = commands.add_parser(name)
-        command.add_argument("--config", required=True)
-        command.add_argument("--subject", required=True)
-        if name == "provision-user":
-            command.add_argument("--roles", required=True)
-            command.add_argument("--targets", required=True)
-        elif name == "issue-token":
-            command.add_argument("--output", required=True)
-        elif name == "revoke-token":
-            command.add_argument("--token-file", required=True)
     args = parser.parse_args(argv)
     try:
         managed_arguments = None
@@ -149,7 +131,6 @@ def main(argv=None):
             return
         if args.command == "call":
             client = Endpoint(url=args.url).client()
-            token = protected_read(args.token_file, private=True, limit=256).decode().strip()
             raw = (
                 dumps(managed_arguments)
                 if managed_arguments is not None
@@ -160,18 +141,12 @@ def main(argv=None):
                 )
             )
             payload = loads(raw)
-            headers = {"Authorization": "Bearer " + token, "Content-Type": "application/json"}
+            headers = {"Content-Type": "application/json"}
             if args.public_origin:
                 if origin(args.public_origin) != args.public_origin:
                     raise UpdateError("untrusted_origin")
                 headers["Host"] = urlsplit(args.public_origin).netloc
-            path = (
-                "/api/v1/grants"
-                if args.tool == "grant"
-                else "/api/v1/grants/revoke"
-                if args.tool == "revoke-grant"
-                else "/api/v1/tools/" + args.tool
-            )
+            path = "/api/v1/tools/" + args.tool
             with client.stream(
                 "POST",
                 args.url.rstrip("/") + path,
@@ -190,48 +165,9 @@ def main(argv=None):
                 if response.status_code != 200:
                     raise SystemExit(1)
             return
-        cfg, c, auth = coordinator(args.config)
-        if args.command == "serve":
-            if cfg.server_tls:
-                cfg.server_tls.context()
-            tls = (
-                {"ssl_certfile": cfg.server_tls.cert_file, "ssl_keyfile": cfg.server_tls.key_file}
-                if cfg.server_tls
-                else {}
-            )
-            uvicorn.run(
-                create_app(c, auth, cfg.public_origin),
-                host=cfg.listen_host,
-                port=cfg.listen_port,
-                proxy_headers=False,
-                access_log=False,
-                **tls,
-            )
-        else:
-            with exclusive(c.journal.directory / "coordinator.lock"):
-                if args.command == "provision-user":
-                    if not set(args.targets.split(",")) <= set(c.profiles):
-                        raise UpdateError("invalid_input")
-                    auth.user(
-                        args.subject,
-                        getpass.getpass("Operator password: "),
-                        args.roles.split(","),
-                        args.targets.split(","),
-                    )
-                elif args.command == "disable-user":
-                    auth.disable_user(args.subject)
-                elif args.command == "revoke-token":
-                    token = (
-                        protected_read(args.token_file, private=True, limit=256).decode().strip()
-                    )
-                    auth.revoke_token(args.subject, token)
-                else:
-                    path = Path(args.output)
-                    if not path.is_absolute() or path.exists() or path.is_symlink():
-                        raise UpdateError("unsafe_storage")
-                    durable_write(path, (auth.issue_token(args.subject) + "\n").encode())
-                c.journal.flush_export()
-            print(dumps({"completed": args.command, "subject": args.subject}).decode())
+        from .bootstrap_cli import main as service_main
+
+        service_main(["serve", "--config", args.config])
     except (UpdateError, httpx.HTTPError) as error:
         sys.stderr.write(
             dumps(

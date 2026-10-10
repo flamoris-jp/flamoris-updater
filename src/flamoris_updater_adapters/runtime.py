@@ -8,7 +8,6 @@ from flamoris_update_core.wire import digest, dumps
 from flamoris_updater.coordinator import Coordinator
 
 from .artifacts import Fetcher, NativeStore
-from .auth import AuthStore
 from .authority import Authority
 from .backends import ApplicationBackend, LocalOwner, NativeDriver
 from .config import Clock, CoordinatorConfig, HelperConfig, load, protected_read, signer
@@ -125,7 +124,7 @@ def coordinator(path):
         cfg.policy_revision,
     )
     c.guard = configuration_guard(path, files=credential_files(cfg))
-    return cfg, c, AuthStore(journal, authority, clock)
+    return cfg, c, None
 
 
 def executor(path, root_only=True):

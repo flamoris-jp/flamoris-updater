@@ -142,7 +142,7 @@ class Database(Model):
 
 
 class Application(Model):
-    application_id: str
+    application_id: str = Field(pattern=r"^[a-z0-9][a-z0-9._-]{0,127}$")
     release: str
     directories: list[Directory] = Field(default_factory=list, max_length=64)
     files: list[Copy] = Field(default_factory=list, max_length=128)
@@ -152,8 +152,8 @@ class Application(Model):
 
     @model_validator(mode="after")
     def target(self):
-        if self.application_id not in VERSIONS or version(self.release) < version(
-            VERSIONS[self.application_id]
+        if self.application_id == "flamoris-updater" or version(self.release) < version(
+            VERSIONS.get(self.application_id, "0.0.0")
         ):
             raise ValueError("Release precedes the supported initial version")
         u = urlsplit(self.health_url)
@@ -246,14 +246,16 @@ class Unit(Model):
 class NativeApplication(Application):
     kind: Literal["native"]
     python: str
+    entrypoint: str = Field(default="gpu-node-manager", pattern=r"^[a-zA-Z0-9_.-]+$")
+    distribution: str = Field(default="flamoris-gpu-node-manager", pattern=r"^[a-zA-Z0-9_.-]+$")
     venv: str
     wheels: list[File] = Field(min_length=1, max_length=256)
     units: list[Unit] = Field(min_length=1, max_length=8)
 
     @model_validator(mode="after")
     def native(self):
-        if self.application_id != "flamoris-gpu-node-manager" or self.database:
-            raise ValueError("Only the native GPU Node Manager uses this installer")
+        if self.database:
+            raise ValueError("Native recipes cannot initialize a database")
         if ".." in Path(self.venv).parts or not any(
             Path(self.venv).is_relative_to(d.path) for d in self.directories
         ):
@@ -549,7 +551,7 @@ class Installer:
                     ]
                     if (
                         len(commands) != 1
-                        or not commands[0].startswith(f"ExecStart={app.venv}/bin/gpu-node-manager ")
+                        or not commands[0].startswith(f"ExecStart={app.venv}/bin/{app.entrypoint} ")
                         or "\\\n" in content
                     ):
                         raise UpdateError(
@@ -828,7 +830,7 @@ class Installer:
                 [
                     app.venv + "/bin/python",
                     "-c",
-                    "import importlib.metadata; print(importlib.metadata.version('flamoris-gpu-node-manager'))",
+                    f"import importlib.metadata; print(importlib.metadata.version({app.distribution!r}))",
                 ]
             )
             if result.strip().decode() != app.release:

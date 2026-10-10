@@ -184,7 +184,7 @@ def test_old_certificate_settings_are_rejected_and_host_is_loopback_only():
     )
 
 
-def test_cli_calls_with_only_url_and_private_bearer_token(tmp_path, monkeypatch, capsys):
+def test_cli_calls_with_only_url_without_bearer_token(tmp_path, monkeypatch, capsys):
     token = tmp_path / "token"
     token.write_text("test-private-token\n")
     token.chmod(0o600)
@@ -204,15 +204,13 @@ def test_cli_calls_with_only_url_and_private_bearer_token(tmp_path, monkeypatch,
             "call",
             "--url",
             "https://updater.example.invalid",
-            "--token-file",
-            str(token),
             "--tool",
-            "updater_job_get",
+            "updater_managed_job_get",
             "--arguments",
             str(arguments),
         ]
     )
-    assert requests[0].headers["authorization"] == "Bearer test-private-token"
+    assert "authorization" not in requests[0].headers
     assert "example-job" in capsys.readouterr().out
 
 
@@ -296,22 +294,15 @@ def test_uninstalled_owner_inspection_round_trip_keeps_required_null_fields(tmp_
     assert result.release is None
 
 
-def test_cli_loopback_connection_keeps_public_origin_boundary(
-    environment, tmp_path, monkeypatch, capsys
-):
-    from flamoris_updater_adapters.auth import AuthStore
+def test_cli_loopback_connection_keeps_public_origin_boundary(tmp_path, monkeypatch, capsys):
+    from test_interfaces import fake_coordinator
+
     from flamoris_updater_adapters.web import create_app
 
-    e = environment
     public = "https://updater.example.invalid"
-    auth = AuthStore(e.coordinator.journal, e.coordinator.authority, e.clock)
-    auth.user("operator", "isolated-test-password", ["read"], ["app"])
-    token = tmp_path / "token"
-    token.write_text(auth.issue_token("operator"))
-    token.chmod(0o600)
     arguments = tmp_path / "arguments.json"
     arguments.write_text("{}")
-    app = create_app(e.coordinator, auth, public, run_worker=False)
+    app = create_app(fake_coordinator(tmp_path / "state"), public, run_worker=False)
     with TestClient(app, base_url="http://127.0.0.1:8765") as client:
         monkeypatch.setattr(Endpoint, "client", lambda _: client)
         main(
@@ -321,12 +312,10 @@ def test_cli_loopback_connection_keeps_public_origin_boundary(
                 "http://127.0.0.1:8765",
                 "--public-origin",
                 public,
-                "--token-file",
-                str(token),
                 "--tool",
-                "updater_inventory_list",
+                "updater_apps_list",
                 "--arguments",
                 str(arguments),
             ]
         )
-    assert loads(capsys.readouterr().out.encode()) == {"items": [], "next_cursor": None}
+    assert loads(capsys.readouterr().out.encode()) == {"items": []}

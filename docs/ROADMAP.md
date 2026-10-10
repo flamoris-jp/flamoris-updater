@@ -3,10 +3,10 @@
 | Area | Implemented source | Separate evidence/work |
 | --- | --- | --- |
 | Updater bootstrap | Package/bundle launcher, dedicated Web account, three units, local peer helper, empty-app startup | Install reviewed artifact on a disposable/real host |
-| Web first setup | Expiring code, administrator, release source, displayed storage root | Browser/access/proxy deployment acceptance |
+| Web first setup | Immediate catalog screen, multiple repository sources, displayed storage root | Browser/access/proxy deployment acceptance |
 | Per-app installation | Recipe settings, prebuilt Native/Docker, app-owned new DB initialization, `awaiting_setup` → verification | Real first setup for every app/external connection |
 | Updates | Same registry/Jobs, staged code, retained settings/data, declared compatibility/dependencies, switch/health | Real supported next-release acceptance |
-| Web/MCP/CLI | Same twelve managed operations and durable status/history; revocable persistent keys | Client reconnect/access operational acceptance |
+| Web/MCP/CLI | Same fifteen managed operations and durable status/history; credential-free operator interface | Client reconnect/access operational acceptance |
 | Updater self-update | Indexed compatible bundle; independent supervisor replaces Web/manager and preserves control stores | Real systemd acceptance; pinned bootstrap supervisor maintenance |
 | Diagnostic logs | Durable app/self effect timelines, typed command failures and recorded layout via scoped read-only MCP; private offline mirrors | Real-host observations/AI-authored recovery procedure and manual recovery when Updater stops |
 | Old versions | Current plus one previous; post-success executable/cache cleanup and explicit previous deletion | Actual host capacity/ownership verification |

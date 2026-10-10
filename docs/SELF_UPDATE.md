@@ -1,7 +1,7 @@
 # Self-update, MCP continuity and logging review
 
-Current work adds Updater Web/manager self-update, persistent MCP credentials
-and AI-readable effect/layout evidence. External software/access setup,
+Updater supports Web/manager self-update and AI-readable effect/layout evidence.
+Updater credentials have been removed. External software/access setup,
 automatic failure recovery and application DB upgrades are outside this change. Source/CI evidence is not
 release publication or installation on a real host.
 
@@ -40,7 +40,7 @@ identity. After stopping Web/manager, both existing journal stores must pass the
 candidate's read-only v1 schema/content probe. No data migration occurs. Drifted
 bootstrap configuration or managed units are rejected rather than overwritten.
 Final checks require the actual Web and manager versions/runtime paths, not just
-HTTP 200 or an active unit. Settings, principals, keys and history stay in place.
+HTTP 200 or an active unit. Settings and history stay in place. Historical account records may remain in existing journals but are no longer used by the endpoint.
 
 Current and immediately previous Updater records are retained; staged self
 bundles and the original supervisor installation are not automatically deleted.
@@ -51,25 +51,7 @@ back automatically. Detailed exception output is not included in public Jobs.
 
 ## Continuing MCP operation
 
-The existing 24-hour tokens remain available. A password-authenticated Web
-operator can issue/rotate/revoke a separate persistent key, granting read-only or
-read/execute access to that operator's targets. It has no operator/credential
-issuance authority. Only its hash is persisted; the secret is returned once.
-Owner disablement or any owner authority revision invalidates keys. Rotation
-immediately invalidates the previous secret; the client must receive the new one.
-
-The Streamable HTTP server is stateless. Self-update causes a temporary outage,
-after which clients can reconnect to the same URL with the same valid key and
-read the same durable Job. A lost update response is reconciled with the same
-request key. Client reconnection policy, HTTPS proxy/tunnel availability and
-external client credential storage are deployment responsibilities. There is no
-promise that an in-flight HTTP connection survives process replacement.
-
-Human intervention: first bootstrap/Web account and initial client key setup;
-later key rotation/revocation or changed access; selection/authorization of an
-update and investigation if a Job stops. Compatible update execution and status
-inspection are callable through MCP. No daily token reissue is needed when using
-a persistent key. Scheduled automatic checking/updating is not added.
+Streamable HTTP needs no Updater credential. Self-update causes a temporary outage; clients reconnect at the same URL and read the same durable Job. A lost response is reconciled with the same request key. Client reconnection and external proxy/tunnel access remain deployment responsibilities. Scheduled checking/updating is not added.
 
 ## Diagnostic evidence and manual recovery
 
@@ -90,8 +72,7 @@ limits, offline private exports, uncertainty and the human investigation procedu
 ## Validation boundary
 
 Tests exercise real indexed archive staging, protected journals, candidate
-read-only probes of both SQLite stores, Web/session/MCP authentication, key
-revocation/rotation/owner changes and supervised Job failure/interruption. Only
+read-only probes of both SQLite stores, credential-free Web/CLI/MCP continuity and supervised Job failure/interruption. Only
 systemd and running service identity commands are controlled in the self Job
 tests. Native-bundle CI separately imports the actual packaged dependencies and
 checks its runtime identity on amd64/arm64. This does not certify real host

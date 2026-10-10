@@ -54,7 +54,7 @@ def main():
                 [sys.executable, "-I", str(entry), "--help"], check=True, stdout=subprocess.DEVNULL
             )
         # Module imports and static assets must be present inside the actual bundle.
-        assert (stage / "site-packages/flamoris_updater_adapters/static/app.js").is_file()
+        assert (stage / "site-packages/flamoris_updater_adapters/static/managed.js").is_file()
         assert (stage / "site-packages/flamoris_updater_adapters/compatibility.py").is_file()
         cfg = BootstrapConfig(
             state_directory=temporary + "/web",

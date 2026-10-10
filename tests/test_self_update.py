@@ -14,10 +14,8 @@ from test_interfaces import mcp_call
 
 from flamoris_update_core.errors import UpdateError
 from flamoris_update_core.wire import digest, dumps, loads
-from flamoris_updater_adapters.auth import AuthStore
-from flamoris_updater_adapters.authority import Authority
 from flamoris_updater_adapters.journal import Journal
-from flamoris_updater_adapters.managed import MANAGED_TARGETS, Catalog, Manager
+from flamoris_updater_adapters.managed import MANAGED_TOOLS, Catalog, Manager
 from flamoris_updater_adapters.self_update import (
     SELF,
     SelfRelease,
@@ -112,10 +110,6 @@ def updater(tmp_path, monkeypatch, request):
     pinned = units / "flamoris-updater-supervisor.service"
     pinned.write_text("pinned supervisor unit")
     web = Journal(tmp_path / "web")
-    authority = Authority(web, lambda: 100)
-    authority.provision("operator", ["read", "execute", "operator"], MANAGED_TARGETS)
-    auth = AuthStore(web, authority, lambda: 100)
-    key = auth.integration("operator", "persistent automation")
     release, blob = bundle()
     release = release.model_copy(
         update={
@@ -181,8 +175,7 @@ def updater(tmp_path, monkeypatch, request):
         manager=manager,
         supervisor=supervisor,
         release=release,
-        auth=auth,
-        key=key,
+        web=web,
         calls=calls,
         fail=fail,
         candidate=candidate,
@@ -212,7 +205,7 @@ def test_self_update_redirect_or_digest_failure_precedes_service_changes(updater
 
 def test_updates_both_services_preserves_credentials_history_and_pinned_supervisor(updater):
     e = updater
-    before_auth = e.auth.journal.get("integration", e.key["integration_id"])
+    before_state = e.web.meta("epoch")
     job = accept(e)
     assert accept(e)["job_id"] == job["job_id"]
     e.manager.run_job(job["job_id"])
@@ -243,10 +236,7 @@ def test_updates_both_services_preserves_credentials_history_and_pinned_supervis
     assert layout["mcp_url"] == e.cfg.public_origin + e.cfg.base_path + "/mcp"
     assert e.pinned.read_text() == "pinned supervisor unit"
     assert e.original.read_text() == "original pinned installation"
-    assert e.auth.journal.get("integration", e.key["integration_id"]) == before_auth
-    restarted = AuthStore(Journal(e.auth.journal.directory), e.auth.authority, lambda: 99999999999)
-    assert restarted.bearer(e.key["token"]) == e.key["integration_id"]
-    assert e.key["token"].encode() not in dumps(result)
+    assert e.web.meta("epoch") == before_state
 
 
 @pytest.mark.parametrize("failure", ["check", "stop", "daemon-reload", "start"])
@@ -370,20 +360,20 @@ def test_mcp_reconnect_and_cli_share_the_self_update_job(updater, monkeypatch, c
     origin = e.cfg.public_origin
 
     def call(client, name, args):
-        response = mcp_call(client, e.key["token"], "tools/call", {"name": name, "arguments": args})
+        response = mcp_call(client, "", "tools/call", {"name": name, "arguments": args})
         assert response.status_code == 200, response.text
         result = response.json()["result"]
         assert not result["isError"], result
         return result["structuredContent"]
 
-    with TestClient(create_app(c, c.auth, origin, run_worker=False), base_url=origin) as client:
-        advertised = mcp_call(client, e.key["token"], "tools/list").json()["result"]["tools"]
-        assert len(advertised) == 12
+    with TestClient(create_app(c, origin, run_worker=False), base_url=origin) as client:
+        advertised = mcp_call(client, "", "tools/list").json()["result"]["tools"]
+        assert len(advertised) == len(MANAGED_TOOLS)
         job = call(client, "updater_self_update", {"release": "1.1.0", "request_key": "mcp-self"})
     e.supervisor.run_job(job["job_id"])
     # A new Web/coordinator instance uses the same state and Bearer key.
     c = LocalCoordinator(e.cfg, client=Direct())
-    with TestClient(create_app(c, c.auth, origin, run_worker=False), base_url=origin) as client:
+    with TestClient(create_app(c, origin, run_worker=False), base_url=origin) as client:
         result = call(client, "updater_managed_job_get", {"job_id": job["job_id"]})
         assert result["phase"] == "succeeded", result
         assert (
@@ -392,11 +382,8 @@ def test_mcp_reconnect_and_cli_share_the_self_update_job(updater, monkeypatch, c
             ]
             == job["job_id"]
         )
-        tokenfile = e.config.parent / "private-token"
-        tokenfile.write_text(e.key["token"])
-        tokenfile.chmod(0o600)
         monkeypatch.setattr("flamoris_updater_adapters.config.Endpoint.client", lambda _: client)
-        main(["self-status", "--url", origin, "--token-file", str(tokenfile)])
+        main(["self-status", "--url", origin])
         assert loads(capfd.readouterr().out.encode())["installation"]["release"] == "1.1.0"
 
 

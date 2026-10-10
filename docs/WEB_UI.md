@@ -1,14 +1,13 @@
 # Updater Web
 
-The included standalone UI works with no applications and has no Studio/account/database dependency.
+The standalone screen starts immediately without creating an administrator, logging in or issuing a token. It has no Studio dependency.
 
-1. Enter the printed setup code, create the administrator and select the trusted release catalog. Storage/access paths are selected by bootstrap and displayed.
-2. Log in; select an app/release and complete its release-owned settings form. Missing required providers are explicit installation blockers; optional app connections do not force an installation group.
-3. Follow durable install status. `awaiting_setup` means executables/services are provisioned without claiming the application is already healthy. Start the app for its own setup, then verify afterward.
-4. Update a succeeded installation. Settings/data are reused, progress/history persists independently of the browser, and cleanup occurs only after verification. The current and previous releases are displayed; previous deletion is explicit.
-5. Issue a 24-hour Bearer token, or a persistent read-only/read-execute integration key for continuing MCP use. Web operators can rotate/revoke keys; only issuance/rotation shows the secret. Logout does not cancel Jobs.
-6. Select a compatible Updater release to update Web/manager through the pinned supervisor. The page reconnects after the temporary outage; keys/settings/history remain. See [self-update and diagnostic evidence](SELF_UPDATE.md).
+1. Register each repository's catalog URL; multiple catalogs can coexist.
+2. Select an app/release and complete its settings form.
+3. Follow installation status; start the application for its own setup and verify afterward.
+4. Update that app while retaining its settings/data and one previous executable version.
+5. Inspect durable Jobs/history, or update Updater itself through the pinned supervisor.
 
-The frontend binds loopback as an unprivileged service. Exact Host/Origin, bounded requests, CSP, CSRF, HttpOnly/SameSite cookies and HTTPS Secure cookies apply. Local first setup uses literal loopback HTTP, optionally forwarded over SSH; remote public access requires ordinary HTTPS. No private CA/client certificate or application Owner setup is needed. The old explicit-plan UI remains available only with the advanced coordinator configuration.
+Each repository owns its releases and payloads. Registration downloads only catalogs, installation/update downloads only selected app/platform payloads, and unregistering a catalog does not delete apps. One unavailable source does not prevent checking other repositories. Conflicting release definitions are rejected and previous checked snapshots remain available.
 
-Structured effect/layout evidence is available through the scoped MCP/API readers; see [diagnostics and manual recovery](DIAGNOSTICS.md). If Updater itself is stopped, use the independent administrator channel described there.
+The frontend is an unprivileged loopback service. Exact Host/supplied Origin checks, bounded JSON and CSP remain; password/session/CSRF-token/key workflows and their endpoints are removed. See [transport](TRANSPORT.md), [running](RUNNING.md) and [self-update](SELF_UPDATE.md).

@@ -16,7 +16,7 @@ from flamoris_updater_adapters.inputs import TOOLS
 from flamoris_updater_adapters.install import Configuration
 from flamoris_updater_adapters.managed import Catalog as InstallCatalog
 from flamoris_updater_adapters.releases import Catalog
-from flamoris_updater_adapters.setup import BootstrapConfig, SetupRequest
+from flamoris_updater_adapters.setup import BootstrapConfig
 
 
 def main():
@@ -41,7 +41,6 @@ def main():
         ServerConfiguration,
         Configuration,
         BootstrapConfig,
-        SetupRequest,
     ]:
         (root / (model.__name__ + ".schema.json")).write_text(
             json.dumps(model.model_json_schema(by_alias=True), indent=2) + "\n"
