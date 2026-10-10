@@ -19,10 +19,13 @@ GitHub Release attachment URLs are unsuitable without a separate direct HTTPS
 hosting step. No runtime source, version, app settings, database or service is
 changed by this preparation.
 
-Local verification: **284 passed, 7 skipped**; Ruff lint/format, workflow YAML
+Local verification: **285 passed, 7 skipped**; Ruff lint/format, workflow YAML
 and documentation links pass. The new tests exercise
 the assembled catalog through the existing manager and download every fixture
 payload with its declared digest, plus incomplete/tampered/unsafe inputs. They
+run Manager integration in the existing root-owned CI job while pure assembly
+checks also run unprivileged. The initial CI attempt identified this test-placement
+correction; the latest head's CI is recorded in the PR. The tests
 do not substitute for the manual twelve-candidate build, publication, HTTPS
 hosting verification, Web administrator setup or real application installation.
 Those acceptance stages remain pending.

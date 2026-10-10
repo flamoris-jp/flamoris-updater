@@ -2,6 +2,7 @@
 
 import importlib.util
 import json
+import os
 import sys
 from pathlib import Path
 from unittest.mock import patch
@@ -54,7 +55,7 @@ def inputs(tmp_path):
     return candidates, tmp_path / "distribution"
 
 
-def test_complete_flat_distribution_keeps_package_keys_and_binds_actual_bytes(inputs, tmp_path):
+def test_complete_flat_distribution_keeps_package_keys_and_binds_actual_bytes(inputs):
     candidates, output = inputs
     catalog = module.assemble(candidates, output, base_url=BASE + "/")
     assert len(catalog.recipes) == 12
@@ -81,6 +82,13 @@ def test_complete_flat_distribution_keeps_package_keys_and_binds_actual_bytes(in
     for line in checksums:
         expected, name = line.split("  ")
         assert module.file_digest(output / name) == "sha256:" + expected
+    assert all(not s.default for r in catalog.recipes for s in r.settings if s.secret)
+
+
+@pytest.mark.skipif(os.geteuid() != 0, reason="Manager storage must be root-owned")
+def test_existing_manager_accepts_catalog_and_downloads_all_payloads(inputs, tmp_path):
+    candidates, output = inputs
+    catalog = module.assemble(candidates, output, base_url=BASE)
 
     # The installed 1.0.1 manager accepts the assembled schema unchanged.
     def serve(request):
@@ -97,7 +105,6 @@ def test_complete_flat_distribution_keeps_package_keys_and_binds_actual_bytes(in
             saved.parent.mkdir(parents=True, exist_ok=True)
             manager._download(item.url, 4 * 1024**3, saved, item.digest)
             assert module.file_digest(saved) == item.digest
-    assert all(not s.default for r in catalog.recipes for s in r.settings if s.secret)
 
 
 @pytest.mark.parametrize(
