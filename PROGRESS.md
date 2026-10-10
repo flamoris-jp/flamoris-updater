@@ -1,3 +1,13 @@
+# Release/catalog preparation (2026-10-11)
+
+The operator requested catalog preparation and then explicitly requested each application repository's own distribution preparation. Updater 1.0.4 packages the merged simplified flow. Its own publisher generates a typed `catalog.json` from both verified native bundle summaries, referencing immutable files in this repository's Release and authorizing 1.0.3 as predecessor. The catalog is checksummed with the other Updater assets. No app builds or payload copies are added here.
+
+Application repository inspection found no published Releases in the seven application repositories at this checkpoint. Existing centrally hosted initial-app artifacts are historical and do not satisfy the new repository-owned distribution requirement. Controller is a library hosted by Generation MCP, not an additional service. Per-repository preparation is in progress; no host install/update is performed.
+
+Local validation: 311 passed, 7 environment-gated integration tests skipped; distribution/catalog, managed install and self-update tests pass. Ruff and documentation links pass. CI/publication evidence is pending. Actual 1.0.3-to-1.0.4 host cutover remains pending.
+
+---
+
 # Current change: independent repository updates (2026-10-11)
 
 Explicit user direction replaces the earlier distribution and authentication decisions. Application repositories own their source/build/release/payloads; Updater presents them together without collecting assets. Removed the cross-repository candidate builder, all-app/two-platform assembly workflow/packager and user authentication store/routes/UI/dependency/commands. Previous preparation below is historical, not current authorization or product behavior.

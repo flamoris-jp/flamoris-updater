@@ -77,7 +77,7 @@ jobs:
       - run: python -m build --wheel
       - run: |
           python -m pip download --only-binary=:all: --constraint requirements-runtime.lock --dest dist/wheels dist/*.whl
-      - run: python scripts/build_bundle.py --wheelhouse dist/wheels --output dist/native --platform '${{ matrix.platform }}' --version 1.0.3 --python-executable /usr/bin/python3.12
+      - run: python scripts/build_bundle.py --wheelhouse dist/wheels --output dist/native --platform '${{ matrix.platform }}' --version 1.0.4 --python-executable /usr/bin/python3.12
       - run: python -m pip install dist/*.whl
       - name: Verify bundle and identity as user and root
         run: |

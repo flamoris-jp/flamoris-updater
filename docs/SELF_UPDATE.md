@@ -5,6 +5,20 @@ Updater credentials have been removed. External software/access setup,
 automatic failure recovery and application DB upgrades are outside this change. Source/CI evidence is not
 release publication or installation on a real host.
 
+## Version 1.0.4 catalog
+
+The publication workflow generates `catalog.json` from both verified Native bundle
+summaries. It points directly to this repository's immutable v1.0.4 Release assets,
+sets `compatible_from` to `["1.0.3"]`, and includes the catalog in `SHA256SUMS`.
+Register the Release asset URL in the existing 1.0.3 screen before selecting
+1.0.4. Preserve the original supervisor installation and all control records;
+do not run initial bootstrap over an existing installation.
+
+Catalog URL after successful publication:
+`https://github.com/flamoris-jp/flamoris-updater/releases/download/v1.0.4/catalog.json`.
+It contains no application payloads or application recipes. Register each
+application repository's own catalog separately after publication.
+
 ## Self-update contract
 
 New bootstrap starts three services: unprivileged Web, local root manager and

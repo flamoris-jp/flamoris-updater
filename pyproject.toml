@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "flamoris-updater"
-version = "1.0.3"
+version = "1.0.4"
 description = "Per-repository application installation and updates"
 readme = "README.md"
 requires-python = ">=3.12"

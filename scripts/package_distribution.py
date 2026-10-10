@@ -9,8 +9,10 @@ import tomllib
 from pathlib import Path
 
 from flamoris_update_core.models import Artifact
-from flamoris_update_core.wire import dumps, loads
+from flamoris_update_core.wire import dumps, loads, version
 from flamoris_updater_adapters.artifacts import NativeStore, relative
+from flamoris_updater_adapters.managed import Catalog
+from flamoris_updater_adapters.self_update import SelfRelease
 
 
 def checksum(path):
@@ -18,12 +20,14 @@ def checksum(path):
         return "sha256:" + hashlib.file_digest(stream, "sha256").hexdigest()
 
 
-def assemble(inputs, output, release, revision, root):
+def assemble(inputs, output, release, revision, root, *, compatible_from=()):
     if not re.fullmatch(r"[0-9a-f]{40}", revision):
         raise ValueError("An exact source revision is required")
     package = tomllib.loads((root / "pyproject.toml").read_text())["project"]
-    if release not in {"1.0.0", "1.0.1", "1.0.2", "1.0.3"} or package["version"] != release:
+    if package["version"] != release:
         raise ValueError("Distribution and package versions disagree")
+    if any(version(prior) >= version(release) for prior in compatible_from):
+        raise ValueError("Self-update predecessors must be older than the release")
     core_version = tomllib.loads((root / "packages/update-core/pyproject.toml").read_text())[
         "project"
     ]["version"]
@@ -93,6 +97,26 @@ def assemble(inputs, output, release, revision, root):
         raise ValueError(
             "Source/SDK/schema distribution is incomplete or contains unexpected assets"
         )
+    location = "https://github.com/flamoris-jp/flamoris-updater/releases/download/v" + release
+    catalog = Catalog(
+        catalog_version=1,
+        recipes=[],
+        updater_releases=[
+            SelfRelease(
+                release=release,
+                compatible_from=list(compatible_from),
+                artifact=Artifact(
+                    kind="native",
+                    platform=summary["platform"],
+                    locator=location + "/" + summary["artifact"],
+                    digest=summary["digest"],
+                    content_index_digest=summary["content_index_digest"],
+                    max_expanded_bytes=summary["expanded_bytes"],
+                ),
+            )
+            for summary in sorted(summaries, key=lambda s: s["platform"])
+        ],
+    )
     if output.exists():
         raise ValueError("Refusing to overwrite assembled distribution")
     output.mkdir(parents=True)
@@ -100,6 +124,7 @@ def assemble(inputs, output, release, revision, root):
         shutil.copyfile(p, output / p.name)
     (output / "release-notes.md").write_bytes(notes)
     (output / "changes.json").write_bytes(changes)
+    (output / "catalog.json").write_bytes(dumps(catalog) + b"\n")
     shutil.copyfile(root / "docs/DISTRIBUTION.md", output / ("INSTALL-v" + release + ".md"))
     metadata = {
         "distribution_version": 1,
@@ -128,6 +153,7 @@ def main():
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--version", required=True)
     parser.add_argument("--revision", required=True)
+    parser.add_argument("--compatible-from", action="append", default=[])
     args = parser.parse_args()
     metadata = assemble(
         args.inputs,
@@ -135,6 +161,7 @@ def main():
         args.version,
         args.revision,
         Path(__file__).resolve().parent.parent,
+        compatible_from=args.compatible_from,
     )
     print(dumps(metadata).decode())
 
