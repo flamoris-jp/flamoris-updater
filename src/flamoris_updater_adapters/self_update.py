@@ -6,6 +6,7 @@ restore databases, replay interrupted effects or roll back control records.
 
 import os
 import secrets
+import socket
 import threading
 import time
 from importlib.metadata import version as package_version
@@ -22,6 +23,8 @@ from flamoris_update_core.wire import decode, digest, dumps, loads, version
 
 from .artifacts import Fetcher, NativeStore, origin
 from .compatibility import bundle_metadata, probe_candidate
+from .diagnostics import effect as recorded_effect
+from .diagnostics import event, failure, observed, recording, save_layout
 from .install import path, run
 from .journal import Journal, durable_write, exclusive
 
@@ -85,6 +88,44 @@ def initial_record(cfg):
     }
 
 
+def deployment_layout(cfg, installation, config_path=None):
+    return {
+        "application_id": SELF,
+        "kind": "updater",
+        "release": installation["release"],
+        "runtime_directory": installation["runtime"],
+        "job_id": installation.get("job_id"),
+        "installation_phase": installation["phase"],
+        "host": socket.gethostname(),
+        "configuration_file": str(config_path or Path(cfg.state_directory).parent / "setup.json"),
+        "web_state_directory": cfg.state_directory,
+        "manager_state_directory": cfg.helper_state_directory,
+        "diagnostics_directory": str(Path(cfg.helper_state_directory) / "diagnostics"),
+        "application_storage": cfg.root,
+        "manager_socket": cfg.socket_path,
+        "public_origin": cfg.public_origin,
+        "mcp_url": cfg.public_origin + "/mcp",
+        "bootstrap_executable": cfg.bootstrap_executable,
+        "units": [
+            {
+                "name": name,
+                "path": str(Path(cfg.unit_directory) / name),
+                "executable": cfg.bootstrap_executable
+                if name.endswith("supervisor.service")
+                else str(Path(installation["runtime"]) / "bin/flamoris-updater-service"),
+            }
+            for name in (
+                "flamoris-updater.service",
+                "flamoris-updater-manager.service",
+                "flamoris-updater-supervisor.service",
+            )
+        ],
+        "previous": installation.get("previous"),
+        "evidence": "recorded_configuration",
+        "live_state": False,
+    }
+
+
 def admit(manager, args):
     cfg = manager.self_configuration
     if cfg is None or cfg.bootstrap_executable is None:
@@ -132,6 +173,8 @@ def admit(manager, args):
             "recipe": digest(dumps(recipe)),
             "steps": [],
             "retained_candidate": installed,
+            "host": socket.gethostname(),
+            "platform": manager.hardware(),
         }
         manager.journal.put("managed_self_recipe", job_id, recipe.model_dump(), db)
         manager.journal.put("managed_job", job_id, job, db)
@@ -148,7 +191,8 @@ class Supervisor:
         self.cfg, self.config_path = cfg, path(str(config_path))
         self.state = path(cfg.helper_state_directory)
         self.journal = Journal(self.state)
-        self.command = command
+        self.raw_command = command
+        self.command = observed(command)
         self.client = client or httpx.Client(trust_env=False, follow_redirects=False, timeout=5)
         self.store = store
         self.stopping = threading.Event()
@@ -160,6 +204,7 @@ class Supervisor:
                 db, "self_update_" + (job["step"] or "state"), job["job_id"], job["phase"]
             )
         self.journal.flush_export()
+        event("job.state", job["phase"], {"step": job.get("step"), "error": job.get("error")})
 
     def candidate(self, release):
         store = self.store or NativeStore(
@@ -255,7 +300,7 @@ class Supervisor:
             time.sleep(0.25)
 
     def run_job(self, identity):
-        with exclusive(self.state / "manager.lock"):
+        with exclusive(self.state / "manager.lock"), recording(self.journal, identity):
             job = self.journal.get("managed_job", identity)
             if not job or job["action"] != "self_update" or job["phase"] != "accepted":
                 return
@@ -264,13 +309,30 @@ class Supervisor:
                 job.update(step=name, phase="intent")
                 job["steps"].append({"step": name, "outcome": "intent", "time": int(time.time())})
                 self.persist(job)
-                result = function()
+                result = recorded_effect(name, function)
                 job.update(phase="running")
                 job["steps"].append({"step": name, "outcome": "verified", "time": int(time.time())})
                 self.persist(job)
                 return result
 
             try:
+                event(
+                    "job.accepted",
+                    "recorded",
+                    {
+                        k: job.get(k)
+                        for k in (
+                            "application_id",
+                            "action",
+                            "release",
+                            "from_release",
+                            "recipe",
+                            "host",
+                            "platform",
+                            "created_at",
+                        )
+                    },
+                )
                 self.bindings()
                 raw = self.journal.get("managed_self_recipe", identity)
                 release = decode(
@@ -280,6 +342,14 @@ class Supervisor:
                     raise UpdateError("journal_corrupt")
                 directory, executable, store = effect("stage", lambda: self.candidate(release))
                 job["candidate_runtime"] = str(directory)
+                layout = deployment_layout(
+                    self.cfg,
+                    {"release": release.release, "runtime": str(directory), "phase": "candidate"},
+                    self.config_path,
+                )
+                previous = self.journal.get("self_installation", "current")
+                layout["previous_layout"] = deployment_layout(self.cfg, previous, self.config_path)
+                save_layout(self.journal, identity, layout)
                 self.persist(job)
                 # No app work can be admitted while this Job is active.
                 effect(
@@ -298,7 +368,7 @@ class Supervisor:
                 # probes both databases read-only and must agree before replacement.
                 def check_state():
                     for state in (self.cfg.state_directory, self.cfg.helper_state_directory):
-                        probe_candidate(directory, state, self.command, "/usr/bin/python3.12")
+                        probe_candidate(directory, state, self.raw_command, "/usr/bin/python3.12")
                     store.verify(directory, release.artifact)
 
                 effect("control_check", check_state)
@@ -310,7 +380,11 @@ class Supervisor:
                         destination = path(str(Path(self.cfg.unit_directory) / name))
                         if not destination.is_file():
                             raise UpdateError("outcome_unknown")
-                        durable_write(destination, content.encode(), mode=0o644)
+                        recorded_effect(
+                            "unit.write",
+                            lambda: durable_write(destination, content.encode(), mode=0o644),
+                            {"unit": name, "path": str(destination), "executable": str(executable)},
+                        )
                     self.command(["/usr/bin/systemctl", "daemon-reload"])
 
                 effect("switch", switch)
@@ -350,6 +424,7 @@ class Supervisor:
                 job.update(
                     phase="recovery_required",
                     error=error.code if isinstance(error, UpdateError) else "outcome_unknown",
+                    failure=failure(error),
                 )
                 self.persist(job)
                 if not isinstance(error, Exception):
@@ -365,8 +440,14 @@ class Supervisor:
                     )
                 ]
             for job in interrupted:
-                job.update(phase="recovery_required", error="outcome_unknown")
-                self.persist(job)
+                job.update(
+                    phase="recovery_required",
+                    error="outcome_unknown",
+                    failure={"error": "outcome_unknown", "kind": "interrupted"},
+                )
+                with recording(self.journal, job["job_id"]):
+                    event("job.interrupted", "unknown", {"step": job.get("step")})
+                    self.persist(job)
             while not self.stopping.is_set():
                 with self.journal.connection() as db:
                     queued = db.execute(

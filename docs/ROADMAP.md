@@ -6,9 +6,9 @@
 | Web first setup | Expiring code, administrator, release source, displayed storage root | Browser/access/proxy deployment acceptance |
 | Per-app installation | Recipe settings, prebuilt Native/Docker, app-owned new DB initialization, `awaiting_setup` → verification | Real first setup for every app/external connection |
 | Updates | Same registry/Jobs, staged code, retained settings/data, declared compatibility/dependencies, switch/health | Real supported next-release acceptance |
-| Web/MCP/CLI | Same ten managed operations and durable status/history; revocable persistent keys | Client reconnect/access operational acceptance |
+| Web/MCP/CLI | Same twelve managed operations and durable status/history; revocable persistent keys | Client reconnect/access operational acceptance |
 | Updater self-update | Indexed compatible bundle; independent supervisor replaces Web/manager and preserves control stores | Real systemd acceptance; pinned bootstrap supervisor maintenance |
-| Diagnostic logs | MCP reads latest app Job state/error; self Jobs also retain step outcomes | Full app step timelines/command diagnostics and MCP event-log access are not implemented; require separate authorization |
+| Diagnostic logs | Durable app/self effect timelines, typed command failures and recorded layout via scoped read-only MCP; private offline mirrors | Real-host observations/AI-authored recovery procedure and manual recovery when Updater stops |
 | Old versions | Current plus one previous; post-success executable/cache cleanup and explicit previous deletion | Actual host capacity/ownership verification |
 | Data changes | Standalone app-owned migration runner; no backup/restore prerequisite | App-specific new schema handlers and matching Owner SDK when needed |
 | Releases | Exact candidate builds, portable catalog generator, CI/manual artifacts | Maintainer review/distribution/publication |

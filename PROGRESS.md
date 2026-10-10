@@ -2,7 +2,33 @@
 
 Updated: 2026-10-10 (JST).
 
-## Updater self-update and MCP continuity — source verified
+## AI-readable diagnostics — implemented and locally verified
+
+The user's additional authorization covers structured evidence for AI recovery
+procedure preparation and installation documentation, plus an explicit manual
+recovery guide when Updater is stopped. PR #14 now includes ordinary app and
+self-update timelines, bounded exit/errno/SQLSTATE/fixed-hint failure records and
+read-only application-scoped MCP log/layout tools. No automatic recovery, external
+installation, new DB migration, release publication or real-host change is added.
+
+Intent is durably committed and privately exported before effects. Current,
+candidate and previous layout distinguish recorded bindings from live state;
+Server Manager remains the current infrastructure observation authority. Offline
+JSONL/layout mirrors support manual inspection during Updater downtime. Existing
+records tables are reused without a DB schema upgrade. See
+[diagnostics and manual recovery](docs/DIAGNOSTICS.md).
+
+Local suite: **227 passed, 7 skipped**. Ruff/format, JavaScript syntax, doc links,
+strict schema export, Updater wheel/sdist and the actual amd64 indexed bundle
+with all installed entrypoints pass. Tests cover durable pagination/export,
+secret exclusion, bounded diagnostic classification, logging-write/quota failure
+before effects, install/setup/update interruption and app-scoped read-only MCP.
+Self-update still passes both actual read-only SQLite probes. The latest GitHub
+CI result is recorded in [PR #14](https://github.com/flamoris-jp/flamoris-updater/pull/14).
+The earlier logging investigation below is historical and superseded by this
+authorized implementation; its missing features are no longer the source status.
+
+## Previous checkpoint: self-update and MCP continuity — source verified
 
 Implemented on the direct-install source (PR #11) in
 [PR #14](https://github.com/flamoris-jp/flamoris-updater/pull/14), targeting that

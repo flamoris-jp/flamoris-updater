@@ -318,25 +318,49 @@ class Configuration(Model):
 
 
 def run(argv, timeout=300):
+    import tempfile
+
+    from .diagnostics import hint
+
     if argv[0] == "/usr/bin/docker":
         argv = [argv[0], "--host", "unix:///var/run/docker.sock", *argv[1:]]
     try:
-        result = subprocess.run(
-            argv,
-            stdin=subprocess.DEVNULL,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.DEVNULL,
-            timeout=timeout,
-            check=True,
-            env={"PATH": "/usr/sbin:/usr/bin:/sbin:/bin", "LANG": "C.UTF-8"},
-        )
+        with tempfile.TemporaryFile() as diagnostic:
+            result = subprocess.run(
+                argv,
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.PIPE,
+                stderr=diagnostic,
+                timeout=timeout,
+                check=False,
+                env={"PATH": "/usr/sbin:/usr/bin:/sbin:/bin", "LANG": "C.UTF-8"},
+            )
+            if result.returncode:
+                diagnostic.seek(0)
+                error = UpdateError(
+                    "outcome_unknown", "Installation command did not confirm completion"
+                )
+                error.diagnostic = {
+                    "kind": "nonzero_exit",
+                    "exit_code": result.returncode,
+                    "hint": hint(diagnostic.read(8192)),
+                }
+                raise error
         if len(result.stdout) > 1024 * 1024:
             raise UpdateError("outcome_unknown")
         return result.stdout
-    except (OSError, subprocess.SubprocessError):
-        raise UpdateError(
-            "outcome_unknown", "Installation command did not confirm completion"
-        ) from None
+    except (OSError, subprocess.SubprocessError) as failure:
+        error = UpdateError("outcome_unknown", "Installation command did not confirm completion")
+        error.diagnostic = (
+            {"kind": "timeout", "timeout_seconds": timeout}
+            if isinstance(failure, subprocess.TimeoutExpired)
+            else {
+                "kind": "os_error",
+                "errno": getattr(failure, "errno", None),
+                "hint": hint(b"", getattr(failure, "errno", None)),
+            }
+        )
+        raise error from None
 
 
 def inputs(app):
@@ -378,10 +402,27 @@ class Installer:
         health=None,
         unit_directory="/etc/systemd/system",
     ):
-        self.cfg, self.command = cfg, command
+        from .diagnostics import ACTIVE, observed
+
+        self.cfg, self.command = cfg, observed(command)
         self.connect = connect or self._connect
         self.health = health or self._health
         self.unit_directory = Path(unit_directory)
+        if log := ACTIVE.get():
+            for app in cfg.applications:
+                for item in inputs(app):
+                    if item.private:
+                        raw = (
+                            protected_read(item.path, private=True).decode(errors="replace").strip()
+                        )
+                        log.secrets.append(raw)
+                        for line in raw.splitlines():
+                            key, separator, value = line.partition("=")
+                            if separator and any(
+                                w in key.upper()
+                                for w in ("PASSWORD", "TOKEN", "SECRET", "KEY", "DSN", "URL")
+                            ):
+                                log.secrets.append(value)
 
     @staticmethod
     def _connect(db, database=None):
@@ -602,6 +643,8 @@ class Installer:
     def _database_create(self, app):
         from psycopg import sql
 
+        from .diagnostics import effect
+
         db = app.database
         with self.connect(db) as conn:
             for role, password in (
@@ -609,28 +652,48 @@ class Installer:
                 (db.runtime_role, db.runtime_password),
             ):
                 value = protected_read(password.path, private=True).decode().rstrip("\n")
-                conn.execute(
-                    sql.SQL(
-                        "CREATE ROLE {} LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE PASSWORD {}"
-                    ).format(sql.Identifier(role), sql.Literal(value))
+                effect(
+                    "database.create_role",
+                    lambda: conn.execute(
+                        sql.SQL(
+                            "CREATE ROLE {} LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE PASSWORD {}"
+                        ).format(sql.Identifier(role), sql.Literal(value))
+                    ),
+                    {"role": role},
                 )
-            conn.execute(
-                sql.SQL("CREATE DATABASE {} OWNER {}").format(
-                    sql.Identifier(db.name), sql.Identifier(db.owner)
-                )
+            effect(
+                "database.create",
+                lambda: conn.execute(
+                    sql.SQL("CREATE DATABASE {} OWNER {}").format(
+                        sql.Identifier(db.name), sql.Identifier(db.owner)
+                    )
+                ),
+                {"database": db.name, "owner_role": db.owner},
             )
-            conn.execute(
-                sql.SQL("REVOKE ALL ON DATABASE {} FROM PUBLIC").format(sql.Identifier(db.name))
+            effect(
+                "database.restrict_public",
+                lambda: conn.execute(
+                    sql.SQL("REVOKE ALL ON DATABASE {} FROM PUBLIC").format(sql.Identifier(db.name))
+                ),
+                {"database": db.name},
             )
-            conn.execute(
-                sql.SQL("GRANT CONNECT ON DATABASE {} TO {}").format(
-                    sql.Identifier(db.name), sql.Identifier(db.runtime_role)
-                )
+            effect(
+                "database.grant_runtime",
+                lambda: conn.execute(
+                    sql.SQL("GRANT CONNECT ON DATABASE {} TO {}").format(
+                        sql.Identifier(db.name), sql.Identifier(db.runtime_role)
+                    )
+                ),
+                {"database": db.name, "runtime_role": db.runtime_role},
             )
         with self.connect(db, db.name) as conn:
             for f in db.sql_files:
                 f.verify()
-                conn.execute(protected_read(f.path, limit=16 * 1024**2).decode())
+                effect(
+                    "database.apply_initial_sql",
+                    lambda: conn.execute(protected_read(f.path, limit=16 * 1024**2).decode()),
+                    {"file": f.path, "digest": f.digest},
+                )
         if db.studio_migration_environment:
             self.command(
                 [
@@ -689,18 +752,38 @@ class Installer:
                     )
 
     def _files(self, app):
+        from .diagnostics import effect
+
         for d in app.directories:
             absent(d.path)
-            Path(d.path).mkdir(parents=True, mode=d.mode)
+            effect(
+                "files.create_directory",
+                lambda: Path(d.path).mkdir(parents=True, mode=d.mode),
+                {"path": d.path, "mode": d.mode},
+            )
         for f in app.files:
             p = Path(f.destination)
             p.parent.mkdir(parents=True, exist_ok=True)
-            durable_write(p, protected_read(f.source.path, private=f.source.private), mode=f.mode)
-            os.chown(p, f.uid, f.gid)
+
+            def copy_file():
+                durable_write(
+                    p, protected_read(f.source.path, private=f.source.private), mode=f.mode
+                )
+                os.chown(p, f.uid, f.gid)
+
+            effect(
+                "files.copy_configuration",
+                copy_file,
+                {"destination": str(p), "mode": f.mode, "private": f.source.private},
+            )
         # Ownership is applied only to new, explicit roots, never external model trees.
         for d in app.directories:
-            os.chown(d.path, d.uid, d.gid)
-            os.chmod(d.path, d.mode)
+
+            def ownership():
+                os.chown(d.path, d.uid, d.gid)
+                os.chmod(d.path, d.mode)
+
+            effect("files.set_ownership", ownership, d.model_dump())
 
     def _stage(self, app):
         if isinstance(app, DockerApplication):
@@ -810,11 +893,17 @@ class Installer:
             else:
                 self.command([*argv, app.image_id])
         else:
+            from .diagnostics import effect
+
             for unit in app.units:
-                durable_write(
-                    self.unit_directory / unit.name,
-                    protected_read(unit.source.path),
-                    mode=0o644,
+                effect(
+                    "unit.write",
+                    lambda: durable_write(
+                        self.unit_directory / unit.name,
+                        protected_read(unit.source.path),
+                        mode=0o644,
+                    ),
+                    {"unit": unit.name, "path": str(self.unit_directory / unit.name)},
                 )
             self.command(["/usr/bin/systemctl", "daemon-reload"])
             self.command(
@@ -863,7 +952,9 @@ class Installer:
                         if previous["phase"] == "succeeded"
                         else "recovery_required"
                     )
-            self.preflight()
+            from .diagnostics import effect as recorded_effect
+
+            recorded_effect("installer.preflight", self.preflight)
             record = {
                 "profile_digest": binding,
                 "phase": "accepted",
@@ -894,7 +985,9 @@ class Installer:
                             f.verify()
                         record.update(phase="intent", application_id=app.application_id, step=name)
                         persist()
-                        effect(app)
+                        from .diagnostics import effect as recorded_effect
+
+                        recorded_effect("installer." + name, lambda: effect(app))
                         record["phase"] = "step_succeeded"
                         persist()
                 record.update(

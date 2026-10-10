@@ -331,7 +331,7 @@ def test_mcp_reconnect_and_cli_share_the_self_update_job(updater, monkeypatch, c
 
     with TestClient(create_app(c, c.auth, origin, run_worker=False), base_url=origin) as client:
         advertised = mcp_call(client, e.key["token"], "tools/list").json()["result"]["tools"]
-        assert len(advertised) == 10
+        assert len(advertised) == 12
         job = call(client, "updater_self_update", {"release": "1.1.0", "request_key": "mcp-self"})
     e.supervisor.run_job(job["job_id"])
     # A new Web/coordinator instance uses the same state and Bearer key.
@@ -362,3 +362,34 @@ def test_live_probe_rejects_wrong_runtime_even_when_health_is_200(updater, monke
     with pytest.raises(UpdateError) as error:
         e.supervisor.probe(e.release, e.candidate / "bin/flamoris-updater-service")
     assert error.value.code == "outcome_unknown"
+
+
+def test_self_update_layout_and_effect_logs_share_read_api(updater):
+    e = updater
+    job = accept(e)
+    e.supervisor.run_job(job["job_id"])
+    assert e.manager.journal.get("managed_job", job["job_id"])["phase"] == "succeeded"
+    records, after = [], 0
+    while True:
+        page = e.manager.invoke(
+            "updater_managed_log_get",
+            {
+                "application_id": "flamoris-updater",
+                "job_id": job["job_id"],
+                "after": after,
+                "limit": 10,
+            },
+        )
+        records.extend(page["items"])
+        if not page["has_more"]:
+            break
+        after = page["next_after"]
+    assert any(r["operation"] == "control_check" and r["outcome"] == "completed" for r in records)
+    assert sum(r["operation"] == "unit.write" and r["outcome"] == "completed" for r in records) == 2
+    layout = e.manager.invoke("updater_managed_layout_get", {"application_id": "flamoris-updater"})
+    assert layout["current"]["release"] == "1.1.0"
+    assert layout["candidate"]["previous_layout"]["release"] == "1.0.0"
+    assert layout["current"]["bootstrap_executable"] == e.cfg.bootstrap_executable
+    assert layout["current"]["configuration_file"] == str(e.config)
+    assert layout["current"]["manager_socket"] == e.cfg.socket_path
+    assert b"token" not in dumps(records).lower()

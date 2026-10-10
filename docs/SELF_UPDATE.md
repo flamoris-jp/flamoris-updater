@@ -1,8 +1,8 @@
 # Self-update, MCP continuity and logging review
 
-Current work adds Updater Web/manager self-update and persistent MCP credentials.
-External software/access setup, failure recovery, application DB upgrades and
-general logging enhancements are outside this change. Source/CI evidence is not
+Current work adds Updater Web/manager self-update, persistent MCP credentials
+and AI-readable effect/layout evidence. External software/access setup,
+automatic failure recovery and application DB upgrades are outside this change. Source/CI evidence is not
 release publication or installation on a real host.
 
 ## Self-update contract
@@ -63,22 +63,21 @@ update and investigation if a Job stops. Compatible update execution and status
 inspection are callable through MCP. No daily token reissue is needed when using
 a persistent key. Scheduled automatic checking/updating is not added.
 
-## Existing ordinary application logs: investigation only
+## Diagnostic evidence and manual recovery
 
-| Evidence | Recorded | AI through Updater MCP |
-| --- | --- | --- |
-| Managed Job | ID, app/release/action, created time, latest phase/step, error code, retained candidate and cleanup state | `updater_managed_job_get`; recent 100 via `updater_managed_history` |
-| Previous completed app steps | Ordinary `Manager.persist` overwrites latest Job; event records are generic type/ID/outcome/hash links, without per-step details/timestamps | No complete app step timeline |
-| Local effect journal | `journal.sqlite` and chained `recovery.jsonl`; separate installer substeps persist locally | No MCP event-log/file-reading API |
-| Command diagnosis | Installer captures stdout for internal checks; stderr is discarded and outputs are not stored as diagnostic logs | No stdout/stderr, exit context or detailed failure explanation |
-| New self-update Job | Ordered step intents/verified outcomes/times, candidate path, result/error code and both runtime versions | Existing managed Job/history tools include these fields |
+Ordinary app install/update, setup verification, cleanup and self-update now record
+structured intent/completion/failure timelines. Read-only scoped MCP tools
+`updater_managed_log_get` and `updater_managed_layout_get` expose those records and
+recorded current/candidate/previous placement. Command failures include fixed
+classification and exit/errno context without raw output, credentials or SQL.
+This supersedes the earlier investigation finding that latest Job state alone
+was insufficient. Earlier Jobs do not receive invented retrospective logs.
 
-The current app logs identify where work stopped and which old/candidate state
-was retained. They are insufficient to reliably reconstruct every completed
-action or diagnose a command failure using Updater MCP alone. Inspecting local
-logs needs an independently authorized host tool. This investigation adds no
-ordinary app log enhancement or general MCP log-reading feature. A subsequent
-proposal would require user approval and secret-safe, bounded structured logs.
+If Updater Web/manager itself is unavailable, its MCP endpoint is unavailable.
+Manual recovery through an independent administrator channel is required;
+Server Manager can support AI investigation only if independently available.
+See [AI-readable evidence and manual recovery](DIAGNOSTICS.md) for record fields,
+limits, offline private exports, uncertainty and the human investigation procedure.
 
 ## Validation boundary
 

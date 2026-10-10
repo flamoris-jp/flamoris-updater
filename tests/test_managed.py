@@ -707,3 +707,125 @@ def test_native_real_offline_venvs_keep_runtime_profiles_and_only_one_previous(
     manager.delete_previous(app)
     assert sorted(p.name for p in directory.iterdir()) == ["1.4.0"]
     assert runtime.read_text() == "operator-owned runtime settings"
+
+
+def read_all_logs(manager, job):
+    items, after = [], 0
+    while True:
+        page = manager.invoke(
+            "updater_managed_log_get",
+            {"application_id": APP, "job_id": job["job_id"], "after": after, "limit": 10},
+        )
+        items.extend(page["items"])
+        if not page["has_more"]:
+            return items
+        after = page["next_after"]
+
+
+def test_diagnostics_cover_install_setup_failed_update_and_layout(managed):
+    e = managed
+    e.manager.configure("https://releases.example.invalid/catalog.json")
+    first = install(e)
+    e.manager.start_setup(APP)
+    e.manager.complete(APP)
+    initial = read_all_logs(e.manager, first)
+    assert {
+        "installer.files",
+        "installer.stage",
+        "installer.provision",
+        "setup.health",
+        "setup.verify_running",
+    } <= {r["operation"] for r in initial}
+    assert any(r["operation"] == "docker.start" and r["outcome"] == "completed" for r in initial)
+    e.fail["health"] = True
+    failed = update(e, "1.1.0")
+    timeline = read_all_logs(e.manager, failed)
+    assert any(r["operation"] == "switch" and r["outcome"] == "completed" for r in timeline)
+    assert any(r["operation"] == "health" and r["outcome"] == "failed" for r in timeline)
+    assert failed["failure"]["error"] == "outcome_unknown"
+    layout = e.manager.invoke(
+        "updater_managed_layout_get", {"application_id": APP, "job_id": failed["job_id"]}
+    )
+    assert layout["live_state"] is False
+    assert layout["current"]["release"] == "1.0.0"
+    assert layout["candidate"]["release"] == "1.1.0"
+    assert layout["candidate"]["previous_layout"]["release"] == "1.0.0"
+    assert layout["current"]["configuration"][0]["path"].endswith("config/runtime.env")
+    assert layout["current"]["mounts"][0]["source"].endswith("data")
+    assert b"keep-private-value" not in dumps(layout)
+    assert b"keep-private-value" not in dumps(timeline)
+    assert b"private diagnostic" not in dumps(timeline)
+    for p in (e.tmp / "manager/diagnostics").glob("job-*"):
+        assert b"keep-private-value" not in p.read_bytes()
+    with pytest.raises(UpdateError) as mismatch:
+        e.manager.invoke(
+            "updater_managed_log_get",
+            {"application_id": "flamoris-studio", "job_id": failed["job_id"]},
+        )
+    assert mismatch.value.code == "invalid_input"
+
+
+def test_read_only_scoped_mcp_key_can_read_evidence_but_cannot_update(managed):
+    e = managed
+    e.manager.configure("https://releases.example.invalid/catalog.json")
+    job = install(e)
+    c = coordinator(e)
+    c.auth.user("reader", "isolated-test-password", ["read", "operator"], [APP])
+    with c.journal.transaction() as db:
+        c.journal.put("web_setup", "completed", {"username": "reader"}, db)
+    key = c.auth.integration("reader", "evidence", execute=False)
+    with TestClient(create_app(c, c.auth, ORIGIN, run_worker=False), base_url=ORIGIN) as client:
+        for name, args in (
+            ("updater_managed_log_get", {"application_id": APP, "job_id": job["job_id"]}),
+            ("updater_managed_layout_get", {"application_id": APP}),
+        ):
+            response = mcp_call(
+                client, key["token"], "tools/call", {"name": name, "arguments": args}
+            )
+            assert response.status_code == 200
+            assert not response.json()["result"]["isError"], response.text
+        forbidden = mcp_call(
+            client,
+            key["token"],
+            "tools/call",
+            {
+                "name": "updater_managed_layout_get",
+                "arguments": {"application_id": "flamoris-studio"},
+            },
+        )
+        assert forbidden.json()["result"]["isError"]
+        forbidden = mcp_call(
+            client,
+            key["token"],
+            "tools/call",
+            {"name": "updater_install_start", "arguments": {"application_id": APP}},
+        )
+        assert forbidden.json()["result"]["isError"]
+
+
+def test_interrupted_intent_keeps_timeline_and_is_not_replayed(managed):
+    from flamoris_updater_adapters.diagnostics import event, recording
+
+    e = managed
+    e.manager.configure("https://releases.example.invalid/catalog.json")
+    job = e.manager.start(
+        "install",
+        Start(
+            application_id=APP,
+            release="1.0.0",
+            request_key="interrupted-log",
+            settings={"TOKEN": "keep-private-value"},
+        ),
+    )
+    with recording(e.manager.journal, job["job_id"]):
+        event("switch", "intent")
+    job.update(phase="intent", step="switch")
+    e.manager.persist("managed_job", job["job_id"], job)
+    e.manager.stopping.set()
+    e.manager.worker()
+    assert not e.calls
+    record = e.manager.journal.get("managed_job", job["job_id"])
+    assert record["failure"]["kind"] == "interrupted"
+    entries = read_all_logs(e.manager, job)
+    assert entries[0]["outcome"] == "intent"
+    assert entries[1]["operation"] == "job.interrupted" and entries[1]["outcome"] == "unknown"

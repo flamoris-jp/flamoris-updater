@@ -228,7 +228,7 @@ def test_docker_uses_local_socket_even_with_another_selected_context(monkeypatch
 
     def execute(argv, **kwargs):
         calls.append((argv, kwargs["env"]))
-        return SimpleNamespace(stdout=b"local-result")
+        return SimpleNamespace(stdout=b"local-result", returncode=0)
 
     monkeypatch.setattr("subprocess.run", execute)
     monkeypatch.setenv("DOCKER_HOST", "tcp://unrelated.example.invalid:2376")

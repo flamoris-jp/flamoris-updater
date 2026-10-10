@@ -58,3 +58,15 @@ Web/MCP are unavailable briefly during replacement. Keep the returned Job ID and
 ## Advanced compatibility boundary
 
 The older explicit `serve --config CoordinatorConfig`, host/helper and recovery-controller commands remain for application-owned migration/signed multi-host integration. Their keys, Owner services and independent recovery controller are not required by bootstrap. Neither their plans nor Owner DBs are imported into simple management. Backup/restore operations and fields are removed from Core/Owner/planner/runner; old SDK/configs need a matched rebuild. Pinned supervisor replacement and database schema compatibility still need separately reviewed maintenance; simple app cleanup provides no system rollback.
+
+## Logs, placement and Updater downtime
+
+AI can read ordered effect evidence with `updater_managed_log_get` and recorded
+current/candidate/previous placement with `updater_managed_layout_get`, using a
+read-only key scoped to the application. See [diagnostics](DIAGNOSTICS.md) for
+pagination, secret handling, offline exports and failure uncertainty.
+
+If Updater itself stops, its MCP cannot inspect evidence or recover it. Use an
+independent administrator channel and the documented manual investigation
+procedure. Check queued Jobs before restarting services; do not assume restart
+clears unknown effects or recovery blockers.
