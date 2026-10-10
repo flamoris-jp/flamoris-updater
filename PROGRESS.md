@@ -2,6 +2,24 @@
 
 Updated: 2026-10-10 (JST).
 
+## Privileged native-launcher correction / 1.0.3 preparation
+
+Updater 1.0.2 was successfully published from source
+`0edb7bb431b162b71a1235e5f6544109f1a41de9`; all 14 published asset digests,
+metadata and checksums agreed. No host was upgraded. During authorized maintenance
+preparation, review found that root can bypass mode 0555 and Python imports may
+write unindexed bytecode into the sealed bundle. The previous bundle verifier
+checked before entrypoint execution but omitted a final index check.
+
+Current source disables bytecode generation in every generated launcher before
+bundle imports and verifies the exact index again after all entrypoints and the
+identity probe. Native CI/publication now exercise actual bundle execution as
+both an ordinary user and root on amd64/arm64. Version 1.0.3 packages this fix
+and the public redirect correction; published 1.0.1/1.0.2 assets are immutable.
+Local/CI evidence is recorded in the correction PR. Publication and live acceptance
+remain separate; existing pinned-supervisor maintenance and application/Web setup
+are still pending. No journal/config/database schema change is introduced.
+
 ## Updater 1.0.2 publication and maintenance preparation
 
 The operator explicitly authorized publishing the corrected distribution and

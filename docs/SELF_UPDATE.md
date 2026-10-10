@@ -13,7 +13,7 @@ so stopping/replacing the first two does not stop the update controller. Never
 delete that installation. Updating the pinned supervisor itself remains explicit
 bootstrap maintenance; this is not a claim to replace every privileged component.
 
-Distribution 1.0.2 applies the checked public-release redirect policy described in
+Distribution 1.0.3 applies the checked public-release redirect policy described in
 [installation](INSTALL.md) to supervisor bundle downloads as well as manager
 catalog/app downloads. The published 1.0.1 supervisor does not contain that
 correction. Replacing Web/manager alone cannot enable GitHub Release downloads

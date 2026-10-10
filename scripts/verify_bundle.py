@@ -86,7 +86,9 @@ def main():
             integration_auth_version=1,
             runtime_root=str(stage / "site-packages"),
         )
-    print("Verified indexed native bundle and all installed entrypoints")
+        # Execution must retain the exact index, including privileged launchers.
+        store.verify(stage, artifact)
+    print("Verified indexed native bundle, all entrypoints and unchanged content after execution")
 
 
 if __name__ == "__main__":
