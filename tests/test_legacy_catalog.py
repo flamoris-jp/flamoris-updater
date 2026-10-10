@@ -1,5 +1,6 @@
 """The one-time catalog switch preserves 1.0.3 state and immutable bindings."""
 
+import os
 import runpy
 from pathlib import Path
 
@@ -11,6 +12,9 @@ from flamoris_updater_adapters.managed import Catalog, Manager
 
 SCRIPT = runpy.run_path("scripts/prepare_103_catalog.py")
 bind = SCRIPT["bind"]
+pytestmark = pytest.mark.skipif(
+    os.geteuid() != 0, reason="Catalog maintenance uses protected root state"
+)
 
 
 @pytest.fixture
