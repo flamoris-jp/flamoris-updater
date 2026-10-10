@@ -1,4 +1,5 @@
 "use strict";
+const basePath = document.querySelector('meta[name="updater-base-path"]').content;
 let csrf = "", busy = false, appSnapshot = "", selfSnapshot = "", integrationSnapshot = "";
 const $ = id => document.getElementById(id);
 const labels = {accepted:"受付済み", intent:"処理中", running:"処理中", awaiting_setup:"初回設定待ち", succeeded:"完了", recovery_required:"処理の確認が必要"};
@@ -7,7 +8,7 @@ function showError(error) {
   $("message").hidden = false;
 }
 async function api(path, data) {
-  const response = await fetch(path, {
+  const response = await fetch(basePath + path, {
     method: data === undefined ? "GET" : "POST",
     credentials: "same-origin",
     headers: data === undefined ? {} : {"Content-Type":"application/json", "X-CSRF-Token":csrf},

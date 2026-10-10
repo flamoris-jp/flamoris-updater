@@ -2,6 +2,25 @@
 
 Updated: 2026-10-10 (JST).
 
+## v1.0.1 public base-path support
+
+The operator authorized public subpath support and a patch distribution. An
+explicit validated `base_path` covers bootstrap/setup, static assets, browser API,
+CLI, MCP, self-update health verification and deployment evidence. Origin checks
+still use a pure origin; loopback listeners, bearer/session/CSRF checks and the
+pinned supervisor boundary remain intact. Existing root configurations default
+to an empty path. External nginx/TLS/relay provisioning remains separate.
+
+Local verification: **265 passed, 7 skipped**; Ruff lint/format, documentation
+links, JavaScript syntax, workflow YAML/Bash syntax and whitespace checks pass.
+Root and prefixed routes cover browser setup/login, static assets, MCP bearer
+authorization and supervised self-update success/fault cases.
+
+Updater is 1.0.1; the independently versioned Core SDK remains 1.0.0. The scoped
+publication workflow builds both native platforms, tests them and verifies the
+14-asset distribution. Publication and real-host acceptance are pending at this
+source checkpoint; final evidence belongs to CI and GitHub release metadata.
+
 ## v1.0.0 distribution preparation
 
 The user authorized Updater v1.0 and distribution creation. Package version remains

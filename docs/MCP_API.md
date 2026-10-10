@@ -1,6 +1,8 @@
 # Managed Web, MCP and command API
 
-Bootstrap mode exposes twelve typed tools through authenticated `/mcp` (Streamable HTTP) and `/api/v1/tools/{name}`. Web/CLI/MCP call the same facade and root manager. CLI convenience commands construct the same requests; no caller-selected shell/path/source code is accepted.
+Bootstrap mode exposes twelve typed tools through authenticated `/mcp` (Streamable HTTP) and `/api/v1/tools/{name}`. With `--base-path /updater`, these endpoints become `/updater/mcp` and
+`/updater/api/v1/tools/{name}`. Preserve the configured public path at the proxy;
+Host/Origin remain the pure public origin. Web/CLI/MCP call the same facade and root manager. CLI convenience commands construct the same requests; no caller-selected shell/path/source code is accepted.
 
 | Tool | Arguments/purpose |
 | --- | --- |

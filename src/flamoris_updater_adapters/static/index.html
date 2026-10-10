@@ -1,8 +1,8 @@
 <!doctype html>
 <html lang="ja">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>FLAMORIS Updater</title><link rel="stylesheet" href="/static/style.css"><script src="/static/app.js" defer></script></head>
+<head><meta charset="utf-8"><meta name="updater-base-path" content="__UPDATER_BASE_PATH__"><meta name="viewport" content="width=device-width,initial-scale=1"><title>FLAMORIS Updater</title><link rel="stylesheet" href="__UPDATER_BASE_PATH__/static/style.css"><script src="__UPDATER_BASE_PATH__/static/app.js" defer></script></head>
 <body>
-<header><a class="brand" href="/"><span class="mark">U</span><span>FLAMORIS <strong>Updater</strong></span></a><div id="identity"></div><button id="logout" class="quiet" hidden>ログアウト</button></header>
+<header><a class="brand" href="__UPDATER_BASE_PATH__/"><span class="mark">U</span><span>FLAMORIS <strong>Updater</strong></span></a><div id="identity"></div><button id="logout" class="quiet" hidden>ログアウト</button></header>
 <main>
 <section id="login-panel" class="login card"><div class="eyebrow">OPERATOR ACCESS</div><h1>制作環境を、次のバージョンへ。</h1><p>更新計画を確認してから実行できます。実行中の処理は、画面を閉じても記録されます。</p><form id="login-form"><label>アカウント<input name="username" autocomplete="username" required maxlength="128"></label><label>パスワード<input name="password" type="password" autocomplete="current-password" required maxlength="1024"></label><button type="submit">ログイン</button></form></section>
 <section id="workspace" hidden>

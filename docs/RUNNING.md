@@ -8,7 +8,7 @@ Consume a reviewed prebuilt wheel plus its complete offline wheelhouse, or an in
 
 ```bash
 sudo python3.12 -m venv /opt/flamoris-updater
-sudo /opt/flamoris-updater/bin/python -m pip install --no-index --find-links /absolute/wheelhouse flamoris-updater==1.0.0
+sudo /opt/flamoris-updater/bin/python -m pip install --no-index --find-links /absolute/wheelhouse flamoris-updater==1.0.1
 sudo /opt/flamoris-updater/bin/flamoris-updater bootstrap --root /srv/flamoris/apps
 ```
 
@@ -16,7 +16,10 @@ The paths are portable examples. An indexed bundle has its own `bin/flamoris-upd
 
 Bootstrap refuses existing state/services, provisions `flamoris-updater` as a system account, and generates `setup.json` rather than requiring manual JSON. Defaults: Web on `http://127.0.0.1:8764`, Web/helper journals under `/var/lib/flamoris-updater`, app namespaces under `/srv/flamoris/apps`. Public Web runs as the service account; the root manager exposes only a peer-checked Unix socket. systemd owns its temporary socket directory, so restart removes stale sockets. No application is needed to start Web.
 
-Use `--directory`, `--root`, `--port` for other local paths/ports. For an HTTPS proxy/tunnel, bootstrap with `--public-origin https://updater.example.invalid`; preserve that public Host and enforce HTTPS at the proxy. Updater does not connect a tunnel or issue certificates. For initial remote setup, an SSH forward to the loopback Web port also works without client certificates.
+Use `--directory`, `--root`, `--port` for other local paths/ports. For an HTTPS proxy/tunnel, bootstrap with `--public-origin https://updater.example.invalid`; preserve that public Host and enforce HTTPS at the proxy. Add `--base-path /updater` for a public subpath. The origin still has no path;
+nginx must preserve `/updater` and the public Host. The printed URL and MCP URL
+include the configured prefix. See [distribution](DISTRIBUTION.md#https-below-a-public-path).
+Updater does not connect a tunnel or issue certificates. For initial remote setup, an SSH forward to the loopback Web port also works without client certificates.
 
 Open the printed URL, enter the one-time setup code (expires after one hour), create the administrator and enter the HTTPS catalog URL. To renew a code before setup, run the installed `flamoris-updater-service token --config /var/lib/flamoris-updater/setup.json` as the Web service account. Setup cannot be rerun after completion. Passwords/tokens/settings never enter published release metadata or normal Job results.
 
@@ -36,7 +39,7 @@ Create a 24-hour Bearer token with Web's **CLI/MCP token** button, or a persiste
 
 ```bash
 flamoris-updater apps --url http://127.0.0.1:8764 --token-file /absolute/private-token
-flamoris-updater install --url http://127.0.0.1:8764 --token-file /absolute/private-token --application flamoris-generation-mcp --release 1.0.0 --request-key initial-generation
+flamoris-updater install --url http://127.0.0.1:8764 --token-file /absolute/private-token --application flamoris-generation-mcp --release 1.0.1 --request-key initial-generation
 flamoris-updater start-setup --url http://127.0.0.1:8764 --token-file /absolute/private-token --application flamoris-generation-mcp
 flamoris-updater complete-setup --url http://127.0.0.1:8764 --token-file /absolute/private-token --application flamoris-generation-mcp
 flamoris-updater update --url http://127.0.0.1:8764 --token-file /absolute/private-token --application flamoris-generation-mcp --release 1.1.0 --request-key generation-update

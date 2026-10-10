@@ -38,7 +38,7 @@ def distribution(tmp_path):
                 ],
             }
         )
-        name = "flamoris-updater-1.0.0-linux-" + arch + ".tar.gz"
+        name = "flamoris-updater-1.0.1-linux-" + arch + ".tar.gz"
         with tarfile.open(inputs / name, "w:gz") as archive:
             for filename, raw in (
                 ("bundle-compatibility.json", metadata),
@@ -49,7 +49,7 @@ def distribution(tmp_path):
                 archive.addfile(member, io.BytesIO(raw))
         summary = {
             "artifact": name,
-            "version": "1.0.0",
+            "version": "1.0.1",
             "python": "3.12",
             "platform": "linux/" + arch,
             "digest": digest((inputs / name).read_bytes()),
@@ -59,11 +59,11 @@ def distribution(tmp_path):
         }
         (inputs / ("bundle-digests-linux-" + arch + ".json")).write_bytes(dumps(summary))
     for filename in (
-        "flamoris_updater-1.0.0-py3-none-any.whl",
-        "flamoris_updater-1.0.0.tar.gz",
+        "flamoris_updater-1.0.1-py3-none-any.whl",
+        "flamoris_updater-1.0.1.tar.gz",
         "flamoris_update_core-1.0.0-py3-none-any.whl",
         "flamoris_update_core-1.0.0.tar.gz",
-        "flamoris-updater-1.0.0-schemas.zip",
+        "flamoris-updater-1.0.1-schemas.zip",
     ):
         (inputs / filename).write_bytes(b"CI-built-source-placeholder")
     return inputs, tmp_path / "output", SCRIPT.parent.parent
@@ -71,9 +71,9 @@ def distribution(tmp_path):
 
 def test_complete_distribution_has_exact_source_checksums_and_both_platforms(distribution):
     inputs, output, root = distribution
-    result = module.assemble(inputs, output, "1.0.0", "a" * 40, root)
+    result = module.assemble(inputs, output, "1.0.1", "a" * 40, root)
     assert result["source"]["revision"] == "a" * 40
-    assert result["source"]["tag"] == "v1.0.0"
+    assert result["source"]["tag"] == "v1.0.1"
     assert {b["platform"] for b in result["bundles"]} == {"linux/amd64", "linux/arm64"}
     assert result["live_acceptance"] is False
     files = list(output.iterdir())
@@ -85,7 +85,7 @@ def test_complete_distribution_has_exact_source_checksums_and_both_platforms(dis
         assert hashlib.sha256((output / filename).read_bytes()).hexdigest() == expected
     assert loads((output / "distribution.json").read_bytes()) == result
     with pytest.raises(ValueError, match="overwrite"):
-        module.assemble(inputs, output, "1.0.0", "a" * 40, root)
+        module.assemble(inputs, output, "1.0.1", "a" * 40, root)
 
 
 @pytest.mark.parametrize("fault", ["version", "digest", "platform", "missing", "extra"])
@@ -100,19 +100,19 @@ def test_invalid_candidate_never_creates_distribution(distribution, fault):
     if fault == "digest":
         (inputs / summary["artifact"]).write_bytes(b"modified-candidate")
     if fault == "missing":
-        (inputs / "flamoris-updater-1.0.0-schemas.zip").unlink()
+        (inputs / "flamoris-updater-1.0.1-schemas.zip").unlink()
     if fault == "extra":
         (inputs / "unexpected-private-file").write_bytes(b"must-not-publish")
     summary_path.write_text(json.dumps(summary))
     with pytest.raises(ValueError):
-        module.assemble(inputs, output, "1.0.0", "a" * 40, root)
+        module.assemble(inputs, output, "1.0.1", "a" * 40, root)
     assert not output.exists()
 
 
 def test_revision_and_package_version_must_be_explicit(distribution):
     inputs, output, root = distribution
     with pytest.raises(ValueError, match="exact source"):
-        module.assemble(inputs, output, "1.0.0", "main", root)
+        module.assemble(inputs, output, "1.0.1", "main", root)
     with pytest.raises(ValueError, match="versions disagree"):
         module.assemble(inputs, output, "1.1.0", "a" * 40, root)
     assert not output.exists()

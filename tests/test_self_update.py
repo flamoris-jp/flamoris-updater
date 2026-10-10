@@ -81,8 +81,8 @@ def bundle():
     return release, blob
 
 
-@pytest.fixture
-def updater(tmp_path, monkeypatch):
+@pytest.fixture(params=["", "/updater"])
+def updater(tmp_path, monkeypatch, request):
     monkeypatch.setattr("platform.machine", lambda: "x86_64")
     original = tmp_path / "bootstrap/bin/flamoris-updater-service"
     original.parent.mkdir(parents=True)
@@ -98,6 +98,7 @@ def updater(tmp_path, monkeypatch):
         service_uid=10002,
         service_gid=10002,
         public_origin="http://127.0.0.1:8764",
+        base_path=request.param,
         bootstrap_executable=str(original),
         unit_directory=str(units),
     )
@@ -128,7 +129,7 @@ def updater(tmp_path, monkeypatch):
                 200,
                 content=dumps(Catalog(catalog_version=1, recipes=[], updater_releases=[release])),
             )
-        if request.url.path == "/health":
+        if request.url.path == cfg.base_path + "/health":
             assert request.headers["Host"] == "127.0.0.1:8764"
             return httpx.Response(200, json=wanted)
         return httpx.Response(200, content=blob)
@@ -194,6 +195,12 @@ def test_updates_both_services_preserves_credentials_history_and_pinned_supervis
     )
     for name in unit_contents(e.cfg, e.original, e.config):
         assert str(e.candidate) in (Path(e.cfg.unit_directory) / name).read_text()
+    layout = e.manager.invoke(
+        "updater_managed_layout_get",
+        {"application_id": "flamoris-updater", "job_id": job["job_id"]},
+    )["current"]
+    assert layout["base_path"] == e.cfg.base_path
+    assert layout["mcp_url"] == e.cfg.public_origin + e.cfg.base_path + "/mcp"
     assert e.pinned.read_text() == "pinned supervisor unit"
     assert e.original.read_text() == "original pinned installation"
     assert e.auth.journal.get("integration", e.key["integration_id"]) == before_auth

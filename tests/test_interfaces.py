@@ -145,12 +145,12 @@ def test_login_rate_limit_and_cookie_security(web):
     assert "Secure" in cookie and "HttpOnly" in cookie and "SameSite=strict" in cookie
 
 
-def mcp_call(client, token, method, params=None, identity=1):
+def mcp_call(client, token, method, params=None, identity=1, *, path="/mcp"):
     payload = {"jsonrpc": "2.0", "id": identity, "method": method}
     if params is not None:
         payload["params"] = params
     return client.post(
-        "/mcp",
+        path,
         json=payload,
         headers={
             "Authorization": "Bearer " + token,

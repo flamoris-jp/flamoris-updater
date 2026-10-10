@@ -104,7 +104,8 @@ def deployment_layout(cfg, installation, config_path=None):
         "application_storage": cfg.root,
         "manager_socket": cfg.socket_path,
         "public_origin": cfg.public_origin,
-        "mcp_url": cfg.public_origin + "/mcp",
+        "base_path": getattr(cfg, "base_path", ""),
+        "mcp_url": cfg.public_origin + getattr(cfg, "base_path", "") + "/mcp",
         "bootstrap_executable": cfg.bootstrap_executable,
         "units": [
             {
@@ -284,7 +285,7 @@ class Supervisor:
                     )
                 )
                 response = self.client.get(
-                    f"http://{host}:{self.cfg.listen_port}/health",
+                    f"http://{host}:{self.cfg.listen_port}{self.cfg.base_path}/health",
                     headers={"Host": urlsplit(self.cfg.public_origin).netloc},
                 )
                 if (

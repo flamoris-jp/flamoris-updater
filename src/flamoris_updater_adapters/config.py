@@ -6,7 +6,7 @@ import stat
 import time
 from pathlib import Path
 from typing import Literal
-from urllib.parse import urlsplit
+from urllib.parse import urlsplit, urlunsplit
 
 import httpx
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
@@ -20,6 +20,7 @@ from flamoris_update_core.wire import decode
 
 from .artifacts import origin
 from .signing import Key, Signer
+from .webpaths import base_path
 
 
 def protected_read(filename: str, private=False, root_only=False, limit=1024 * 1024) -> bytes:
@@ -87,7 +88,10 @@ class Endpoint(Model):
 
     @model_validator(mode="after")
     def secure(self):
-        api_origin(self.url)
+        parsed = urlsplit(self.url)
+        prefix = parsed.path[:-1] if parsed.path.endswith("/") else parsed.path
+        base_path(prefix)
+        api_origin(urlunsplit((parsed.scheme, parsed.netloc, "", parsed.query, parsed.fragment)))
         return self
 
     def client(self):
