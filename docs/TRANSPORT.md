@@ -5,7 +5,7 @@ Private CA, per-owner client certificates, certificate fingerprints and client T
 | Connection | Simple bootstrap mode |
 | --- | --- |
 | Browser → Web | Literal loopback HTTP for first/local setup, or ordinary HTTPS at a separately configured proxy/tunnel; account/session/CSRF and exact Host/Origin |
-| CLI/MCP → Web | Bearer token; ordinary HTTPS/system trust or literal loopback HTTP |
+| CLI/MCP → Web | Short-lived token or persistent revocable integration key; ordinary HTTPS/system trust or literal loopback HTTP |
 | Web → root manager | Framed bounded Unix socket; Web verifies root UID, root accepts only provisioned Web UID |
 | Manager → releases | Ordinary system-trusted HTTPS; selected recipe/file digests bind execution |
 | Manager → app | Local Docker/systemd and local app health contract; no pre-running Owner prerequisite |

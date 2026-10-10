@@ -34,6 +34,9 @@ from .install import (
     path,
 )
 from .journal import Journal, durable_write, exclusive
+from .self_update import SELF, SelfRelease, SelfStart
+
+MANAGED_TARGETS = [*VERSIONS, SELF]
 
 
 def https(value):
@@ -103,12 +106,16 @@ class Recipe(Model):
 class Catalog(Model):
     catalog_version: Literal[1]
     recipes: list[Recipe] = Field(max_length=128)
+    updater_releases: list[SelfRelease] = Field(default_factory=list, max_length=128)
 
     @model_validator(mode="after")
     def unique(self):
         identities = [(r.application_id, r.release, r.platform) for r in self.recipes]
         if len(set(identities)) != len(identities):
             raise ValueError("Duplicate release")
+        self_ids = [(r.release, r.artifact.platform) for r in self.updater_releases]
+        if len(set(self_ids)) != len(self_ids):
+            raise ValueError("Duplicate Updater release")
         return self
 
 
@@ -132,6 +139,12 @@ class Refresh(Model):
 
 
 MANAGED_TOOLS = {
+    "updater_self_status": (Model, "Updater version and compatible self-update releases", "read"),
+    "updater_self_update": (
+        SelfStart,
+        "Update Web and manager through the stable supervisor",
+        "execute",
+    ),
     "updater_apps_list": (Refresh, "Installed apps, available recipes and settings", "read"),
     "updater_install": (Start, "Install one selected application", "execute"),
     "updater_update": (
@@ -152,11 +165,23 @@ MANAGED_TOOLS = {
 
 
 class Manager:
-    def __init__(self, state, root, *, installer=Installer, client=None):
+    def __init__(self, state, root, *, installer=Installer, client=None, self_configuration=None):
         self.state, self.root = path(str(state)), path(str(root))
         self.journal = Journal(self.state)
         self.root.mkdir(parents=True, exist_ok=True, mode=0o755)
         self.installer = installer
+        self.self_configuration = self_configuration
+        if (
+            self_configuration
+            and self_configuration.bootstrap_executable
+            and not self.journal.get("self_installation", "current")
+        ):
+            from .self_update import initial_record
+
+            with self.journal.transaction() as db:
+                self.journal.put(
+                    "self_installation", "current", initial_record(self_configuration), db
+                )
         self.client = client or httpx.Client(
             verify=True, trust_env=False, follow_redirects=False, timeout=60
         )
@@ -210,13 +235,17 @@ class Manager:
 
     def accept_catalog(self, catalog):
         with self.journal.transaction() as db:
-            for recipe in catalog.recipes:
+            for recipe in [*catalog.recipes, *catalog.updater_releases]:
                 identity = digest(
                     dumps(
                         {
-                            "application_id": recipe.application_id,
+                            "application_id": recipe.application_id
+                            if isinstance(recipe, Recipe)
+                            else SELF,
                             "release": recipe.release,
-                            "platform": recipe.platform,
+                            "platform": recipe.platform
+                            if isinstance(recipe, Recipe)
+                            else recipe.artifact.platform,
                         }
                     )
                 )
@@ -231,6 +260,28 @@ class Manager:
         if name not in MANAGED_TOOLS:
             raise UpdateError("invalid_input")
         args = decode(MANAGED_TOOLS[name][0], dumps(payload))
+        if MANAGED_TOOLS[name][2] == "execute" and name != "updater_self_update":
+            with self.journal.connection() as db:
+                if db.execute(
+                    "SELECT 1 FROM records WHERE kind='managed_job' AND json_extract(payload,'$.action')='self_update' AND json_extract(payload,'$.phase') IN ('accepted','running','intent','recovery_required') LIMIT 1"
+                ).fetchone():
+                    raise UpdateError("busy")
+        if name == "updater_self_status":
+            return {
+                "installation": self.journal.get("self_installation", "current"),
+                "supported": bool(
+                    self.self_configuration and self.self_configuration.bootstrap_executable
+                ),
+                "releases": [
+                    {"release": r.release, "compatible_from": r.compatible_from}
+                    for r in self.catalog().updater_releases
+                    if r.artifact.platform == self.hardware()
+                ],
+            }
+        if name == "updater_self_update":
+            from .self_update import admit
+
+            return admit(self, args)
         if name == "updater_apps_list":
             catalog = self.catalog(refresh=args.refresh)
             return {
@@ -517,7 +568,7 @@ class Manager:
     def run_job(self, identity):
         with exclusive(self.state / "manager.lock"):
             job = self.journal.get("managed_job", identity)
-            if not job or job["phase"] != "accepted":
+            if not job or job["action"] == "self_update" or job["phase"] != "accepted":
                 return
 
             def effect(name, fn):
@@ -813,7 +864,7 @@ class Manager:
             interrupted = [
                 loads(row[0])
                 for row in db.execute(
-                    "SELECT payload FROM records WHERE kind='managed_job' AND json_extract(payload,'$.phase') IN ('intent','running')"
+                    "SELECT payload FROM records WHERE kind='managed_job' AND json_extract(payload,'$.action')!='self_update' AND json_extract(payload,'$.phase') IN ('intent','running')"
                 )
             ]
         for job in interrupted:
@@ -822,7 +873,7 @@ class Manager:
         while not self.stopping.is_set():
             with self.journal.connection() as db:
                 pending = db.execute(
-                    "SELECT id FROM records WHERE kind='managed_job' AND json_extract(payload,'$.phase')='accepted' LIMIT 1"
+                    "SELECT id FROM records WHERE kind='managed_job' AND json_extract(payload,'$.action')!='self_update' AND json_extract(payload,'$.phase')='accepted' LIMIT 1"
                 ).fetchone()
             if pending:
                 self.run_job(pending[0])

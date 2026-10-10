@@ -7,7 +7,7 @@
 ## Installation and use
 
 1. Install a reviewed prebuilt Updater wheel/runtime or indexed Native bundle (Linux amd64/arm64, Python 3.12, systemd).
-2. Run `sudo /absolute/path/bin/flamoris-updater bootstrap`. It provisions a dedicated Web account, two systemd services, private journals and a peer-checked local helper. It prints the Web URL and an expiring setup code.
+2. Run `sudo /absolute/path/bin/flamoris-updater bootstrap`. It provisions a dedicated Web account, three systemd services (Web, manager, pinned supervisor), private journals and a peer-checked local helper. It prints the Web URL and an expiring setup code.
 3. Open Web setup, enter the code, create the administrator, and select the ordinary HTTPS release catalog. `--root`, `--directory`, `--port` and `--public-origin` select deployment paths/access during bootstrap; no application JSON profile or private CA is required.
 4. Select each application and enter its displayed settings. Installation stages its package and services, then reports **initial setup pending**. Start it for its own setup, and verify afterward.
 5. Update an installed app: download/stage beside the old version, reuse installed settings/data, stop/switch/start and verify. Successful updates keep **current plus one previous version**; older executable versions are removed. Failed/unknown updates retain old versions and require inspection.
@@ -22,7 +22,9 @@ The simple local update path accepts explicitly declared schema/settings-compati
 
 Six deployment units are supported: AI Agent, Studio, Intelligence MCP, Generation MCP, MCP Hub and GPU Node Manager. Generation Controller is embedded in Generation's prebuilt image. AI initial minimum is 1.0.0, GNM 1.2.0, Updater 1.0.0; later compatible releases are allowed. Only declared real provider dependencies constrain installation order. No model/runtime is installed.
 
-Web, commands and eight managed MCP tools share the same authority, root executor, application records and durable Jobs. CLI/MCP use Bearer tokens created in Web; Web uses independent password/session/CSRF checks. Public connections use ordinary HTTPS/system trust. The public Web process is unprivileged and binds loopback; only its OS UID can call the privileged local helper. No interface accepts a shell command or caller-selected file destination.
+Web, commands and ten managed MCP tools share the same authority, root executor, application records and durable Jobs. CLI/MCP use Web-issued 24-hour tokens or separately revocable persistent integration keys; Web uses independent password/session/CSRF checks. Public connections use ordinary HTTPS/system trust. The public Web process is unprivileged and binds loopback; only its OS UID can call the privileged local helper. No interface accepts a shell command or caller-selected file destination.
+
+Updater can update its Web and root manager from an indexed, explicitly compatible Native bundle while retaining configuration, authentication and history. Its independent supervisor remains pinned to the bootstrap installation. MCP reconnects with the same key after the temporary outage; client retry/proxy operation is external. See [self-update and logging review](docs/SELF_UPDATE.md) for boundaries, logs visible to AI, and the bootstrap controller maintenance exception.
 
 ## Release preparation and development
 

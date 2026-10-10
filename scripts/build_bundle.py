@@ -140,6 +140,7 @@ def build(wheelhouse, output, target, version, interpreter):
                     with path.open("rb") as stream:
                         archive.addfile(info, stream)
         summary = {
+            "version": version,
             "platform": target,
             "python": "3.12",
             "artifact": destination.name,

@@ -2,6 +2,42 @@
 
 Updated: 2026-10-10 (JST).
 
+## Updater self-update and MCP continuity — source verified
+
+Implemented on the direct-install source (PR #11); review PR/CI is tracked separately.
+Authorized scope is Web/root-manager self-update and persistent MCP credentials,
+plus investigation of existing logs. No external software installation, failure
+recovery, DB/journal migration, ordinary app log feature, release or live change.
+
+- New bootstrap installs an independently pinned root supervisor alongside Web
+  and manager. Indexed compatible self releases are immutable catalog bindings.
+  It stages/verifies code, stops those two services, runs actual candidate probes
+  of both existing journals read-only, checks bootstrap config/unit bindings,
+  switches/starts, and verifies both live versions/runtime paths. Existing config,
+  credentials and history remain in place. The original supervisor installation
+  stays pinned; staged self bundles are retained, not automatically cleaned.
+- Web can issue/read metadata/rotate/revoke read-only or read/execute integration
+  keys. Secrets appear once and are hashed at rest; service principals cannot
+  issue credentials or grants. Owner changes/disablement invalidate keys. Existing
+  24-hour tokens remain. Stateless MCP reconnects with the same valid key after
+  update downtime; client retry and proxy/tunnel management remain external.
+- Self Jobs record step intents/outcomes/times for MCP Job/history inspection.
+  Unknown/interrupted work stops without replay or rollback and blocks local
+  operations. The ordinary manager does not execute/reconcile supervisor Jobs.
+- Logging investigation finds ordinary MCP exposes latest phase/step/error and
+  retained state, but no complete app step timeline, command diagnostics or MCP
+  event-log reader. This is insufficient for reliable cause diagnosis through
+  Updater MCP alone; enhancements require separate user approval.
+
+Local suite: **216 passed, 7 skipped**. Ruff/format, JavaScript syntax, docs links,
+schema export, Updater/Core wheel/sdist builds and actual amd64 indexed bundle
+runtime identity/entrypoints pass. GitHub CI is pending. Self Job tests use actual indexed staging and
+read-only SQLite probes with controlled systemd/runtime identity commands.
+Web/MCP tests cover expiry/restart, scope, secret redaction, rotation/revocation
+and owner invalidation. Bundle CI adds actual packaged runtime identity checks
+on amd64/arm64. These do not certify real service replacement or external clients.
+Read [self-update and logging review](docs/SELF_UPDATE.md).
+
 ## Simple installation and update — source and CI verified
 
 Current authorization covers the agreed source changes, tests/CI and a reviewable

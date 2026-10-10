@@ -23,7 +23,8 @@ from .auth import AuthStore, token_hash
 from .authority import Authority
 from .install import VERSIONS, path, run
 from .journal import Journal, durable_write, exclusive
-from .managed import MANAGED_TOOLS, Manager, https
+from .managed import MANAGED_TARGETS, MANAGED_TOOLS, Manager, https
+from .self_update import SELF, runtime_identity, unit_contents
 
 
 class BootstrapConfig(Model):
@@ -37,6 +38,8 @@ class BootstrapConfig(Model):
     public_origin: str
     listen_host: str = "127.0.0.1"
     listen_port: int = Field(default=8764, ge=1, le=65535)
+    bootstrap_executable: str | None = None
+    unit_directory: str = "/etc/systemd/system"
 
     @model_validator(mode="after")
     def origin(self):
@@ -62,6 +65,8 @@ class BootstrapConfig(Model):
             self.helper_state_directory,
             self.root,
             self.socket_path,
+            self.unit_directory,
+            *([self.bootstrap_executable] if self.bootstrap_executable else []),
         ]:
             if (
                 not Path(value).is_absolute()
@@ -99,7 +104,7 @@ class LocalCoordinator:
         self.auth = AuthStore(self.journal, self.authority, lambda: int(time.time()))
         self.client = client or UnixClient(cfg.socket_path, expected_uid=0)
         self.profiles = {
-            a: SimpleNamespace(id=a, application_id=a, role="application") for a in VERSIONS
+            a: SimpleNamespace(id=a, application_id=a, role="application") for a in MANAGED_TARGETS
         }
         self.stopping, self.wakeup = threading.Event(), threading.Event()
 
@@ -127,7 +132,7 @@ class LocalCoordinator:
             # retry exactly the same source and complete the account transaction.
             self.client.call({"action": "configure", "body": {"catalog_url": args.catalog_url}})
             self.auth.user(
-                args.username, args.password, ["read", "execute", "operator"], list(VERSIONS)
+                args.username, args.password, ["read", "execute", "operator"], MANAGED_TARGETS
             )
             with self.journal.transaction() as db:
                 self.journal.put("web_setup", "completed", {"username": args.username}, db)
@@ -138,7 +143,16 @@ class LocalCoordinator:
         if self.setup_status()["setup_required"] or name not in MANAGED_TOOLS:
             raise UpdateError("forbidden")
         args = decode(MANAGED_TOOLS[name][0], dumps(payload))
-        targets = [args.application_id] if hasattr(args, "application_id") else list(VERSIONS)
+        targets = (
+            [SELF]
+            if name.startswith("updater_self_") and self.cfg.bootstrap_executable
+            else [args.application_id]
+            if hasattr(args, "application_id")
+            else MANAGED_TARGETS
+            if self.cfg.bootstrap_executable
+            and name in {"updater_managed_history", "updater_managed_job_get"}
+            else list(VERSIONS)
+        )
         self.authority.require(subject, MANAGED_TOOLS[name][2], targets)
         return self.client.call({"action": "tool", "body": {"name": name, "arguments": payload}})
 
@@ -148,6 +162,8 @@ class LocalCoordinator:
 
 def dispatch(manager, action, raw):
     payload = loads(raw)
+    if action == "version" and payload == {}:
+        return dumps(runtime_identity())
     if action == "configure" and set(payload) == {"catalog_url"}:
         current = manager.journal.get("manager_config", "source")
         if current and current["url"] == payload["catalog_url"]:
@@ -161,7 +177,7 @@ def dispatch(manager, action, raw):
 def helper(cfg):
     if os.geteuid() != 0:
         raise UpdateError("forbidden")
-    manager = Manager(cfg.helper_state_directory, cfg.root)
+    manager = Manager(cfg.helper_state_directory, cfg.root, self_configuration=cfg)
     socket_cfg = SimpleNamespace(
         socket_path=cfg.socket_path,
         socket_group_id=cfg.service_gid,
@@ -229,11 +245,15 @@ def bootstrap(
         service_gid=account.pw_gid,
         public_origin=origin,
         listen_port=port,
+        bootstrap_executable=executable,
+        unit_directory=str(unit_directory),
     )
-    units = {
-        "flamoris-updater.service": f"[Unit]\nAfter=network.target flamoris-updater-manager.service\nRequires=flamoris-updater-manager.service\n[Service]\nUser={account.pw_uid}\nGroup={account.pw_gid}\nExecStart={executable} serve --config {base}/setup.json\nRestart=on-failure\nNoNewPrivileges=yes\nPrivateTmp=yes\n[Install]\nWantedBy=multi-user.target\n",
-        "flamoris-updater-manager.service": f"[Unit]\nAfter=network.target docker.service\n[Service]\nGroup={account.pw_gid}\nRuntimeDirectory=flamoris-updater\nRuntimeDirectoryMode=0750\nExecStart={executable} helper --config {base}/setup.json\nRestart=on-failure\n[Install]\nWantedBy=multi-user.target\n",
-    }
+    units = unit_contents(cfg, executable, base / "setup.json")
+    units["flamoris-updater-supervisor.service"] = (
+        "[Unit]\nAfter=network.target\n[Service]\n"
+        f"ExecStart={executable} supervise --config {base}/setup.json\nRestart=on-failure\n"
+        "[Install]\nWantedBy=multi-user.target\n"
+    )
     for name in units:
         if Path(unit_directory, name).exists():
             raise UpdateError("not_empty")

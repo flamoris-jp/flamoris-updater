@@ -7,6 +7,7 @@ Source models/exported schemas are authoritative. Historical backup/restore fiel
 | Bootstrap, access and services | [Running](RUNNING.md), [transport](TRANSPORT.md), `setup.BootstrapConfig` |
 | Catalog, settings and package recipes | [Installation](INSTALL.md), `managed.Catalog` / `Recipe` / exported InstallCatalog |
 | Managed jobs and shared interfaces | [MCP/API](MCP_API.md), [Web](WEB_UI.md), `managed.Start` / `Manager` |
+| Updater self-update, continuing MCP credentials and logging limits | [Self-update](SELF_UPDATE.md), `self_update.SelfRelease` / `SelfStart`, `auth.AuthStore` |
 | App-owned schema migrations | Core schema graph and standalone migration runner; no backup/restore prerequisite |
 | Advanced signed coordinator/Owner | Current source schemas; matching SDK/profiles are separate integration |
 | Source, CI and live boundary | [Progress](../PROGRESS.md), [roadmap](ROADMAP.md) |

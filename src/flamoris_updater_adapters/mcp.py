@@ -12,6 +12,7 @@ from flamoris_update_core.wire import dumps
 
 from .inputs import TOOLS, Facade
 from .managed import MANAGED_TOOLS
+from .self_update import runtime_identity
 
 
 class Verifier:
@@ -28,7 +29,7 @@ class Verifier:
 
 def create_mcp(coordinator, auth, origin):
     facade = Facade(coordinator)
-    server = Server("flamoris-updater", version="1.0.0")
+    server = Server("flamoris-updater", version=runtime_identity()["version"])
 
     @server.list_tools()
     async def list_tools():

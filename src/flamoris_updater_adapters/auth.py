@@ -5,6 +5,7 @@ from argon2 import PasswordHasher
 from argon2.exceptions import VerificationError
 
 from flamoris_update_core.errors import UpdateError
+from flamoris_update_core.wire import loads
 
 
 def token_hash(token: str) -> str:
@@ -71,10 +72,122 @@ class AuthStore:
         if not isinstance(token, str) or not 16 <= len(token) <= 256:
             raise UpdateError("unauthorized")
         record = self.journal.get("token", token_hash(token))
-        if record is None or record["revoked"] or record["expires_at"] <= self.clock():
+        if record is None or record["revoked"]:
+            raise UpdateError("unauthorized")
+        if record.get("integration_id"):
+            integration = self.journal.get("integration", record["integration_id"])
+            if not integration or integration["revoked"]:
+                raise UpdateError("unauthorized")
+            owner = self.authority.require(integration["owner"], "operator", integration["targets"])
+            if owner["_revision"] != integration["owner_revision"]:
+                raise UpdateError("unauthorized")
+        elif record["expires_at"] <= self.clock():
             raise UpdateError("unauthorized")
         self.authority.require(record["subject"], "read", [])
         return record["subject"]
+
+    def integration(self, owner, label, *, execute=True, identity=None):
+        """Explicit, revocable service credentials; only Web operators can issue them.
+
+        The secret is returned once. A separate principal cannot mint credentials
+        or authorize grants, and a changed/disabled owner invalidates its keys.
+        """
+        if (
+            not isinstance(label, str)
+            or not 1 <= len(label) <= 128
+            or any(ord(c) < 32 for c in label)
+        ):
+            raise UpdateError("invalid_input")
+        rotating = identity is not None
+        token, identity = (
+            secrets.token_urlsafe(48),
+            identity or "integration-" + secrets.token_hex(16),
+        )
+        with self.journal.transaction() as db:
+            if self.journal.meta("mode", db) != "active":
+                raise UpdateError("busy")
+            principal = self.authority.require(owner, "operator", [], db)
+            roles = ["read", "execute"] if execute else ["read"]
+            if not set(roles) <= set(principal["roles"]):
+                raise UpdateError("forbidden")
+            old = self.journal.get("integration", identity, db)
+            if old:
+                if old["owner"] != owner or old["revoked"]:
+                    raise UpdateError("forbidden")
+                prior = self.journal.get("token", old["token_hash"], db)
+                self.journal.put("token", old["token_hash"], {**prior, "revoked": True}, db)
+            elif rotating:
+                raise UpdateError("forbidden")
+            elif (
+                db.execute("SELECT COUNT(*) FROM records WHERE kind='integration'").fetchone()[0]
+                >= 256
+            ):
+                raise UpdateError("quota_exceeded")
+            self.journal.put(
+                "principal",
+                identity,
+                {"roles": roles, "targets": principal["targets"], "active": True},
+                db,
+            )
+            self.journal.put(
+                "integration",
+                identity,
+                {
+                    "owner": owner,
+                    "owner_revision": principal["_revision"],
+                    "label": label,
+                    "targets": principal["targets"],
+                    "roles": roles,
+                    "revoked": False,
+                    "created_at": self.clock(),
+                    "token_hash": token_hash(token),
+                },
+                db,
+            )
+            self.journal.put(
+                "token",
+                token_hash(token),
+                {
+                    "subject": identity,
+                    "expires_at": None,
+                    "revoked": False,
+                    "integration_id": identity,
+                },
+                db,
+            )
+            self.journal.event(db, "integration_rotated" if old else "integration_issued", identity)
+        return {"integration_id": identity, "token": token, "expires_at": None}
+
+    def integrations(self, owner):
+        self.authority.require(owner, "operator", [])
+        with self.journal.connection() as db:
+            return {
+                "items": [
+                    {
+                        "integration_id": row[0],
+                        **{
+                            k: v
+                            for k, v in loads(row[1]).items()
+                            if k in {"label", "roles", "targets", "revoked", "created_at"}
+                        },
+                    }
+                    for row in db.execute(
+                        "SELECT id,payload FROM records WHERE kind='integration' AND json_extract(payload,'$.owner')=? ORDER BY id",
+                        (owner,),
+                    )
+                ]
+            }
+
+    def revoke_integration(self, owner, identity):
+        with self.journal.transaction() as db:
+            self.authority.require(owner, "operator", [], db)
+            if self.journal.meta("mode", db) != "active":
+                raise UpdateError("busy")
+            record = self.journal.get("integration", identity, db)
+            if not record or record["owner"] != owner:
+                raise UpdateError("forbidden")
+            self.journal.put("integration", identity, {**record, "revoked": True}, db)
+            self.journal.event(db, "integration_revoked", identity)
 
     def login(self, username: str, password: str, remote: str):
         if (

@@ -32,6 +32,8 @@ def main(argv=None):
         "start-setup",
         "complete-setup",
         "delete-previous",
+        "self-status",
+        "self-update",
     ):
         command = commands.add_parser(action, help="Use the same managed operation as Web and MCP")
         command.add_argument("--url", required=True)
@@ -39,7 +41,7 @@ def main(argv=None):
         command.add_argument("--public-origin")
         if action in {"install", "update", "start-setup", "complete-setup", "delete-previous"}:
             command.add_argument("--application", required=True)
-        if action in {"install", "update"}:
+        if action in {"install", "update", "self-update"}:
             command.add_argument("--release", required=True)
             command.add_argument("--request-key", default=None)
         if action == "install":
@@ -92,6 +94,8 @@ def main(argv=None):
             "start-setup",
             "complete-setup",
             "delete-previous",
+            "self-status",
+            "self-update",
         }:
             names = {
                 "install": "updater_install",
@@ -101,6 +105,8 @@ def main(argv=None):
                 "start-setup": "updater_install_start",
                 "complete-setup": "updater_install_complete",
                 "delete-previous": "updater_previous_delete",
+                "self-status": "updater_self_status",
+                "self-update": "updater_self_update",
             }
             managed_arguments = {}
             if hasattr(args, "application"):
