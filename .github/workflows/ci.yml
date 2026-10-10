@@ -35,7 +35,7 @@ jobs:
         with:
           python-version: '3.12'
       - run: python -m pip install --constraint requirements-runtime.lock -e '.[dev]'
-      - run: sudo env FLAMORIS_INSTALL_TEST_POSTGRES_DSN='postgresql://postgres:disposable-test-password@127.0.0.1:5432/postgres' "$(command -v python)" -m pytest -q tests/test_install.py tests/test_managed.py
+      - run: sudo env FLAMORIS_INSTALL_TEST_POSTGRES_DSN='postgresql://postgres:disposable-test-password@127.0.0.1:5432/postgres' "$(command -v python)" -m pytest -q tests/test_install.py tests/test_managed.py tests/test_self_update.py
   verify:
     runs-on: ubuntu-24.04
     steps:

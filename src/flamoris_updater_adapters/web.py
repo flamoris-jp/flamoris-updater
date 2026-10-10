@@ -19,6 +19,7 @@ from flamoris_update_core.wire import decode, dumps, loads
 from .inputs import Facade, GrantRequest
 from .journal import exclusive
 from .mcp import create_mcp
+from .self_update import runtime_identity
 
 SESSION = "__Host-updater-session"
 LOGIN = "__Host-updater-login"
@@ -31,6 +32,11 @@ class LoginRequest(Model):
 
 class RevokeRequest(Model):
     authorization_id: ID
+
+
+class IntegrationRequest(Model):
+    label: str = Field(min_length=1, max_length=128)
+    execute: bool = True
 
 
 class Boundary:
@@ -226,10 +232,39 @@ def create_app(coordinator, auth, origin, run_worker=True):
         coordinator.authority.require(subject, "operator", [])
         return JSONResponse({"token": auth.issue_token(subject), "expires_seconds": 86400})
 
+    def integration_owner(request, mutation=False):
+        # Service keys cannot issue/rotate keys, even if sent with a browser cookie.
+        if request.headers.get("authorization") is not None:
+            raise UpdateError("forbidden")
+        subject = principal(request, mutation=mutation)
+        coordinator.authority.require(subject, "operator", [])
+        return subject
+
+    async def integrations(request):
+        owner = integration_owner(request, request.method == "POST")
+        if request.method == "GET":
+            return JSONResponse(auth.integrations(owner))
+        args = decode(IntegrationRequest, await body(request))
+        return JSONResponse(auth.integration(owner, args.label, execute=args.execute))
+
+    async def integration_change(request):
+        owner = integration_owner(request, True)
+        identity = request.path_params["identity"]
+        if request.path_params["action"] == "revoke":
+            decode(Model, await body(request))
+            auth.revoke_integration(owner, identity)
+            return JSONResponse({"revoked": True})
+        if request.path_params["action"] != "rotate":
+            raise UpdateError("invalid_input")
+        args = decode(IntegrationRequest, await body(request))
+        return JSONResponse(
+            auth.integration(owner, args.label, execute=args.execute, identity=identity)
+        )
+
     async def health(request):
         return JSONResponse(
             {
-                "version": "1.0.0",
+                **runtime_identity(),
                 "journal_version": 1,
                 "mode": coordinator.journal.meta("mode"),
                 "epoch": int(coordinator.journal.meta("epoch")),
@@ -281,6 +316,8 @@ def create_app(coordinator, auth, origin, run_worker=True):
             Route("/api/v1/setup", setup_status),
             Route("/api/v1/setup", setup, methods=["POST"]),
             Route("/api/v1/token", issue_token, methods=["POST"]),
+            Route("/api/v1/integrations", integrations, methods=["GET", "POST"]),
+            Route("/api/v1/integrations/{identity}/{action}", integration_change, methods=["POST"]),
             Route("/api/v1/login", login, methods=["POST"]),
             Route("/api/v1/session", session),
             Route("/api/v1/logout", logout, methods=["POST"]),

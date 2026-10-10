@@ -1,5 +1,5 @@
 "use strict";
-let csrf = "", busy = false, appSnapshot = "";
+let csrf = "", busy = false, appSnapshot = "", selfSnapshot = "", integrationSnapshot = "";
 const $ = id => document.getElementById(id);
 const labels = {accepted:"受付済み", intent:"処理中", running:"処理中", awaiting_setup:"初回設定待ち", succeeded:"完了", recovery_required:"処理の確認が必要"};
 function showError(error) {
@@ -132,6 +132,26 @@ async function refresh(releases = false) {
       element("span", job.application_id + " " + job.release + " · " + (labels[job.phase] || job.phase) + " · " + (job.step || "") + (job.cleanup_pending ? " · 旧版の整理待ち" : ""), row);
       element("code", job.job_id, row);
     }
+    const self = await tool("updater_self_status");
+    const selfJson = JSON.stringify(self);
+    if (selfJson !== selfSnapshot) {
+      $("self-update").replaceChildren();
+      $("self-section").hidden = false;
+      const current = self.installation;
+      element("p", current ? "現在のバージョン: " + current.release : "自己更新には対応するbootstrapが必要です。", $("self-update"));
+      const choices = self.releases.filter(r => self.supported && current && newer(r.release, current.release) && r.compatible_from.includes(current.release));
+      if (choices.length) {
+        const select = element("select", undefined, $("self-update"));
+        select.setAttribute("aria-label", "Updaterの更新バージョン");
+        for (const release of choices) element("option", release.release, select).value = release.release;
+        button("Updaterを更新", $("self-update"), async () => {
+          await tool("updater_self_update", {release:select.value, request_key:crypto.randomUUID()});
+          await refresh();
+        });
+      } else element("p", "現在利用できる互換更新はありません。", $("self-update"));
+      selfSnapshot = selfJson;
+    }
+    await refreshIntegrations();
   } finally { busy = false; }
 }
 async function start() {
@@ -147,6 +167,7 @@ async function start() {
     $("identity").textContent = session.subject;
     $("workspace").hidden = false;
     $("logout").hidden = false;
+    $("integrations-section").hidden = false;
     await refresh();
   } catch {
     $("login").hidden = false;
@@ -168,5 +189,39 @@ $("token").addEventListener("click", () => api("/api/v1/token", {}).then(result 
   $("access-token").textContent = result.token + "\n有効期限: 24時間。安全なファイルに保存してください。";
   $("access-token").hidden = false;
 }).catch(showError));
+function showIntegrationKey(result) {
+  $("integration-secret").textContent = result.token + "\n失効するまで有効です。連携先の秘密情報設定に保存してください。";
+  $("integration-secret").hidden = false;
+}
+async function refreshIntegrations() {
+  const result = await api("/api/v1/integrations");
+  const snapshot = JSON.stringify(result);
+  if (snapshot === integrationSnapshot) return;
+  $("integrations").replaceChildren();
+  for (const item of result.items) {
+    const row = element("div", undefined, $("integrations"));
+    row.className = "history-row";
+    element("span", item.label + " · " + (item.revoked ? "失効済み" : item.roles.includes("execute") ? "読み取り・実行" : "読み取りのみ"), row);
+    if (!item.revoked) {
+      button("キーを更新", row, async () => {
+        if (!confirm("現在のキーを失効し、新しいキーを発行します。連携先の設定を更新してください。")) return;
+        showIntegrationKey(await api("/api/v1/integrations/" + item.integration_id + "/rotate", {label:item.label, execute:item.roles.includes("execute")}));
+        await refreshIntegrations();
+      });
+      button("失効", row, async () => {
+        if (!confirm("この連携キーを失効します。")) return;
+        await api("/api/v1/integrations/" + item.integration_id + "/revoke", {});
+        await refreshIntegrations();
+      });
+    }
+  }
+  integrationSnapshot = snapshot;
+}
+$("integration-form").addEventListener("submit", event => {
+  event.preventDefault();
+  const values = Object.fromEntries(new FormData(event.target));
+  api("/api/v1/integrations", {label:values.label, execute:values.execute === "true"})
+    .then(result => { showIntegrationKey(result); return refreshIntegrations(); }).catch(showError);
+});
 start().catch(showError);
 setInterval(() => { if (!$("workspace").hidden) refresh().catch(showError); }, 3000);

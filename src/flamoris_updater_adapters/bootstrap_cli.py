@@ -11,24 +11,33 @@ from flamoris_update_core.wire import dumps
 
 from .auth import token_hash
 from .config import load
+from .self_update import Supervisor, runtime_identity
 from .setup import BootstrapConfig, LocalCoordinator, helper
 from .web import create_app
 
 
 def main(argv=None):
     parser = argparse.ArgumentParser()
-    parser.add_argument("command", choices=["serve", "helper", "token"])
+    parser.add_argument(
+        "command", choices=["serve", "helper", "token", "supervise", "check", "probe"]
+    )
     parser.add_argument("--config", required=True)
     args = parser.parse_args(argv)
     try:
         cfg = load(BootstrapConfig, args.config)
-        if args.command == "helper":
+        if args.command == "check":
+            print(dumps(runtime_identity()).decode())
+        elif args.command == "supervise":
+            Supervisor(cfg, args.config).worker()
+        elif args.command == "helper":
             helper(cfg)
         else:
             if os.geteuid() != cfg.service_uid:
                 raise UpdateError("forbidden", "Run the frontend as its configured service account")
             c = LocalCoordinator(cfg)
-            if args.command == "token":
+            if args.command == "probe":
+                print(dumps(c.client.call({"action": "version", "body": {}})).decode())
+            elif args.command == "token":
                 if not c.setup_status()["setup_required"]:
                     raise UpdateError("forbidden")
                 token = secrets.token_urlsafe(32)

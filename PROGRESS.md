@@ -2,6 +2,90 @@
 
 Updated: 2026-10-10 (JST).
 
+## PR #11 merged; PR #14 reconciled with main
+
+PR #11 was squash-merged into main at
+`c21ef02794ab8c3917a20539e4cf253e1d936136`. Its complete Git tree is identical
+to the reviewed PR #11 head `1b12c503630eff29fa394674967578d709c1ce3f`
+(`6d4e1247456d77cc5fb94d08f287e5531a07b06f`). The subsequent PR #14 conflict
+was caused by changed ancestry, not different installation source contents.
+
+PR #14 now targets main and incorporates that main commit with a merge commit,
+preserving the already validated self-update, continuing MCP credentials and
+diagnostic/layout source. No application code, configuration or test behavior is
+changed by this reconciliation. Documentation links are checked locally; latest
+CI and mergeability evidence are recorded in PR #14. PR #14 remains reviewable;
+no release publication or real-host changes are performed.
+
+## AI-readable diagnostics — implemented and locally verified
+
+The user's additional authorization covers structured evidence for AI recovery
+procedure preparation and installation documentation, plus an explicit manual
+recovery guide when Updater is stopped. PR #14 now includes ordinary app and
+self-update timelines, bounded exit/errno/SQLSTATE/fixed-hint failure records and
+read-only application-scoped MCP log/layout tools. No automatic recovery, external
+installation, new DB migration, release publication or real-host change is added.
+
+Intent is durably committed and privately exported before effects. Current,
+candidate and previous layout distinguish recorded bindings from live state;
+Server Manager remains the current infrastructure observation authority. Offline
+JSONL/layout mirrors support manual inspection during Updater downtime. Existing
+records tables are reused without a DB schema upgrade. See
+[diagnostics and manual recovery](docs/DIAGNOSTICS.md).
+
+Local suite: **227 passed, 7 skipped**. Ruff/format, JavaScript syntax, doc links,
+strict schema export, Updater wheel/sdist and the actual amd64 indexed bundle
+with all installed entrypoints pass. Tests cover durable pagination/export,
+secret exclusion, bounded diagnostic classification, logging-write/quota failure
+before effects, install/setup/update interruption and app-scoped read-only MCP.
+Self-update still passes both actual read-only SQLite probes. The latest GitHub
+CI result is recorded in [PR #14](https://github.com/flamoris-jp/flamoris-updater/pull/14).
+The earlier logging investigation below is historical and superseded by this
+authorized implementation; its missing features are no longer the source status.
+
+## Previous checkpoint: self-update and MCP continuity — source verified
+
+Implemented on the direct-install source (PR #11) in
+[PR #14](https://github.com/flamoris-jp/flamoris-updater/pull/14), targeting that
+feature branch so the two authorized additions can be reviewed independently.
+Authorized scope is Web/root-manager self-update and persistent MCP credentials,
+plus investigation of existing logs. No external software installation, failure
+recovery, DB/journal migration, ordinary app log feature, release or live change.
+
+- New bootstrap installs an independently pinned root supervisor alongside Web
+  and manager. Indexed compatible self releases are immutable catalog bindings.
+  It stages/verifies code, stops those two services, runs actual candidate probes
+  of both existing journals read-only, checks bootstrap config/unit bindings,
+  switches/starts, and verifies both live versions/runtime paths. Existing config,
+  credentials and history remain in place. The original supervisor installation
+  stays pinned; staged self bundles are retained, not automatically cleaned.
+- Web can issue/read metadata/rotate/revoke read-only or read/execute integration
+  keys. Secrets appear once and are hashed at rest; service principals cannot
+  issue credentials or grants. Owner changes/disablement invalidate keys. Existing
+  24-hour tokens remain. Stateless MCP reconnects with the same valid key after
+  update downtime; client retry and proxy/tunnel management remain external.
+- Self Jobs record step intents/outcomes/times for MCP Job/history inspection.
+  Unknown/interrupted work stops without replay or rollback and blocks local
+  operations. The ordinary manager does not execute/reconcile supervisor Jobs.
+- Logging investigation finds ordinary MCP exposes latest phase/step/error and
+  retained state, but no complete app step timeline, command diagnostics or MCP
+  event-log reader. This is insufficient for reliable cause diagnosis through
+  Updater MCP alone; enhancements require separate user approval.
+
+Local suite: **216 passed, 7 skipped**. Ruff/format, JavaScript syntax, docs links,
+schema export, Updater/Core wheel/sdist builds and actual amd64 indexed bundle
+runtime identity/entrypoints pass. [CI run 38010234118](https://github.com/flamoris-jp/flamoris-updater/actions/runs/38010234118)
+on implementation commit `d7f5f427a287b29a36aa19f527e795c1d3c8e921` passed all
+five jobs: ordinary verification/build/docs/schemas, root managed/self flows with
+real PostgreSQL initialization, actual Generation Docker install/start/health,
+and amd64/arm64 indexed bundle/runtime identity checks.
+Self Job tests use actual indexed staging and
+read-only SQLite probes with controlled systemd/runtime identity commands.
+Web/MCP tests cover expiry/restart, scope, secret redaction, rotation/revocation
+and owner invalidation. Bundle CI adds actual packaged runtime identity checks
+on amd64/arm64. These do not certify real service replacement or external clients.
+Read [self-update and logging review](docs/SELF_UPDATE.md).
+
 ## Simple installation and update — source and CI verified
 
 Current authorization covers the agreed source changes, tests/CI and a reviewable

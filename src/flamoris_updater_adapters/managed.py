@@ -24,6 +24,18 @@ from flamoris_update_core.errors import UpdateError
 from flamoris_update_core.models import ID, Digest, Model, VersionRange
 from flamoris_update_core.wire import decode, digest, dumps, loads, version
 
+from .diagnostics import (
+    LayoutRequest,
+    Log,
+    LogPage,
+    describe,
+    event,
+    failure,
+    recording,
+    redact,
+    save_layout,
+)
+from .diagnostics import effect as recorded_effect
 from .install import (
     VERSIONS,
     Configuration,
@@ -34,6 +46,9 @@ from .install import (
     path,
 )
 from .journal import Journal, durable_write, exclusive
+from .self_update import SELF, SelfRelease, SelfStart
+
+MANAGED_TARGETS = [*VERSIONS, SELF]
 
 
 def https(value):
@@ -103,12 +118,16 @@ class Recipe(Model):
 class Catalog(Model):
     catalog_version: Literal[1]
     recipes: list[Recipe] = Field(max_length=128)
+    updater_releases: list[SelfRelease] = Field(default_factory=list, max_length=128)
 
     @model_validator(mode="after")
     def unique(self):
         identities = [(r.application_id, r.release, r.platform) for r in self.recipes]
         if len(set(identities)) != len(identities):
             raise ValueError("Duplicate release")
+        self_ids = [(r.release, r.artifact.platform) for r in self.updater_releases]
+        if len(set(self_ids)) != len(self_ids):
+            raise ValueError("Duplicate Updater release")
         return self
 
 
@@ -132,6 +151,22 @@ class Refresh(Model):
 
 
 MANAGED_TOOLS = {
+    "updater_managed_log_get": (
+        LogPage,
+        "Paged, secret-free effect timeline for one application Job",
+        "read",
+    ),
+    "updater_managed_layout_get": (
+        LayoutRequest,
+        "Recorded installation and candidate placement for documentation",
+        "read",
+    ),
+    "updater_self_status": (Model, "Updater version and compatible self-update releases", "read"),
+    "updater_self_update": (
+        SelfStart,
+        "Update Web and manager through the stable supervisor",
+        "execute",
+    ),
     "updater_apps_list": (Refresh, "Installed apps, available recipes and settings", "read"),
     "updater_install": (Start, "Install one selected application", "execute"),
     "updater_update": (
@@ -152,11 +187,23 @@ MANAGED_TOOLS = {
 
 
 class Manager:
-    def __init__(self, state, root, *, installer=Installer, client=None):
+    def __init__(self, state, root, *, installer=Installer, client=None, self_configuration=None):
         self.state, self.root = path(str(state)), path(str(root))
         self.journal = Journal(self.state)
         self.root.mkdir(parents=True, exist_ok=True, mode=0o755)
         self.installer = installer
+        self.self_configuration = self_configuration
+        if (
+            self_configuration
+            and self_configuration.bootstrap_executable
+            and not self.journal.get("self_installation", "current")
+        ):
+            from .self_update import initial_record
+
+            with self.journal.transaction() as db:
+                self.journal.put(
+                    "self_installation", "current", initial_record(self_configuration), db
+                )
         self.client = client or httpx.Client(
             verify=True, trust_env=False, follow_redirects=False, timeout=60
         )
@@ -210,13 +257,17 @@ class Manager:
 
     def accept_catalog(self, catalog):
         with self.journal.transaction() as db:
-            for recipe in catalog.recipes:
+            for recipe in [*catalog.recipes, *catalog.updater_releases]:
                 identity = digest(
                     dumps(
                         {
-                            "application_id": recipe.application_id,
+                            "application_id": recipe.application_id
+                            if isinstance(recipe, Recipe)
+                            else SELF,
                             "release": recipe.release,
-                            "platform": recipe.platform,
+                            "platform": recipe.platform
+                            if isinstance(recipe, Recipe)
+                            else recipe.artifact.platform,
                         }
                     )
                 )
@@ -231,6 +282,38 @@ class Manager:
         if name not in MANAGED_TOOLS:
             raise UpdateError("invalid_input")
         args = decode(MANAGED_TOOLS[name][0], dumps(payload))
+        if name in {"updater_managed_log_get", "updater_managed_layout_get"}:
+            if args.application_id not in MANAGED_TARGETS:
+                raise UpdateError("invalid_input")
+            if args.job_id:
+                job = self.journal.get("managed_job", args.job_id)
+                if not job or job["application_id"] != args.application_id:
+                    raise UpdateError("invalid_input")
+            if name == "updater_managed_log_get":
+                return {"job": job, **Log(self.journal, args.job_id).page(args.after, args.limit)}
+            return self.layout(args.application_id, args.job_id)
+        if MANAGED_TOOLS[name][2] == "execute" and name != "updater_self_update":
+            with self.journal.connection() as db:
+                if db.execute(
+                    "SELECT 1 FROM records WHERE kind='managed_job' AND json_extract(payload,'$.action')='self_update' AND json_extract(payload,'$.phase') IN ('accepted','running','intent','recovery_required') LIMIT 1"
+                ).fetchone():
+                    raise UpdateError("busy")
+        if name == "updater_self_status":
+            return {
+                "installation": self.journal.get("self_installation", "current"),
+                "supported": bool(
+                    self.self_configuration and self.self_configuration.bootstrap_executable
+                ),
+                "releases": [
+                    {"release": r.release, "compatible_from": r.compatible_from}
+                    for r in self.catalog().updater_releases
+                    if r.artifact.platform == self.hardware()
+                ],
+            }
+        if name == "updater_self_update":
+            from .self_update import admit
+
+            return admit(self, args)
         if name == "updater_apps_list":
             catalog = self.catalog(refresh=args.refresh)
             return {
@@ -396,6 +479,9 @@ class Manager:
                 "step": None,
                 "recipe": digest(dumps(recipe)),
                 "created_at": int(time.time()),
+                "from_release": installed["release"] if installed else None,
+                "host": socket.gethostname(),
+                "platform": self.hardware(),
             }
             self.journal.put("managed_recipe", identity, recipe.model_dump(), db)
             self.journal.put("managed_job", identity, job, db)
@@ -419,12 +505,22 @@ class Manager:
         for name, item in recipe.downloads.items():
             destination = package / name
             destination.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
-            self._download(item.url, 4 * 1024**3, destination, item.digest)
+            recorded_effect(
+                "artifact.download",
+                lambda: self._download(item.url, 4 * 1024**3, destination, item.digest),
+                {"member": name, "digest": item.digest, "destination": str(destination)},
+            )
         for name, template in recipe.generated.items():
             destination = package / name
             destination.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
             try:
-                durable_write(destination, Template(template).substitute(values).encode())
+                recorded_effect(
+                    "configuration.generate",
+                    lambda: durable_write(
+                        destination, Template(template).substitute(values).encode()
+                    ),
+                    {"path": str(destination), "private": True},
+                )
             except (ValueError, KeyError):
                 raise UpdateError("invalid_profile") from None
 
@@ -513,22 +609,130 @@ class Manager:
             self.journal.put(kind, identity, record, db)
             self.journal.event(db, kind, identity, record.get("phase", ""))
         self.journal.flush_export()
+        if kind == "managed_job":
+            event(
+                "job.state",
+                record.get("phase", ""),
+                {"step": record.get("step"), "error": record.get("error")},
+            )
+
+    def secrets(self, identity):
+        recipe = self.journal.get("managed_recipe", identity)
+        if not recipe:
+            return []
+        values = loads(
+            (self.state / "settings" / recipe["application_id"] / "values.json").read_bytes()
+        )
+        return [values.get(s["key"], "") for s in recipe["settings"] if s["secret"]]
+
+    def save_layout(self, identity, app, installer):
+        layout = describe(app, self.root / app.application_id, installer.unit_directory)
+        layout.update(
+            host=socket.gethostname(),
+            platform=self.hardware(),
+            unit_directory=str(installer.unit_directory),
+        )
+        installed = self.journal.get("managed_app", app.application_id)
+        if installed:
+            layout["previous_layout"] = self.layout(app.application_id)["current"]
+        save_layout(self.journal, identity, layout)
+
+    def layout(self, application, identity=None):
+        with self.journal.connection() as db:
+            row = db.execute(
+                "SELECT id FROM records WHERE kind='managed_job' AND json_extract(payload,'$.application_id')=? ORDER BY json_extract(payload,'$.created_at') DESC,rowid DESC LIMIT 1",
+                (application,),
+            ).fetchone()
+        selected = identity or (row[0] if row else None)
+        candidate = self.journal.get("managed_layout", selected) if selected else None
+        installed = self.journal.get("managed_app", application)
+        current = None
+        if installed:
+            bound = self.journal.get("managed_layout", installed["job_id"])
+            profile = installed["profile"]
+            app = decode(
+                NativeApplication if profile["kind"] == "native" else DockerApplication,
+                dumps(profile),
+            )
+            current = redact(
+                describe(
+                    app,
+                    self.root / application,
+                    (bound or {}).get("unit_directory", "/etc/systemd/system"),
+                ),
+                self.secrets(installed["job_id"]),
+            )
+            current.update(
+                installation_phase=installed["phase"],
+                job_id=installed["job_id"],
+                host=(bound or {}).get("host"),
+                recorded_at_ms=(bound or {}).get("recorded_at_ms"),
+            )
+        if application == SELF:
+            from .self_update import deployment_layout
+
+            bound = self.journal.get("self_installation", "current")
+            layout_bound = (
+                self.journal.get("managed_layout", bound.get("job_id"))
+                if bound and bound.get("job_id")
+                else None
+            )
+            current = (
+                deployment_layout(
+                    self.self_configuration, bound, (layout_bound or {}).get("configuration_file")
+                )
+                if self.self_configuration and bound
+                else bound
+            )
+        return dict(
+            application_id=application,
+            current=current,
+            candidate=candidate,
+            candidate_job=self.journal.get("managed_job", selected) if selected else None,
+            previous=(installed or {}).get("previous"),
+            older=(installed or {}).get("older", [])[:20],
+            older_count=len((installed or {}).get("older", [])),
+            evidence="recorded_bindings_and_effects",
+            live_state=False,
+            diagnostics_directory=str(self.state / "diagnostics"),
+        )
 
     def run_job(self, identity):
-        with exclusive(self.state / "manager.lock"):
+        with (
+            exclusive(self.state / "manager.lock"),
+            recording(self.journal, identity) as log,
+        ):
             job = self.journal.get("managed_job", identity)
-            if not job or job["phase"] != "accepted":
+            if not job or job["action"] == "self_update" or job["phase"] != "accepted":
                 return
 
             def effect(name, fn):
                 job.update(phase="intent", step=name)
                 self.persist("managed_job", identity, job)
-                result = fn()
+                result = recorded_effect(name, fn)
                 job.update(phase="running", step=name)
                 self.persist("managed_job", identity, job)
                 return result
 
             try:
+                log.secrets.extend(self.secrets(identity))
+                event(
+                    "job.accepted",
+                    "recorded",
+                    {
+                        k: job.get(k)
+                        for k in (
+                            "application_id",
+                            "action",
+                            "release",
+                            "from_release",
+                            "recipe",
+                            "host",
+                            "platform",
+                            "created_at",
+                        )
+                    },
+                )
                 recipe = decode(
                     Recipe,
                     dumps(
@@ -546,6 +750,7 @@ class Manager:
                 installer = self.installer(cfg)
                 app = cfg.applications[0]
                 if job["action"] == "install":
+                    self.save_layout(identity, app, installer)
                     # Application setup/health is explicitly a later step.
                     effect("install", lambda: installer.apply(start=False))
                     installed = {
@@ -600,18 +805,22 @@ class Manager:
                         source.verify()
                         retained_files.append(copied.model_copy(update={"source": source}))
                     app = app.model_copy(update={"files": retained_files})
-                    installer._verify_running(old)
+                    self.save_layout(identity, app, installer)
+                    effect("verify_current", lambda: installer._verify_running(old))
                     artifact_inputs = (
                         [app.image_archive]
                         if isinstance(app, DockerApplication)
                         else [*app.wheels, *(u.source for u in app.units)]
                     )
                     for f in artifact_inputs:
-                        f.verify()
+                        recorded_effect(
+                            "artifact.verify", f.verify, {"path": f.path, "digest": f.digest}
+                        )
                     effect("stage", lambda: installer._stage(app))
                     retained = self._retained(old, identity)
                     retained["package_id"] = installed["job_id"]
                     job["retained_candidate"] = retained
+                    event("runtime.retain_previous", "recorded", retained)
                     effect("stop", lambda: self._stop(installer, old, retained))
                     effect("switch", lambda: installer._start(app))
                     effect("health", lambda: installer.health(app))
@@ -630,14 +839,16 @@ class Manager:
                 self.persist("managed_job", identity, job)
                 if job["phase"] == "succeeded":
                     try:
-                        self._cleanup(installed, previous=False)
-                    except Exception:
+                        recorded_effect("cleanup", lambda: self._cleanup(installed, previous=False))
+                    except Exception as error:
                         job["cleanup_pending"] = True
+                        job["cleanup_failure"] = failure(error)
                         self.persist("managed_job", identity, job)
             except BaseException as error:
                 job.update(
                     phase="recovery_required",
                     error=error.code if isinstance(error, UpdateError) else "outcome_unknown",
+                    failure=failure(error),
                 )
                 self.persist("managed_job", identity, job)
                 if not isinstance(error, Exception):
@@ -670,53 +881,57 @@ class Manager:
             installed = self.journal.get("managed_app", application)
             if not installed or installed["phase"] != "awaiting_setup":
                 raise UpdateError("invalid_input")
-            app = installed["profile"]
-            cfg = decode(
-                Configuration,
-                dumps(
-                    {
-                        "install_profile_version": 1,
-                        "expected_hostname": socket.gethostname(),
-                        "platform": self.hardware(),
-                        "state_directory": str(self.state / "installer"),
-                        "applications": [app],
-                    }
-                ),
-            )
-            installer = self.installer(cfg)
-            installer.health(cfg.applications[0])
-            installer._verify_running(cfg.applications[0])
-            installed["phase"] = "succeeded"
-            self.persist("managed_app", application, installed)
-            job = self.journal.get("managed_job", installed["job_id"])
-            job.update(phase="succeeded", step="initial_setup_verified")
-            self.persist("managed_job", job["job_id"], job)
-            return {"application_id": application, "phase": "succeeded"}
+            with recording(self.journal, installed["job_id"], self.secrets(installed["job_id"])):
+                app = installed["profile"]
+                cfg = decode(
+                    Configuration,
+                    dumps(
+                        {
+                            "install_profile_version": 1,
+                            "expected_hostname": socket.gethostname(),
+                            "platform": self.hardware(),
+                            "state_directory": str(self.state / "installer"),
+                            "applications": [app],
+                        }
+                    ),
+                )
+                installer = self.installer(cfg)
+                recorded_effect("setup.health", lambda: installer.health(cfg.applications[0]))
+                recorded_effect(
+                    "setup.verify_running", lambda: installer._verify_running(cfg.applications[0])
+                )
+                installed["phase"] = "succeeded"
+                self.persist("managed_app", application, installed)
+                job = self.journal.get("managed_job", installed["job_id"])
+                job.update(phase="succeeded", step="initial_setup_verified")
+                self.persist("managed_job", job["job_id"], job)
+                return {"application_id": application, "phase": "succeeded"}
 
     def start_setup(self, application):
         with exclusive(self.state / "manager.lock"):
             installed = self.journal.get("managed_app", application)
             if not installed or installed["phase"] != "awaiting_setup":
                 raise UpdateError("invalid_input")
-            cfg = decode(
-                Configuration,
-                dumps(
-                    {
-                        "install_profile_version": 1,
-                        "expected_hostname": socket.gethostname(),
-                        "platform": self.hardware(),
-                        "state_directory": str(self.state / "installer"),
-                        "applications": [installed["profile"]],
-                    }
-                ),
-            )
-            app = cfg.applications[0]
-            installer = self.installer(cfg)
-            if isinstance(app, DockerApplication):
-                installer.command(["/usr/bin/docker", "start", app.container_name])
-            else:
-                installer.command(["/usr/bin/systemctl", "start", *[u.name for u in app.units]])
-            return {"application_id": application, "phase": "awaiting_setup", "started": True}
+            with recording(self.journal, installed["job_id"], self.secrets(installed["job_id"])):
+                cfg = decode(
+                    Configuration,
+                    dumps(
+                        {
+                            "install_profile_version": 1,
+                            "expected_hostname": socket.gethostname(),
+                            "platform": self.hardware(),
+                            "state_directory": str(self.state / "installer"),
+                            "applications": [installed["profile"]],
+                        }
+                    ),
+                )
+                app = cfg.applications[0]
+                installer = self.installer(cfg)
+                if isinstance(app, DockerApplication):
+                    installer.command(["/usr/bin/docker", "start", app.container_name])
+                else:
+                    installer.command(["/usr/bin/systemctl", "start", *[u.name for u in app.units]])
+                return {"application_id": application, "phase": "awaiting_setup", "started": True}
 
     def _cleanup(self, installed, previous):
         current = installed["profile"]
@@ -731,7 +946,11 @@ class Manager:
                 if p != expected or str(p) == current.get("venv"):
                     raise UpdateError("unsafe_storage")
                 if p.exists():
-                    shutil.rmtree(p)
+                    recorded_effect(
+                        "cleanup.runtime",
+                        lambda: shutil.rmtree(p),
+                        {"path": str(p), "release": entry["release"]},
+                    )
             else:
                 name = entry["container"]
                 if not name.startswith(installed["application_id"] + "-") or name == current.get(
@@ -787,7 +1006,9 @@ class Manager:
                     raise UpdateError("unsafe_storage")
                 package = path(str(self.state / "packages" / package_id))
                 if package.exists():
-                    shutil.rmtree(package)
+                    recorded_effect(
+                        "cleanup.package", lambda: shutil.rmtree(package), {"path": str(package)}
+                    )
         installed["older"] = []
         if previous:
             installed["previous"] = None
@@ -804,8 +1025,9 @@ class Manager:
             installed = self.journal.get("managed_app", application)
             if not installed or installed["phase"] != "succeeded":
                 raise UpdateError("busy")
-            self._cleanup(installed, True)
-            return {"application_id": application, "deleted_previous": True}
+            with recording(self.journal, installed["job_id"], self.secrets(installed["job_id"])):
+                recorded_effect("cleanup.delete_previous", lambda: self._cleanup(installed, True))
+                return {"application_id": application, "deleted_previous": True}
 
     def worker(self):
         # A recorded intent is never automatically replayed after process loss.
@@ -813,16 +1035,21 @@ class Manager:
             interrupted = [
                 loads(row[0])
                 for row in db.execute(
-                    "SELECT payload FROM records WHERE kind='managed_job' AND json_extract(payload,'$.phase') IN ('intent','running')"
+                    "SELECT payload FROM records WHERE kind='managed_job' AND json_extract(payload,'$.action')!='self_update' AND json_extract(payload,'$.phase') IN ('intent','running')"
                 )
             ]
         for job in interrupted:
-            job["phase"] = "recovery_required"
-            self.persist("managed_job", job["job_id"], job)
+            job.update(
+                phase="recovery_required",
+                failure={"error": "outcome_unknown", "kind": "interrupted"},
+            )
+            with recording(self.journal, job["job_id"], self.secrets(job["job_id"])):
+                event("job.interrupted", "unknown", {"step": job.get("step")})
+                self.persist("managed_job", job["job_id"], job)
         while not self.stopping.is_set():
             with self.journal.connection() as db:
                 pending = db.execute(
-                    "SELECT id FROM records WHERE kind='managed_job' AND json_extract(payload,'$.phase')='accepted' LIMIT 1"
+                    "SELECT id FROM records WHERE kind='managed_job' AND json_extract(payload,'$.action')!='self_update' AND json_extract(payload,'$.phase')='accepted' LIMIT 1"
                 ).fetchone()
             if pending:
                 self.run_job(pending[0])

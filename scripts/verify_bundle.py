@@ -7,8 +7,9 @@ import tempfile
 from pathlib import Path
 
 from flamoris_update_core.models import Artifact
-from flamoris_update_core.wire import loads
+from flamoris_update_core.wire import dumps, loads
 from flamoris_updater_adapters.artifacts import NativeStore
+from flamoris_updater_adapters.setup import BootstrapConfig
 
 
 def main():
@@ -55,6 +56,36 @@ def main():
         # Module imports and static assets must be present inside the actual bundle.
         assert (stage / "site-packages/flamoris_updater_adapters/static/app.js").is_file()
         assert (stage / "site-packages/flamoris_updater_adapters/compatibility.py").is_file()
+        cfg = BootstrapConfig(
+            state_directory=temporary + "/web",
+            helper_state_directory=temporary + "/manager",
+            root=temporary + "/apps",
+            socket_path=temporary + "/ipc/manager.sock",
+            service_uid=10002,
+            service_gid=10002,
+            public_origin="http://127.0.0.1:8764",
+        )
+        config = Path(temporary) / "setup.json"
+        config.write_bytes(dumps(cfg))
+        config.chmod(0o600)
+        identity = loads(
+            subprocess.check_output(
+                [
+                    sys.executable,
+                    "-I",
+                    str(stage / "bin/flamoris-updater-service"),
+                    "check",
+                    "--config",
+                    str(config),
+                ]
+            )
+        )
+        assert identity == dict(
+            version=summary["version"],
+            supervisor_protocol_version=1,
+            integration_auth_version=1,
+            runtime_root=str(stage / "site-packages"),
+        )
     print("Verified indexed native bundle and all installed entrypoints")
 
 
