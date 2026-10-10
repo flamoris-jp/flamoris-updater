@@ -1,0 +1,43 @@
+{
+  "format_version": 1,
+  "application_id": "flamoris-updater",
+  "release": "1.0.2",
+  "entries": [
+    {
+      "category": "fix",
+      "summary": "Follow bounded checked public HTTPS and GitHub Release asset redirects for catalogs, app payloads and supervisor bundles",
+      "affected": [
+        "managed-downloads",
+        "self-update"
+      ],
+      "breaking": false
+    },
+    {
+      "category": "security",
+      "summary": "Reject unsafe redirect destinations and strip ambient authorization and cookies while retaining system TLS trust, budgets and digest/index verification",
+      "affected": [
+        "downloads"
+      ],
+      "breaking": false
+    },
+    {
+      "category": "feature",
+      "summary": "Assemble verified initial application candidates into a complete catalog with immutable payload mapping and checksums",
+      "affected": [
+        "release-preparation"
+      ],
+      "breaking": false
+    },
+    {
+      "category": "known_issue",
+      "summary": "Existing 1.0.1 deployments require administrator maintenance of the pinned supervisor as well as Web and manager; ordinary self-update does not replace it",
+      "affected": [
+        "deployment",
+        "self-update"
+      ],
+      "breaking": false
+    }
+  ],
+  "restart_required": true,
+  "recovery_conditions": "Inspect active Jobs and protected journals before maintenance. Preserve authentication, configuration, history, diagnostics and the original runtime. Unknown effects stop without replay; use an independent administrator channel for recovery."
+}

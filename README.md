@@ -51,4 +51,4 @@ Apache License 2.0. External applications, models and media retain their own lic
 
 ## v1.0.0 distribution
 
-The [release](https://github.com/flamoris-jp/flamoris-updater/releases/tag/v1.0.1) supplies Linux amd64/arm64 indexed installation bundles, wheel/source, Core SDK, schemas and checksums. Follow the [distribution guide](docs/DISTRIBUTION.md). Python 3.12/systemd and external access/app catalogs are separate prerequisites; release publication does not certify live deployment.
+The [release](https://github.com/flamoris-jp/flamoris-updater/releases/tag/v1.0.2) supplies Linux amd64/arm64 indexed installation bundles, wheel/source, Core SDK, schemas and checksums. Follow the [distribution guide](docs/DISTRIBUTION.md). Python 3.12/systemd and external access/app catalogs are separate prerequisites; release publication does not certify live deployment.
