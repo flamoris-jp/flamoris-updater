@@ -10,11 +10,13 @@ release publication or installation on a real host.
 The publication workflow generates `catalog.json` from both verified Native bundle
 summaries. It points directly to this repository's immutable v1.0.4 Release assets,
 sets `compatible_from` to `["1.0.3"]`, and includes the catalog in `SHA256SUMS`.
-Register the Release asset URL in the existing 1.0.3 screen before selecting
-1.0.4. Preserve the original supervisor installation and all control records;
+An already configured 1.0.3 cannot change catalog URLs from its screen. Use the
+[one-time catalog switch](UPGRADE_103.md), then select 1.0.4 from the existing
+self-update screen. An unconfigured installation can use the new catalog during
+its existing first setup. Preserve the original supervisor installation and all control records;
 do not run initial bootstrap over an existing installation.
 
-Catalog URL after successful publication:
+Published self-update catalog URL:
 `https://github.com/flamoris-jp/flamoris-updater/releases/download/v1.0.4/catalog.json`.
 It contains no application payloads or application recipes. Register each
 application repository's own catalog separately after publication.
