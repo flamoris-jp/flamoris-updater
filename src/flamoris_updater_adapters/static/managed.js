@@ -1,6 +1,6 @@
 "use strict";
 const basePath = document.querySelector('meta[name="updater-base-path"]').content;
-let csrf = "", busy = false, appSnapshot = "", selfSnapshot = "", integrationSnapshot = "";
+let busy = false, appSnapshot = "", selfSnapshot = "";
 const $ = id => document.getElementById(id);
 const labels = {accepted:"受付済み", intent:"処理中", running:"処理中", awaiting_setup:"初回設定待ち", succeeded:"完了", recovery_required:"処理の確認が必要"};
 function showError(error) {
@@ -11,7 +11,7 @@ async function api(path, data) {
   const response = await fetch(basePath + path, {
     method: data === undefined ? "GET" : "POST",
     credentials: "same-origin",
-    headers: data === undefined ? {} : {"Content-Type":"application/json", "X-CSRF-Token":csrf},
+    headers: data === undefined ? {} : {"Content-Type":"application/json"},
     body: data === undefined ? undefined : JSON.stringify(data)
   });
   const body = await response.json();
@@ -105,6 +105,7 @@ async function refresh(releases = false) {
   busy = true;
   try {
     const apps = await tool("updater_apps_list", {refresh:releases});
+    if (releases && apps.catalog_errors.length) showError(new Error("カタログを再取得できません: " + apps.catalog_errors.map(item => item.url).join(", ")));
     // Progress polling must not replace inputs while the operator is typing.
     const snapshot = JSON.stringify(apps.items);
     if (snapshot !== appSnapshot) {
@@ -152,77 +153,28 @@ async function refresh(releases = false) {
       } else element("p", "現在利用できる互換更新はありません。", $("self-update"));
       selfSnapshot = selfJson;
     }
-    await refreshIntegrations();
+    $("root").textContent = "アプリの保存先: " + apps.root;
+    await refreshCatalogs();
   } finally { busy = false; }
 }
-async function start() {
-  const setup = await api("/api/v1/setup");
-  if (setup.setup_required) {
-    $("root").textContent = "アプリの保存先: " + setup.root;
-    $("setup").hidden = false;
-    return;
-  }
-  try {
-    const session = await api("/api/v1/session");
-    csrf = session.csrf_token;
-    $("identity").textContent = session.subject;
-    $("workspace").hidden = false;
-    $("logout").hidden = false;
-    $("integrations-section").hidden = false;
-    await refresh();
-  } catch {
-    $("login").hidden = false;
-    const init = await api("/api/v1/bootstrap");
-    csrf = init.csrf_token;
-  }
-}
-$("setup-form").addEventListener("submit", event => {
-  event.preventDefault();
-  api("/api/v1/setup", Object.fromEntries(new FormData(event.target))).then(() => location.reload()).catch(showError);
-});
-$("login-form").addEventListener("submit", event => {
-  event.preventDefault();
-  api("/api/v1/login", Object.fromEntries(new FormData(event.target))).then(() => location.reload()).catch(showError);
-});
-$("logout").addEventListener("click", () => api("/api/v1/logout", {}).then(() => location.reload()).catch(showError));
-$("refresh").addEventListener("click", () => refresh(true).catch(showError));
-$("token").addEventListener("click", () => api("/api/v1/token", {}).then(result => {
-  $("access-token").textContent = result.token + "\n有効期限: 24時間。安全なファイルに保存してください。";
-  $("access-token").hidden = false;
-}).catch(showError));
-function showIntegrationKey(result) {
-  $("integration-secret").textContent = result.token + "\n失効するまで有効です。連携先の秘密情報設定に保存してください。";
-  $("integration-secret").hidden = false;
-}
-async function refreshIntegrations() {
-  const result = await api("/api/v1/integrations");
-  const snapshot = JSON.stringify(result);
-  if (snapshot === integrationSnapshot) return;
-  $("integrations").replaceChildren();
-  for (const item of result.items) {
-    const row = element("div", undefined, $("integrations"));
+async function refreshCatalogs() {
+  const catalogs = await tool("updater_catalogs_list");
+  $("catalogs").replaceChildren();
+  for (const item of catalogs.items) {
+    const row = element("div", undefined, $("catalogs"));
     row.className = "history-row";
-    element("span", item.label + " · " + (item.revoked ? "失効済み" : item.roles.includes("execute") ? "読み取り・実行" : "読み取りのみ"), row);
-    if (!item.revoked) {
-      button("キーを更新", row, async () => {
-        if (!confirm("現在のキーを失効し、新しいキーを発行します。連携先の設定を更新してください。")) return;
-        showIntegrationKey(await api("/api/v1/integrations/" + item.integration_id + "/rotate", {label:item.label, execute:item.roles.includes("execute")}));
-        await refreshIntegrations();
-      });
-      button("失効", row, async () => {
-        if (!confirm("この連携キーを失効します。")) return;
-        await api("/api/v1/integrations/" + item.integration_id + "/revoke", {});
-        await refreshIntegrations();
-      });
-    }
+    element("span", item.url, row);
+    button("登録解除", row, async () => {
+      await tool("updater_catalog_remove", {url:item.url});
+      await refresh();
+    });
   }
-  integrationSnapshot = snapshot;
 }
-$("integration-form").addEventListener("submit", event => {
+$("catalog-form").addEventListener("submit", event => {
   event.preventDefault();
-  const values = Object.fromEntries(new FormData(event.target));
-  api("/api/v1/integrations", {label:values.label, execute:values.execute === "true"})
-    .then(result => { showIntegrationKey(result); return refreshIntegrations(); }).catch(showError);
+  tool("updater_catalog_add", Object.fromEntries(new FormData(event.target)))
+    .then(() => { event.target.reset(); return refresh(); }).catch(showError);
 });
-start().catch(showError);
-setInterval(() => { if (!$("workspace").hidden) refresh().catch(showError); }, 3000);
+$("refresh").addEventListener("click", () => refresh(true).catch(showError));
+refresh().catch(showError);
+setInterval(() => refresh().catch(showError), 3000);

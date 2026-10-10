@@ -10,16 +10,6 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 jobs:
-  initial-docker:
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-      - run: python -m pip install --constraint requirements-runtime.lock -e '.[dev]'
-      - run: python scripts/build_initial_candidate.py --application flamoris-generation-mcp --platform linux/amd64 --output dist/candidate
-      - run: sudo env FLAMORIS_INSTALL_TEST_DOCKER_CANDIDATE="$PWD/dist/candidate" "$(command -v python)" -m pytest -q tests/test_install.py -k real_docker
   initial-install:
     runs-on: ubuntu-24.04
     services:
@@ -35,7 +25,7 @@ jobs:
         with:
           python-version: '3.12'
       - run: python -m pip install --constraint requirements-runtime.lock -e '.[dev]'
-      - run: sudo env FLAMORIS_INSTALL_TEST_POSTGRES_DSN='postgresql://postgres:disposable-test-password@127.0.0.1:5432/postgres' "$(command -v python)" -m pytest -q tests/test_install.py tests/test_managed.py tests/test_self_update.py tests/test_install_distribution.py
+      - run: sudo env FLAMORIS_INSTALL_TEST_POSTGRES_DSN='postgresql://postgres:disposable-test-password@127.0.0.1:5432/postgres' "$(command -v python)" -m pytest -q tests/test_install.py tests/test_managed.py tests/test_self_update.py
   verify:
     runs-on: ubuntu-24.04
     steps:

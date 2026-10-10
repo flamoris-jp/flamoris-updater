@@ -94,8 +94,8 @@ class Recipe(Model):
 
     @model_validator(mode="after")
     def identity(self):
-        if self.application_id not in VERSIONS or version(self.release) < version(
-            VERSIONS[self.application_id]
+        if self.application_id == SELF or version(self.release) < version(
+            VERSIONS.get(self.application_id, "0.0.0")
         ):
             raise ValueError("Unsupported application or initial release")
         if len({s.key for s in self.settings}) != len(self.settings):
@@ -152,7 +152,14 @@ class Refresh(Model):
     refresh: bool = False
 
 
+class CatalogSource(Model):
+    url: str = Field(min_length=1, max_length=2048)
+
+
 MANAGED_TOOLS = {
+    "updater_catalogs_list": (Model, "Registered repository catalogs", "read"),
+    "updater_catalog_add": (CatalogSource, "Add one repository catalog", "execute"),
+    "updater_catalog_remove": (CatalogSource, "Remove a catalog without deleting apps", "execute"),
     "updater_managed_log_get": (
         LogPage,
         "Paged, secret-free effect timeline for one application Job",
@@ -210,18 +217,75 @@ class Manager:
             verify=True, trust_env=False, follow_redirects=False, timeout=60
         )
         self.stopping, self.wakeup = threading.Event(), threading.Event()
+        self.catalog_errors = []
 
     def configure(self, source):
         https(source)
         with exclusive(self.state / "manager.lock"):
-            if self.journal.get("manager_config", "source"):
-                raise UpdateError("already_installed")
-            catalog = decode(Catalog, self._download(source, 1024 * 1024))
-            self.accept_catalog(catalog)
+            sources = self.sources()
+            if source in sources:
+                return {"configured": True}
+            if len(sources) >= 32:
+                raise UpdateError("quota_exceeded")
+            existing = {url: self._source_catalog(url) for url in sources}
+            candidate = decode(Catalog, self._download(source, 1024 * 1024))
+            catalog = self._merge_catalogs([*sources, source], {source: candidate})
             with self.journal.transaction() as db:
-                self.journal.put("manager_config", "source", {"url": source}, db)
-                self.journal.put("manager_catalog", "current", catalog.model_dump(), db)
+                self.accept_catalog(catalog, db=db)
+                for url, snapshot in existing.items():
+                    self.journal.put(
+                        "manager_source_catalog", digest(url.encode()), snapshot.model_dump(), db
+                    )
+                self.journal.put(
+                    "manager_source_catalog", digest(source.encode()), candidate.model_dump(), db
+                )
+                self.journal.put("manager_config", "source", {"urls": [*sources, source]}, db)
             return {"configured": True}
+
+    def sources(self):
+        config = self.journal.get("manager_config", "source")
+        return config.get("urls", [config["url"]] if "url" in config else []) if config else []
+
+    def _source_catalog(self, source):
+        raw = self.journal.get("manager_source_catalog", digest(source.encode()))
+        if raw is None and self.sources() == [source]:
+            # The former single-source installation already has a checked snapshot.
+            raw = self.journal.get("manager_catalog", "current")
+        if raw is None:
+            raise UpdateError("release_unavailable")
+        return decode(Catalog, dumps({k: v for k, v in raw.items() if k != "_revision"}))
+
+    def _merge_catalogs(self, sources, replacements=None):
+        replacements = replacements or {}
+        recipes, releases = {}, {}
+        for source in sources:
+            catalog = (
+                replacements[source] if source in replacements else self._source_catalog(source)
+            )
+            for item in [*catalog.recipes, *catalog.updater_releases]:
+                entries = recipes if isinstance(item, Recipe) else releases
+                key = (
+                    (item.application_id, item.release, item.platform)
+                    if isinstance(item, Recipe)
+                    else (item.release, item.artifact.platform)
+                )
+                if key in entries and entries[key] != item:
+                    raise UpdateError("operation_conflict", "Catalogs disagree about a release")
+                entries[key] = item
+        return Catalog(
+            catalog_version=1,
+            recipes=list(recipes.values()),
+            updater_releases=list(releases.values()),
+        )
+
+    def remove_source(self, source):
+        with exclusive(self.state / "manager.lock"):
+            sources = [url for url in self.sources() if url != source]
+            catalog = self._merge_catalogs(sources)
+            with self.journal.transaction() as db:
+                self.accept_catalog(catalog, db=db)
+                self.journal.put("manager_config", "source", {"urls": sources}, db)
+            return {"removed": True}
 
     def _download(self, url, limit, destination=None, expected=None):
         https(url)
@@ -247,18 +311,37 @@ class Manager:
         return b"".join(parts)
 
     def catalog(self, refresh=False):
-        config = self.journal.get("manager_config", "source")
-        if not config:
+        sources = self.sources()
+        if not sources:
             return Catalog(catalog_version=1, recipes=[])
         if refresh:
-            catalog = decode(Catalog, self._download(config["url"], 1024 * 1024))
-            self.accept_catalog(catalog)
-            return catalog
+            self.catalog_errors = []
+            with exclusive(self.state / "manager.lock"):
+                sources = self.sources()
+                for source in sources:
+                    try:
+                        candidate = decode(Catalog, self._download(source, 1024 * 1024))
+                        catalog = self._merge_catalogs(sources, {source: candidate})
+                        with self.journal.transaction() as db:
+                            self.accept_catalog(catalog, db=db)
+                            self.journal.put(
+                                "manager_source_catalog",
+                                digest(source.encode()),
+                                candidate.model_dump(),
+                                db,
+                            )
+                    except (UpdateError, ValueError):
+                        self.catalog_errors.append(
+                            {"url": source, "error": "catalog_refresh_failed"}
+                        )
+            return self.catalog()
         raw = self.journal.get("manager_catalog", "current")
         return decode(Catalog, dumps({k: v for k, v in raw.items() if k != "_revision"}))
 
-    def accept_catalog(self, catalog):
-        with self.journal.transaction() as db:
+    def accept_catalog(self, catalog, db=None):
+        from contextlib import nullcontext
+
+        with self.journal.transaction() if db is None else nullcontext(db) as db:
             for recipe in [*catalog.recipes, *catalog.updater_releases]:
                 identity = digest(
                     dumps(
@@ -284,8 +367,14 @@ class Manager:
         if name not in MANAGED_TOOLS:
             raise UpdateError("invalid_input")
         args = decode(MANAGED_TOOLS[name][0], dumps(payload))
+        if name == "updater_catalogs_list":
+            return {"items": [{"url": url} for url in self.sources()]}
+        if name == "updater_catalog_add":
+            return self.configure(args.url)
+        if name == "updater_catalog_remove":
+            return self.remove_source(args.url)
         if name in {"updater_managed_log_get", "updater_managed_layout_get"}:
-            if args.application_id not in MANAGED_TARGETS:
+            if args.application_id != SELF and args.application_id not in self.application_ids():
                 raise UpdateError("invalid_input")
             if args.job_id:
                 job = self.journal.get("managed_job", args.job_id)
@@ -320,6 +409,7 @@ class Manager:
             catalog = self.catalog(refresh=args.refresh)
             return {
                 "root": str(self.root),
+                "catalog_errors": self.catalog_errors,
                 "items": [
                     {
                         "application_id": a,
@@ -337,7 +427,7 @@ class Manager:
                             if r.application_id == a and r.platform == self.hardware()
                         ],
                     }
-                    for a in VERSIONS
+                    for a in self.application_ids(catalog)
                 ],
             }
         if name == "updater_managed_history":
@@ -366,6 +456,13 @@ class Manager:
     @staticmethod
     def hardware():
         return {"x86_64": "linux/amd64", "aarch64": "linux/arm64"}.get(platform.machine())
+
+    def application_ids(self, catalog=None):
+        catalog = self.catalog() if catalog is None else catalog
+        return sorted(
+            {r.application_id for r in catalog.recipes}
+            | {r["application_id"] for r in self.journal.list("managed_app")}
+        )
 
     def start(self, action, args):
         recipe = next(

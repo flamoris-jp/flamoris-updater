@@ -1,34 +1,35 @@
 # FLAMORIS Updater
 
-必要なFLAMORISアプリを選んでインストールし、以後は設定とデータを引き継いで更新する、独立したWeb・MCP・CLI管理サービスです。
+各リポジトリが管理するアプリを、一つの画面からインストール・更新する独立したWeb・CLI・MCPサービスです。
 
-**Source status:** simple bootstrap/setup/install/update is implemented and tested; release publication and real-host acceptance are separate. Read [progress](PROGRESS.md) for exact evidence. Existing unmanaged applications cannot be imported.
+1. Updaterを導入して管理画面を開く。
+2. 各リポジトリのカタログURLを登録する。複数登録できる。
+3. 必要なアプリを選び、その配布元から現在のCPU向けの成果物を取得する。
+4. 更新時は新版を横置きし、既存設定・データを引き継いで切り替える。
 
-## Installation and use
+アプリのソース、ビルド、リリース、配布物は各アプリのリポジトリが管理します。Updaterは他のアプリをビルドしたり、一つの配布セットに集め直したりしません。カタログは配布URL・ハッシュ・対応CPU・設定・互換性を記載した案内です。Updater本体の配布物だけは、このリポジトリで管理します。
 
-1. Install a reviewed prebuilt Updater wheel/runtime or indexed Native bundle (Linux amd64/arm64, Python 3.12, systemd).
-2. Run `sudo /absolute/path/bin/flamoris-updater bootstrap`. It provisions a dedicated Web account, three systemd services (Web, manager, pinned supervisor), private journals and a peer-checked local helper. It prints the Web URL and an expiring setup code.
-3. Open Web setup, enter the code, create the administrator, and select the ordinary HTTPS release catalog. `--root`, `--directory`, `--port`, `--public-origin` and `--base-path` select deployment paths/access during bootstrap; no application JSON profile or private CA is required.
-4. Select each application and enter its displayed settings. Installation stages its package and services, then reports **initial setup pending**. Start it for its own setup, and verify afterward.
-5. Update an installed app: download/stage beside the old version, reuse installed settings/data, stop/switch/start and verify. Successful updates keep **current plus one previous version**; older executable versions are removed. Failed/unknown updates retain old versions and require inspection.
+**Updater独自の管理者アカウント、セットアップコード、ログイン、セッション、CLI/MCPトークン、連携キーはありません。** 初回から同じ画面で操作できます。サービス用OSアカウントとローカル実行権限の分離はインストール処理のために維持します。アプリ自身の認証やGitHub側のリポジトリアクセス権限は別です。
 
-[Running](docs/RUNNING.md) has executable commands, [installation](docs/INSTALL.md) the release recipe contract, and [transport](docs/TRANSPORT.md) the access boundary. A checkout plus a tunnel alone does not install the package or services. An authenticated tunnel/proxy is configured separately; Updater does not manage it.
+## Install and update
 
-## Boundaries
+Linux/systemd、Python 3.12とレビュー済みのUpdaterパッケージが必要です。
 
-Updater implements **no database backup, system backup or data restore**. Existing backup services remain independent. Cleanup excludes configuration, databases, application data/outputs, shared PostgreSQL, external AI runtimes and models. Applications own first setup, schema migration and domain behavior; Server Manager owns infrastructure observations and GPU Node Manager owns runtime lifecycle.
+```bash
+sudo /absolute/installation/bin/flamoris-updater bootstrap
+```
 
-The simple local update path accepts explicitly declared schema/settings-compatible predecessors; it does not run an invented reverse migration. The standalone application migration runner remains available. Owner-driven migration and the older signed multi-host coordinator are advanced integration paths with their own matching profiles/SDK. They are not bootstrap prerequisites or a second registry for a simple installation.
+表示されたURLを開いてカタログを登録します。[実行手順](docs/RUNNING.md)と[カタログ仕様](docs/INSTALL.md)を参照してください。Webはloopbackで待ち受け、トンネル・プロキシの設定は外部で行います。アクセスできる人は同じ更新操作を実行できます。[接続仕様](docs/TRANSPORT.md)に境界を記載しています。
 
-Six deployment units are supported: AI Agent, Studio, Intelligence MCP, Generation MCP, MCP Hub and GPU Node Manager. Generation Controller is embedded in Generation's prebuilt image. AI initial minimum is 1.0.0, GNM 1.2.0, Updater 1.0.0; later compatible releases are allowed. Only declared real provider dependencies constrain installation order. No model/runtime is installed.
+新規インストール後はアプリ自身の初回設定と動作確認を行います。更新には対応する旧版との互換性が必要です。成功後は現行と旧版1世代を保持し、設定・DB・データ・外部ランタイム・モデルは削除しません。失敗・中断した処理は記録を残して停止します。
 
-Web, commands and twelve managed MCP tools share the same authority, root executor, application records and durable Jobs. CLI/MCP use Web-issued 24-hour tokens or separately revocable persistent integration keys; Web uses independent password/session/CSRF checks. Public connections use ordinary HTTPS/system trust. The public Web process is unprivileged and binds loopback; only its OS UID can call the privileged local helper. No interface accepts a shell command or caller-selected file destination.
+カタログは配布元を集めるだけなので、各アプリは独立してリリースできます。一つの配布元が取得できなくても、他のカタログの更新確認は継続します。登録解除はアプリのアンインストールではありません。既存の単一カタログ登録とインストール記録は引き継ぎます。
 
-Updater can update its Web and root manager from an indexed, explicitly compatible Native bundle while retaining configuration, authentication and history. Its independent supervisor remains pinned to the bootstrap installation. MCP reconnects with the same key after the temporary outage; client retry/proxy operation is external. See [self-update and logging review](docs/SELF_UPDATE.md) for boundaries and the bootstrap controller maintenance exception. [AI-readable evidence and manual recovery](docs/DIAGNOSTICS.md) describes scoped MCP logs/layouts and what to do when Updater is stopped.
+DB・システムバックアップ、未管理アプリの取り込み、任意シェルの実行は提供しません。アプリ固有のDB移行は各アプリが所有します。既存の高度なCore/Owner移行・署名付き協調処理は内部統合用で、通常のWeb/CLI/MCPには公開しません。
 
-## Release preparation and development
+**Source status:** この構成のソース実装とテスト結果は[PROGRESS.md](PROGRESS.md)に記載しています。公開済みv1.0.3の配布物は以前の構成のままで、今回の変更のリリース・実機反映は別です。各アプリのカタログ・配布物の公開も各リポジトリ側で行います。
 
-Release maintainers build candidates and portable recipes in CI/workstations, then distribute artifacts/catalog over ordinary HTTPS. Operators enter settings through Web rather than writing profiles. Source verification or a controlled candidate test can run before publication/full-host acceptance. Nothing in these commands automatically publishes a release.
+## Development
 
 ```bash
 python3.12 -m venv .venv
@@ -38,17 +39,12 @@ ruff check src tests scripts
 ruff format --check src tests scripts
 pytest -q
 python -m build
-python -m build packages/update-core --outdir dist/sdk
 python scripts/export_schemas.py --output dist/schemas
 python scripts/check_docs.py
 ```
 
-Core, FLAMORIS policy, adapters, migration runner, Web assets and tests remain in this repository. Core has no MCP/Studio/FLAMORIS dependency. Application schema/config compatibility is intentionally changed from the historical backup/restore contracts; old plans and Owner configs are not silently converted. Existing application SDK pins for the advanced Owner path require separate matched rebuilds. The simple path does not require a running Owner or preconfigured application.
+CoreとFLAMORISラッパは同じリポジトリ内です。Dedicated WebはStudioに依存しません。詳しい現在の契約は[仕様一覧](docs/CONTRACTS.md)、[Web](docs/WEB_UI.md)、[API](docs/MCP_API.md)、[自己更新](docs/SELF_UPDATE.md)を参照してください。
 
 ## License
 
 Apache License 2.0. External applications, models and media retain their own licenses.
-
-## v1.0.0 distribution
-
-The [release](https://github.com/flamoris-jp/flamoris-updater/releases/tag/v1.0.3) supplies Linux amd64/arm64 indexed installation bundles, wheel/source, Core SDK, schemas and checksums. Follow the [distribution guide](docs/DISTRIBUTION.md). Python 3.12/systemd and external access/app catalogs are separate prerequisites; release publication does not certify live deployment.

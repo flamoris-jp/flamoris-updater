@@ -465,21 +465,6 @@ def test_compatibility_rejects_unknown_control_tables(environment):
         inspect_control(environment.coordinator.journal.directory)
 
 
-def test_offline_token_revocation_and_user_disable_take_effect(environment):
-    from flamoris_updater_adapters.auth import AuthStore
-
-    e = environment
-    auth = AuthStore(e.coordinator.journal, e.coordinator.authority, e.clock)
-    one, two = auth.issue_token("operator"), auth.issue_token("operator")
-    auth.revoke_token("operator", one)
-    with pytest.raises(UpdateError):
-        auth.bearer(one)
-    assert auth.bearer(two) == "operator"
-    auth.disable_user("operator")
-    with pytest.raises(UpdateError):
-        auth.bearer(two)
-
-
 def test_docker_command_is_bound_to_configured_daemon_and_rejects_implicit_volumes():
     from flamoris_updater_adapters.docker import DockerDriver
 

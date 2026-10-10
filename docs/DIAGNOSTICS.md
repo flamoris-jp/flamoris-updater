@@ -9,8 +9,7 @@ Source/tests/CI do not mean publication or real-host acceptance.
 
 ## Reading evidence through MCP
 
-Both tools need `read` authority for the specified application. A read-only
-persistent integration key can use them; execute/operator authority is unnecessary.
+The tools use the same credential-free Web/CLI/MCP endpoint.
 The root helper verifies that a supplied Job belongs to that application.
 
 | Tool | Request | Evidence |

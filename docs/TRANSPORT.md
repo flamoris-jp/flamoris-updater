@@ -1,21 +1,16 @@
 # Access and transport
 
-Private CA, per-owner client certificates, certificate fingerprints and client TLS credential fields are removed.
+Updater has no application login, account store, setup code, session cookie, Bearer token or integration key. Anyone able to reach the configured endpoint can perform its operations. Access routing belongs to the deployment's local connection/proxy/tunnel; Updater does not configure it.
 
-| Connection | Simple bootstrap mode |
+| Connection | Contract |
 | --- | --- |
-| Browser → Web | Literal loopback HTTP for first/local setup, or ordinary HTTPS at a separately configured proxy/tunnel; account/session/CSRF and exact Host/Origin |
-| CLI/MCP → Web | Short-lived token or persistent revocable integration key; ordinary HTTPS/system trust or literal loopback HTTP |
-| Web → root manager | Framed bounded Unix socket; Web verifies root UID, root accepts only provisioned Web UID |
-| Manager → releases | Ordinary system-trusted HTTPS; selected recipe/file digests bind execution |
-| Manager → app | Local Docker/systemd and local app health contract; no pre-running Owner prerequisite |
+| Browser/CLI/MCP → Web | No Updater credentials; loopback HTTP or ordinary HTTPS through the configured external connection; exact Host and supplied Origin checks |
+| Web → manager | Bounded local Unix socket; Web verifies root UID and manager accepts the service OS UID |
+| Manager → catalogs/payloads | Bounded system-trusted HTTPS with checked redirects and recipe file digests |
+| Manager → app | Local Docker/systemd and application health/runtime checks |
 
-Bootstrap provisions the dedicated service account, private Web/helper journals and units. Web is unprivileged and listens only on loopback. systemd owns `/run/flamoris-updater` with protected group traversal and removes the stale socket on restart. Local HTTP uses distinct host cookies; HTTPS uses `__Host-` Secure cookies. Host/Origin checks and CSRF apply in both modes; plaintext remote origins are rejected. The setup code is expiring and consumed after first setup.
+The listener stays loopback, and bootstrap retains an unprivileged Web OS account and separate root executor. These are execution permissions, not user registration. JSON input validation, byte limits, fixed operations, confined application paths and cross-origin browser rejection remain. No interface accepts arbitrary shell input.
 
-An SSH forward can expose loopback setup to an administrator without a certificate. An ordinary HTTPS proxy/tunnel can expose the configured public origin later; preserve its public Host. An explicit `--base-path /updater` places Web/API/MCP
-and health below that path; the proxy must retain the path rather than rewrite it.
-The pure public origin still controls Host/Origin/CSRF, and forwarded-prefix
-headers cannot change the configured route boundary. Existing configurations
-without `base_path` keep root routes. Updater does not start/manage/authenticate/reconnect that tunnel or issue public server certificates. See [running](RUNNING.md).
+`--public-origin` specifies the exact public origin; `--base-path` places Web/API/MCP below a prefix. The external proxy must preserve Host and path. Forwarded headers cannot change the route boundary. Updater does not issue certificates, open ports or establish a tunnel.
 
-The explicit advanced coordinator path retains signed host operation/receipt authorization over loopback/tunnels and local OS-peer Owner sockets. Its public endpoint uses ordinary HTTPS and matching SDK/profile contracts. It no longer has snapshot/restore operations. Current application source pins for that optional Owner path still need matched rebuilds; no old installation/config/state is converted implicitly. Simple bootstrap does not depend on its five key sets or application Owner services.
+The internal advanced Core/Owner integration still uses signed operation/receipt and local OS-peer contracts. It is not exposed by the normal Web/CLI/MCP. Private GitHub access and app-owned service credentials are independent; removing Updater login does not make private releases public.

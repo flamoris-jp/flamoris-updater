@@ -64,18 +64,11 @@ self-updates. Bootstrap options `--directory`, `--root`, `--port` and
 serves Web, API and MCP below that prefix. Keep `--public-origin` as a pure
 origin (for example `https://updater.example.invalid`); do not include the path.
 
-## First Web setup and MCP
+## Catalog screen and MCP in current source
 
-Open the printed loopback URL locally or via an SSH forward. Enter the printed
-one-time code within one hour, create the administrator, and provide the approved
-**direct HTTPS application catalog URL**. This Updater release does not supply
-application distribution files or an application catalog. Prepare them separately;
-bootstrap itself does not require an already running application.
+Open the printed URL and register each repository's catalog. Current source needs no setup code, administrator, login or MCP key. MCP is `<public-origin><base-path>/mcp`. External proxy/tunnel access is configured separately. Application repositories publish their own catalogs and payloads.
 
-Remote AI access requires a reachable HTTPS endpoint managed by an external
-proxy/tunnel. Web's **MCP integration keys** issues a persistent read-only or
-read/execute key; store it in the client's protected credential configuration.
-The MCP URL is `<public-origin><base-path>/mcp` (`base-path` defaults to empty). Never paste keys into public logs/documents.
+The published v1.0.3 assets described above still contain the former code/account/key workflow. They have not been replaced by this source change. Do not mix current source instructions with that older release's first setup.
 
 Version 1.0.3 supports at most five checked same-origin HTTPS redirects and an
 exact GitHub Release-to-`release-assets.githubusercontent.com` exception for

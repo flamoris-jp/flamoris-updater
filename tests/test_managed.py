@@ -13,7 +13,6 @@ import struct
 import subprocess
 import sys
 import threading
-import time
 import zipfile
 from pathlib import Path
 from types import SimpleNamespace
@@ -26,7 +25,6 @@ from test_interfaces import mcp_call
 from flamoris_update_core.errors import UpdateError
 from flamoris_update_core.owner_cli import serve_connection
 from flamoris_update_core.wire import digest, dumps, loads
-from flamoris_updater_adapters.auth import token_hash
 from flamoris_updater_adapters.install import Installer
 from flamoris_updater_adapters.managed import Catalog, Manager, Start
 from flamoris_updater_adapters.recipes import build_recipe
@@ -273,7 +271,7 @@ def update(e, release):
 
 def test_empty_setup_install_update_keeps_settings_data_and_one_previous(managed):
     e = managed
-    assert not e.manager.invoke("updater_apps_list", {})["items"][0]["installation"]
+    assert e.manager.invoke("updater_apps_list", {})["items"] == []
     e.manager.configure("https://releases.example.invalid/catalog.json")
     install(e)
     env = e.tmp / "apps" / APP / "config/runtime.env"
@@ -385,10 +383,11 @@ def test_idempotency_conflict_and_changed_release_are_rejected(managed):
     with pytest.raises(UpdateError) as failure:
         e.manager.start("install", args.model_copy(update={"settings": {"TOKEN": "different"}}))
     assert failure.value.code == "idempotency_conflict"
+    before = e.manager.catalog()
     e.catalog["recipes"][0]["generated"]["runtime.env"] += "BAD=yes\n"
-    with pytest.raises(UpdateError) as failure:
-        e.manager.catalog(refresh=True)
-    assert failure.value.code == "operation_conflict"
+    assert e.manager.catalog(refresh=True) == before
+    assert e.manager.catalog_errors
+    assert e.manager.start("install", args)["job_id"] == first["job_id"]
 
 
 def test_changed_queued_recipe_stops_before_effects_and_records_failure(managed):
@@ -458,13 +457,6 @@ def coordinator(e):
         public_origin=ORIGIN,
     )
     c = LocalCoordinator(cfg, client=Direct())
-    with c.journal.transaction() as db:
-        c.journal.put(
-            "setup_token",
-            "current",
-            {"hash": token_hash("isolated-setup-token"), "expires": int(time.time()) + 60},
-            db,
-        )
     return c
 
 
@@ -473,38 +465,16 @@ def test_web_setup_then_web_mcp_cli_share_the_same_jobs(managed, monkeypatch, ca
 
     e = managed
     c = coordinator(e)
-    with TestClient(create_app(c, c.auth, ORIGIN, run_worker=False), base_url=ORIGIN) as client:
-        assert client.get("/api/v1/setup").json()["setup_required"]
-        assert "Updaterをセットアップ" in client.get("/").text
-        setup = {
-            "setup_token": "isolated-setup-token",
-            "username": "operator",
-            "password": "isolated-test-password",
-            "catalog_url": "https://releases.example.invalid/catalog.json",
-        }
-        assert client.post("/api/v1/setup", json=setup).status_code == 403
+    with TestClient(create_app(c, ORIGIN, run_worker=False), base_url=ORIGIN) as client:
+        assert "リポジトリのカタログ" in client.get("/").text
         assert (
             client.post(
-                "/api/v1/setup",
-                json={**setup, "setup_token": "wrong-setup-token"},
-                headers={"Origin": ORIGIN},
+                "/api/v1/tools/updater_catalog_add",
+                json={"url": "https://releases.example.invalid/catalog.json"},
             ).status_code
-            == 403
+            == 200
         )
-        assert (
-            client.post("/api/v1/setup", json=setup, headers={"Origin": ORIGIN}).status_code == 200
-        )
-        assert (
-            client.post("/api/v1/setup", json=setup, headers={"Origin": ORIGIN}).status_code == 409
-        )
-        csrf = client.get("/api/v1/bootstrap").json()["csrf_token"]
-        login = client.post(
-            "/api/v1/login",
-            json={"username": "operator", "password": "isolated-test-password"},
-            headers={"Origin": ORIGIN, "X-CSRF-Token": csrf},
-        )
-        assert login.status_code == 200
-        headers = {"Origin": ORIGIN, "X-CSRF-Token": login.json()["csrf_token"]}
+        headers = {}
         args = {
             "application_id": APP,
             "release": "1.0.0",
@@ -513,23 +483,18 @@ def test_web_setup_then_web_mcp_cli_share_the_same_jobs(managed, monkeypatch, ca
         }
         job = client.post("/api/v1/tools/updater_install", json=args, headers=headers).json()
         assert job["phase"] == "accepted"
-        token = client.post("/api/v1/token", json={}, headers=headers).json()["token"]
+        token = ""
         result = mcp_call(
             client, token, "tools/call", {"name": "updater_install", "arguments": args}
         )
         assert result.status_code == 200, result.text
         assert result.json()["result"]["structuredContent"]["job_id"] == job["job_id"]
-        tokenfile = e.tmp / "access-token"
-        tokenfile.write_text(token)
-        tokenfile.chmod(0o600)
         monkeypatch.setattr("flamoris_updater_adapters.config.Endpoint.client", lambda _: client)
         main(
             [
                 "job",
                 "--url",
                 ORIGIN,
-                "--token-file",
-                str(tokenfile),
                 "--job-id",
                 job["job_id"],
             ]
@@ -625,7 +590,8 @@ def test_bootstrap_writes_only_new_services_with_unprivileged_web_and_local_help
     cfg = json.loads((base / "setup.json").read_bytes())
     assert cfg["base_path"] == prefix
     assert cfg["listen_host"] == "127.0.0.1" and cfg["service_uid"] == 10002
-    assert not any(result["setup_token"] in arg for call in calls for arg in call)
+    assert "setup_token" not in result
+    assert not any(call[0] == "/usr/bin/setpriv" for call in calls)
     with pytest.raises(UpdateError):
         bootstrap(base, tmp_path / "apps", ORIGIN, command=command)
 
@@ -837,42 +803,23 @@ def test_diagnostics_cover_install_setup_failed_update_and_layout(managed):
     assert mismatch.value.code == "invalid_input"
 
 
-def test_read_only_scoped_mcp_key_can_read_evidence_but_cannot_update(managed):
+def test_mcp_reads_evidence_without_an_integration_key(managed):
     e = managed
     e.manager.configure("https://releases.example.invalid/catalog.json")
     job = install(e)
     c = coordinator(e)
-    c.auth.user("reader", "isolated-test-password", ["read", "operator"], [APP])
-    with c.journal.transaction() as db:
-        c.journal.put("web_setup", "completed", {"username": "reader"}, db)
-    key = c.auth.integration("reader", "evidence", execute=False)
-    with TestClient(create_app(c, c.auth, ORIGIN, run_worker=False), base_url=ORIGIN) as client:
-        for name, args in (
-            ("updater_managed_log_get", {"application_id": APP, "job_id": job["job_id"]}),
-            ("updater_managed_layout_get", {"application_id": APP}),
-        ):
-            response = mcp_call(
-                client, key["token"], "tools/call", {"name": name, "arguments": args}
-            )
-            assert response.status_code == 200
-            assert not response.json()["result"]["isError"], response.text
-        forbidden = mcp_call(
+    with TestClient(create_app(c, ORIGIN, run_worker=False), base_url=ORIGIN) as client:
+        response = mcp_call(
             client,
-            key["token"],
+            "",
             "tools/call",
             {
-                "name": "updater_managed_layout_get",
-                "arguments": {"application_id": "flamoris-studio"},
+                "name": "updater_managed_log_get",
+                "arguments": {"application_id": APP, "job_id": job["job_id"]},
             },
         )
-        assert forbidden.json()["result"]["isError"]
-        forbidden = mcp_call(
-            client,
-            key["token"],
-            "tools/call",
-            {"name": "updater_install_start", "arguments": {"application_id": APP}},
-        )
-        assert forbidden.json()["result"]["isError"]
+        assert response.status_code == 200
+        assert not response.json()["result"]["isError"]
 
 
 def test_interrupted_intent_keeps_timeline_and_is_not_replayed(managed):
@@ -903,33 +850,138 @@ def test_interrupted_intent_keeps_timeline_and_is_not_replayed(managed):
     assert entries[1]["operation"] == "job.interrupted" and entries[1]["outcome"] == "unknown"
 
 
-def test_prefixed_first_setup_login_and_persistent_mcp_key(managed):
+def test_prefixed_catalog_screen_and_mcp_without_first_setup(managed):
     c = coordinator(managed)
     with TestClient(
-        create_app(c, c.auth, ORIGIN, run_worker=False, base_path="/updater"), base_url=ORIGIN
+        create_app(c, ORIGIN, run_worker=False, base_path="/updater"), base_url=ORIGIN
     ) as client:
-        assert "Updaterをセットアップ" in client.get("/updater/").text
+        assert "リポジトリのカタログ" in client.get("/updater/").text
         for asset in ["managed.js", "style.css"]:
             assert client.get("/updater/static/" + asset).status_code == 200
-        assert client.get("/updater/api/v1/setup").json()["setup_required"]
-        setup = client.post(
-            "/updater/api/v1/setup",
-            json={
-                "setup_token": "isolated-setup-token",
-                "username": "operator",
-                "password": "isolated-test-password",
-                "catalog_url": "https://releases.example.invalid/catalog.json",
-            },
-            headers={"Origin": ORIGIN},
+        assert (
+            client.post(
+                "/updater/api/v1/tools/updater_catalog_add",
+                json={"url": "https://releases.example.invalid/catalog.json"},
+            ).status_code
+            == 200
         )
-        assert setup.status_code == 200
-        csrf = client.get("/updater/api/v1/bootstrap").json()["csrf_token"]
-        login = client.post(
-            "/updater/api/v1/login",
-            json={"username": "operator", "password": "isolated-test-password"},
-            headers={"Origin": ORIGIN, "X-CSRF-Token": csrf},
+        assert mcp_call(client, "", "tools/list", path="/updater/mcp").status_code == 200
+        assert client.get("/api/v1/tools/updater_apps_list").status_code == 404
+
+
+def test_repository_catalogs_refresh_independently_without_payload_copy(managed):
+    e = managed
+    second = "example-private-manager"
+    sources = {
+        "https://github.com/example/generation/releases/latest/download/catalog.json": {
+            "catalog_version": 1,
+            "recipes": [recipe()],
+        },
+        "https://catalog.example.invalid/private/catalog.json": {
+            "catalog_version": 1,
+            "recipes": [recipe(application=second)],
+        },
+    }
+    requested = []
+
+    def respond(request):
+        url = str(request.url)
+        requested.append(url)
+        return (
+            httpx.Response(200, content=dumps(sources[url]))
+            if url in sources
+            else httpx.Response(200, content=b"image")
         )
-        assert login.status_code == 200
-        key = c.auth.integration("operator", "persistent automation")
-        assert mcp_call(client, key["token"], "tools/list", path="/updater/mcp").status_code == 200
-        assert client.get("/api/v1/setup").status_code == 404
+
+    e.manager.client = httpx.Client(transport=httpx.MockTransport(respond))
+    urls = list(sources)
+    for url in urls:
+        e.manager.invoke("updater_catalog_add", {"url": url})
+    assert e.manager.sources() == urls
+    assert all(url in sources for url in requested)  # Catalog registration downloads no payload.
+    apps = e.manager.invoke("updater_apps_list", {})["items"]
+    assert {app["application_id"] for app in apps} == {APP, second}
+    install(e)
+    e.manager.start_setup(APP)
+    e.manager.complete(APP)
+    install(e, second)
+    e.manager.start_setup(second)
+    e.manager.complete(second)
+    sources[urls[0]]["recipes"].append(recipe("1.1.0"))
+    e.manager.invoke("updater_apps_list", {"refresh": True})
+    assert update(e, "1.1.0")["phase"] == "succeeded"
+    assert e.manager.journal.get("managed_app", second)["release"] == "1.0.0"
+    e.manager.invoke("updater_catalog_remove", {"url": urls[1]})
+    assert e.manager.sources() == urls[:1]
+    app = next(
+        a
+        for a in e.manager.invoke("updater_apps_list", {})["items"]
+        if a["application_id"] == second
+    )
+    assert app["installation"]["phase"] == "succeeded" and app["releases"] == []
+    assert second in e.containers
+
+
+def test_catalog_conflict_and_failed_refresh_leave_existing_sources_intact(managed):
+    e = managed
+    e.manager.configure("https://releases.example.invalid/catalog.json")
+    original = e.manager.catalog()
+    changed = recipe()
+    changed["downloads"]["image.tar"]["digest"] = digest(b"changed")
+    e.manager.client = httpx.Client(
+        transport=httpx.MockTransport(
+            lambda request: httpx.Response(
+                200, content=dumps({"catalog_version": 1, "recipes": [changed]})
+            )
+        )
+    )
+    with pytest.raises(UpdateError):
+        e.manager.configure("https://another.example.invalid/catalog.json")
+    assert e.manager.sources() == ["https://releases.example.invalid/catalog.json"]
+    assert e.manager.catalog() == original
+    assert e.manager.catalog(refresh=True) == original
+    assert e.manager.catalog_errors
+    assert e.manager.catalog() == original
+
+
+def test_legacy_single_catalog_record_still_loads_without_web_account(managed):
+    e = managed
+    e.manager.configure("https://releases.example.invalid/catalog.json")
+    with e.manager.journal.transaction() as db:
+        e.manager.journal.put(
+            "manager_config", "source", {"url": "https://releases.example.invalid/catalog.json"}, db
+        )
+    c = coordinator(e)
+    assert c.managed_invoke("local", "updater_apps_list", {})["items"]
+    assert e.manager.catalog(refresh=True).recipes
+
+
+def test_one_offline_repository_does_not_block_another_refresh_or_catalog_removal(managed):
+    e = managed
+    first = "https://first.example.invalid/catalog.json"
+    second = "https://second.example.invalid/catalog.json"
+    catalogs = {
+        first: {"catalog_version": 1, "recipes": [recipe()]},
+        second: {"catalog_version": 1, "recipes": [recipe(application="example-other-app")]},
+    }
+    offline = set()
+
+    def respond(request):
+        url = str(request.url)
+        if url in offline:
+            return httpx.Response(503)
+        return httpx.Response(200, content=dumps(catalogs[url]))
+
+    e.manager.client = httpx.Client(transport=httpx.MockTransport(respond))
+    e.manager.configure(first)
+    offline.add(first)
+    # Registration needs only the newly selected repository, not every source online.
+    e.manager.configure(second)
+    catalogs[second]["recipes"].append(recipe("1.1.0", application="example-other-app"))
+    refreshed = e.manager.invoke("updater_apps_list", {"refresh": True})
+    assert refreshed["catalog_errors"] == [{"url": first, "error": "catalog_refresh_failed"}]
+    other = next(app for app in refreshed["items"] if app["application_id"] == "example-other-app")
+    assert [r["release"] for r in other["releases"]] == ["1.0.0", "1.1.0"]
+    offline.add(second)
+    e.manager.remove_source(first)
+    assert e.manager.sources() == [second]

@@ -56,6 +56,7 @@ def runtime_identity():
     return {
         "version": package_version(SELF),
         "supervisor_protocol_version": 1,
+        # Reserved compatibility marker for existing v1 supervisors; no credentials are used.
         "integration_auth_version": 1,
         "runtime_root": str(Path(__file__).resolve().parent.parent),
     }

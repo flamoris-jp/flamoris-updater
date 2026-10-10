@@ -1,3 +1,15 @@
+# Current change: independent repository updates (2026-10-11)
+
+Explicit user direction replaces the earlier distribution and authentication decisions. Application repositories own their source/build/release/payloads; Updater presents them together without collecting assets. Removed the cross-repository candidate builder, all-app/two-platform assembly workflow/packager and user authentication store/routes/UI/dependency/commands. Previous preparation below is historical, not current authorization or product behavior.
+
+The screen opens immediately. Web/CLI/MCP share credential-free typed operations. Multiple catalog URLs keep independent checked snapshots; adding/removing a source does not require other repositories online. Refresh failures retain that source's previous snapshot while other sources continue. Release conflicts and changed immutable bindings are rejected. Catalog registration downloads no app payload. Removing a catalog preserves apps/settings/data/history.
+
+Managed records and former single-source catalogs remain readable. Native recipes can declare their own package launcher/distribution; no private deployment names enter public defaults. Settings/data retention, staged versions, stop/switch/start verification, local OS-peer checks and durable failure outcomes remain.
+
+Validation: **309 passed, 7 skipped** (real Docker/PostgreSQL integration fixtures are environment-gated); lint/format, JavaScript syntax, schema export and documentation links pass. The wheel builds, and the indexed Linux amd64 bundle validates all entrypoints/imports and its exact content index after root execution. No arm64 or real-host rollout is claimed. Release publication, per-application repository catalog publication and actual-host rollout have not been performed. Public v1.0.3 artifacts are unchanged. Authentication-dependent advanced Web APIs/CLI account commands are intentionally removed; internal Core/Owner migration contracts remain separate.
+
+---
+
 # Progress
 
 Updated: 2026-10-10 (JST).

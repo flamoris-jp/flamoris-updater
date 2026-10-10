@@ -1,43 +1,22 @@
 # Release recipes and direct installation
 
-The normal operator flow is [running](RUNNING.md): bootstrap, Web setup, select an app, first setup, verify, then update through the same records. It needs no pre-running app, application Owner, DB backup, system backup or client certificates.
+The normal operator flow is [running](RUNNING.md): bootstrap, register catalogs, select an app, first setup, verify, then update through the same records. It needs no pre-running app, application Owner, DB backup, system backup or client certificates.
 
-## Maintainer-owned inputs
+## Repository-owned releases
 
-`scripts/build_initial_candidate.py` builds immutable Docker archives or GNM offline wheelhouses from exact reviewed source commits. It validates package/image/component versions and writes `candidate.json` with platform, image ID, file digests and source revision. Initial defaults are AI 1.0.0 / GNM 1.2.0. `--revision`, `--version` and repeated `--compatible-from` support later explicitly compatible releases. These arguments are maintainer/CI inputs; caller APIs do not accept commands/source revisions.
+Each application repository builds and publishes its own Docker archive or Native offline wheelhouse and catalog. Updater does not clone/build the applications or copy their payloads into a shared distribution. One app/platform is sufficient; releases can be published independently.
 
-```bash
-python scripts/build_initial_candidate.py --application flamoris-generation-mcp --platform linux/amd64 --output dist/generation
-python scripts/build_install_catalog.py --candidate dist/generation/candidate.json https://releases.example.invalid/generation --output dist/catalog.json
-```
-
-Distribute that catalog and its candidate files at the selected direct HTTPS locations (no credential/client certificate or implicit registry login). The source example is illustrative, not an available release. Controlled CI uses disposable candidates before publication.
-
-### Complete initial distribution
-
-The manual **Initial installation candidates** workflow takes `base_url`, the
-chosen immutable HTTPS directory. It builds all six applications on
-amd64/arm64, validates the complete matrix and uploads an
-`initial-install-distribution` artifact containing `catalog.json`, flat uniquely
-named payload files, `application-distribution.json` and `SHA256SUMS`. It has
-read-only repository permissions and performs no publication or host installation.
-Download artifacts without merging their candidate directories when assembling
-outside the workflow:
+The recipe helper can generate a catalog from application-owned candidate metadata:
 
 ```bash
-python scripts/package_install_catalog.py --candidates dist/candidates --base-url https://releases.example.invalid/initial-apps --output dist/distribution
+python scripts/build_install_catalog.py --candidate /absolute/app/candidate.json https://github.com/example/app/releases/download/v1.0.0 --output /absolute/app/catalog.json
 ```
 
-The packager requires the reviewed source commits and initial release identities
-from `build_initial_candidate.py` / `install.VERSIONS`. It refuses missing or
-duplicate app/platform entries, source/published-state mismatches, unlisted fields/files,
-symlinks, changed digests, oversized payloads and existing/overlapping output.
-Public asset names are distinct; logical package keys remain unchanged, including
-SQL paths and wheel filenames. The generated catalog is revalidated against the
-installed schema and one-MiB catalog budget. Assembly metadata records
-`published=false`; it describes the build checkpoint, not live hosting acceptance.
-Future releases need a separately reviewed matrix rather than bypassing these
-initial identity checks.
+`candidate.json` records application ID, release, source revision, platform, file digests, optional compatible predecessors and Docker image ID. It is produced and checked by the application's release process. Catalog generation preserves those direct URLs without copying assets. For SQL/subdirectory assets, the maintainer supplies release asset URLs in `Recipe.downloads`; the logical package key can retain a directory even though a GitHub asset has a flat filename.
+
+A repository can also supply `Catalog`/`Recipe` JSON directly, including Native applications composed with another package. `entrypoint` and `distribution` identify the Native package launcher and version to verify; defaults retain the existing GNM contract. No private deployment identity is included in public defaults. Internal catalogs may use a separately reachable HTTPS source; private GitHub authentication is not implemented by Updater.
+
+The catalog contains exact URLs, hashes, settings and compatibility. Register multiple catalog URLs in Web/CLI/MCP; a shared catalog may reference different repositories. Ordinary release downloads still require bounded HTTPS and digest verification.
 
 The corrected managed downloader in current source accepts at most five HTTPS
 redirects for catalogs, app payloads and supervisor self-update bundles. Redirects
@@ -53,8 +32,8 @@ is closed; final byte budgets, SHA-256/index validation and immutable recipe
 bindings remain enforced. The separate signed/coordinator/registry fetcher keeps
 its strict no-redirect contract.
 
-Publish the assembled assets and catalog together at the selected HTTPS location
-and verify every download and checksum before Web setup. GitHub Release download
+Publish each repository's assets/catalog at its own selected HTTPS location
+and verify its downloads/checksums. GitHub Release download
 URLs are supported by distribution 1.0.3; the earlier 1.0.1 package rejects
 redirects. Existing installations need administrator
 maintenance of the pinned supervisor as well as Web/manager; updating only those
