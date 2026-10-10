@@ -11,7 +11,42 @@ python scripts/build_initial_candidate.py --application flamoris-generation-mcp 
 python scripts/build_install_catalog.py --candidate dist/generation/candidate.json https://releases.example.invalid/generation --output dist/catalog.json
 ```
 
-Distribute that catalog and its candidate files at the selected direct HTTPS locations (no credential/client certificate or implicit registry login). The source example is illustrative, not an available release. The manual candidate workflow builds reviewable artifacts for all six units/amd64/arm64; it does not publish them. Controlled CI uses disposable candidates before publication.
+Distribute that catalog and its candidate files at the selected direct HTTPS locations (no credential/client certificate or implicit registry login). The source example is illustrative, not an available release. Controlled CI uses disposable candidates before publication.
+
+### Complete initial distribution
+
+The manual **Initial installation candidates** workflow takes `base_url`, the
+chosen immutable direct HTTPS directory. It builds all six applications on
+amd64/arm64, validates the complete matrix and uploads an
+`initial-install-distribution` artifact containing `catalog.json`, flat uniquely
+named payload files, `application-distribution.json` and `SHA256SUMS`. It has
+read-only repository permissions and performs no publication or host installation.
+Download artifacts without merging their candidate directories when assembling
+outside the workflow:
+
+```bash
+python scripts/package_install_catalog.py --candidates dist/candidates --base-url https://releases.example.invalid/initial-apps --output dist/distribution
+```
+
+The packager requires the reviewed source commits and initial release identities
+from `build_initial_candidate.py` / `install.VERSIONS`. It refuses missing or
+duplicate app/platform entries, source/published-state mismatches, unlisted fields/files,
+symlinks, changed digests, oversized payloads and existing/overlapping output.
+Public asset names are distinct; logical package keys remain unchanged, including
+SQL paths and wheel filenames. The generated catalog is revalidated against the
+installed schema and one-MiB catalog budget. Assembly metadata records
+`published=false`; it describes the build checkpoint, not live hosting acceptance.
+Future releases need a separately reviewed matrix rather than bypassing these
+initial identity checks.
+
+Updater 1.0.1's managed downloader accepts HTTP 200 without following redirects.
+GitHub Release attachment URLs therefore cannot be used directly in this catalog.
+Serve the assembled directory at the selected ordinary HTTPS location and verify
+that the catalog and every payload return 200 directly with system trust and
+matching checksums before Web setup. An Actions artifact is a build output, not
+a release source. The example domain above is not a published catalog. Do not
+change URLs or content for a published app/release/platform identity; the manager
+binds the entire recipe immutably. Hosting/proxy provisioning remains separate.
 
 Generated recipes describe actual app environment fields, new database initialization and program/data layout. Operator choices and generated credentials are private local settings; they are not embedded in public candidates. Agent applies its own schema/migration SQL to a newly-created dedicated DB; Studio runs its own image Alembic. Neither operation touches existing DBs or creates backups. Users supply the PostgreSQL admin connection and a host reachable from both manager and app; unknown/occupied DB/role names stop before initialization.
 

@@ -2,6 +2,31 @@
 
 Updated: 2026-10-10 (JST).
 
+## Initial application catalog distribution preparation
+
+The operator authorized preparation of application payloads and the catalog
+needed for first Web setup. The existing candidate workflow built individual
+artifacts but had no complete catalog assembly. Its read-only manual workflow
+now collects all six applications on both native platforms and assembles a flat
+distribution against a maintainer-supplied direct HTTPS directory.
+
+The packager binds reviewed initial commits/versions, validates all input bytes,
+refuses incomplete/duplicate identities, symlinks and unlisted files, preserves
+package keys, assigns unique public filenames and emits a schema/budget-checked
+catalog, source/asset mapping and SHA-256 sums. Existing outputs cannot be
+replaced. The installed 1.0.1 managed downloader does not follow redirects, so
+GitHub Release attachment URLs are unsuitable without a separate direct HTTPS
+hosting step. No runtime source, version, app settings, database or service is
+changed by this preparation.
+
+Local verification: **284 passed, 7 skipped**; Ruff lint/format, workflow YAML
+and documentation links pass. The new tests exercise
+the assembled catalog through the existing manager and download every fixture
+payload with its declared digest, plus incomplete/tampered/unsafe inputs. They
+do not substitute for the manual twelve-candidate build, publication, HTTPS
+hosting verification, Web administrator setup or real application installation.
+Those acceptance stages remain pending.
+
 ## v1.0.1 public base-path support
 
 The operator authorized public subpath support and a patch distribution. An
