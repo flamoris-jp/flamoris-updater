@@ -1,3 +1,11 @@
+# Published repository catalogs — 2026-10-11
+
+Updater 1.0.4 and its explicit 1.0.3 self-update catalog are published after PR #23 and successful CI/publication. Each application repository now owns its builds, Release assets and complete installation recipe: Agent, Generation, Intelligence, Hub and Studio 1.0.1; GPU Node Manager Native 1.2.1. Controller publishes its 1.0.0 library separately; it remains embedded in the single Generation MCP process. All owning repository PRs, normal CI and per-platform packaging/profile verification passed; all publication jobs succeeded.
+
+A dated initial-install reference catalog combines metadata only, preserving the exact app-owned release URLs/bindings. Independent repository latest-catalog URLs are documented for future release checking. Public catalog downloads, payload SHA-256 agreement and bounded primary-payload transfers are recorded in catalogs/verification-20261011.json. No live install/update, domain initialization, data/credential/runtime mutation or provider invocation is performed. Actual 1.0.3-to-1.0.4 cutover and app operation remain next-stage acceptance.
+
+---
+
 # Release/catalog preparation (2026-10-11)
 
 The operator requested catalog preparation and then explicitly requested each application repository's own distribution preparation. Updater 1.0.4 packages the merged simplified flow. Its own publisher generates a typed `catalog.json` from both verified native bundle summaries, referencing immutable files in this repository's Release and authorizing 1.0.3 as predecessor. The catalog is checksummed with the other Updater assets. No app builds or payload copies are added here.
