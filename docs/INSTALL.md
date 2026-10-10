@@ -55,8 +55,8 @@ its strict no-redirect contract.
 
 Publish the assembled assets and catalog together at the selected HTTPS location
 and verify every download and checksum before Web setup. GitHub Release download
-URLs can be used with a package containing this correction; the already-published
-1.0.1 package rejects redirects. Existing installations need administrator
+URLs are supported by distribution 1.0.2; the earlier 1.0.1 package rejects
+redirects. Existing installations need administrator
 maintenance of the pinned supervisor as well as Web/manager; updating only those
 two services leaves the old self-update downloader in place. No live maintenance
 is performed by this source change. An Actions artifact is a build output, not

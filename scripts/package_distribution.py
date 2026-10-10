@@ -22,7 +22,7 @@ def assemble(inputs, output, release, revision, root):
     if not re.fullmatch(r"[0-9a-f]{40}", revision):
         raise ValueError("An exact source revision is required")
     package = tomllib.loads((root / "pyproject.toml").read_text())["project"]
-    if release not in {"1.0.0", "1.0.1"} or package["version"] != release:
+    if release not in {"1.0.0", "1.0.1", "1.0.2"} or package["version"] != release:
         raise ValueError("Distribution and package versions disagree")
     core_version = tomllib.loads((root / "packages/update-core/pyproject.toml").read_text())[
         "project"

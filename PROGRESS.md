@@ -2,6 +2,22 @@
 
 Updated: 2026-10-10 (JST).
 
+## Updater 1.0.2 publication and maintenance preparation
+
+The operator explicitly authorized publishing the corrected distribution and
+updating the existing installations on 2026-10-10. Version 1.0.2 includes the
+merged public-release redirect correction and catalog assembly support. The
+version-scoped publication workflow builds/verifies both native platforms,
+assembles exact-byte metadata/checksums and refuses an existing v1.0.2 tag before
+publishing. Core SDK remains 1.0.0; no journal/config/database schema changes.
+
+This checkpoint prepares the release; publication success and live three-service
+maintenance are not yet accepted. Local/CI evidence is recorded in the release
+PR. Existing 1.0.1 assets are immutable. The pinned supervisor requires explicit
+administrator maintenance with Job/journal/binding inspection; ordinary self
+update alone cannot replace it. Application publication and Web setup remain
+separate integration work.
+
 ## Public release redirect correction
 
 The operator authorized correcting Updater's download limitation rather than
