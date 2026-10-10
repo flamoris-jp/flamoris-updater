@@ -2,6 +2,32 @@
 
 Updated: 2026-10-10 (JST).
 
+## v1.0.0 distribution preparation
+
+The user authorized Updater v1.0 and distribution creation. Package version remains
+1.0.0, with release tag v1.0.0. The merged main source is verified in CI run
+38018447434. Release preparation updates stale notes/security wording to the
+current simple-bootstrap, self-update and diagnostic contracts and adds the
+version-scoped publication workflow. No product behavior or app feature is added.
+
+The workflow builds/exercises indexed native bundles on amd64/arm64, includes
+Updater/Core wheel/source and schemas, statically verifies both archives again,
+and creates exact source metadata, installation instructions and SHA-256 sums.
+Only its trusted main publication job receives contents-write authority; a
+failed upload is not permission to replace a published release asset. The existing
+protected advanced signing workflow remains separate. Initial distribution uses
+GitHub HTTPS and checksums, not a synthetic signing identity or signed catalog.
+
+Local verification: **234 passed, 7 skipped**; Ruff lint/format, documentation
+links, workflow YAML and shell syntax, and whitespace checks pass. Distribution
+tests reject digest/version/platform mismatches, missing or unexpected assets,
+and replacement of an already assembled output. Publication is still pending
+at this source checkpoint; GitHub CI/release metadata provide its final evidence.
+
+This release contains Updater only. Application artifacts and their direct HTTPS
+catalog, external infrastructure provisioning and real-host installation remain
+separate work. Latest build/publication evidence is recorded in the release/PR.
+
 ## PR #11 merged; PR #14 reconciled with main
 
 PR #11 was squash-merged into main at
