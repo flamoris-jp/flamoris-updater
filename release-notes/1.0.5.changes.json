@@ -1,0 +1,13 @@
+{
+  "format_version": 1,
+  "application_id": "flamoris-updater",
+  "release": "1.0.5",
+  "entries": [{
+    "category": "feature",
+    "summary": "Fetch private repository-owned GitHub Release catalogs and payloads with existing operator GitHub access",
+    "affected": ["catalogs", "downloads"],
+    "breaking": false
+  }],
+  "restart_required": true,
+  "recovery_conditions": "Preserve existing settings, data, Jobs, journals and pinned supervisor. Private downloads require read access in the manager's OS credential context; unknown effects stop without replay."
+}

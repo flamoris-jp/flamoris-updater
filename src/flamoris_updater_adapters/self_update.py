@@ -211,7 +211,12 @@ class Supervisor:
     def candidate(self, release):
         store = self.store or NativeStore(
             path(str(self.state.parent / "releases")),
-            Fetcher([origin(release.artifact.locator)], self.client, public_redirects=True),
+            Fetcher(
+                [origin(release.artifact.locator)],
+                self.client,
+                public_redirects=True,
+                github_releases=True,
+            ),
         )
         directory = store.prepare(release.artifact)
         store.verify(directory, release.artifact)

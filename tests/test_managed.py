@@ -37,6 +37,59 @@ pytestmark = pytest.mark.skipif(
 
 
 @pytest.mark.parametrize("tampered", [False, True])
+def test_private_repository_catalog_and_payload_share_managed_digest_checks(
+    tmp_path, monkeypatch, tampered
+):
+    base = "https://github.com/example/private/releases/download/v1.0"
+    monkeypatch.setenv("GH_TOKEN", "existing-github-token")
+    candidate = recipe()
+    candidate["downloads"]["image.tar"]["url"] = base + "/image.tar"
+    catalog = Catalog.model_validate({"catalog_version": 1, "recipes": [candidate]})
+    payloads = {1: dumps(catalog), 2: b"tampered" if tampered else b"image"}
+
+    def serve(request):
+        if request.url.host == "github.com":
+            assert "authorization" not in request.headers
+            return httpx.Response(404)
+        assert request.url.host == "api.github.com"
+        assert request.headers["authorization"] == "Bearer existing-github-token"
+        if request.url.path.endswith("/tags/v1.0"):
+            return httpx.Response(200, json={"id": 9, "tag_name": "v1.0"})
+        if request.url.path.endswith("/9/assets"):
+            return httpx.Response(
+                200,
+                json=[
+                    {
+                        "id": asset_id,
+                        "name": name,
+                        "state": "uploaded",
+                        "size": len(payloads[asset_id]),
+                    }
+                    for asset_id, name in [(1, "catalog.json"), (2, "image.tar")]
+                ],
+            )
+        return httpx.Response(200, content=payloads[int(request.url.path.rsplit("/", 1)[-1])])
+
+    manager = Manager(
+        tmp_path / "state",
+        tmp_path / "apps",
+        client=httpx.Client(transport=httpx.MockTransport(serve)),
+    )
+    manager.configure(base + "/catalog.json")
+    assert manager.catalog(refresh=True) == catalog
+    item = catalog.recipes[0].downloads["image.tar"]
+    destination = tmp_path / "image.tar"
+    if tampered:
+        with pytest.raises(UpdateError) as error:
+            manager._download(item.url, 1024, destination, item.digest)
+        assert error.value.code == "artifact_mismatch"
+    else:
+        manager._download(item.url, 1024, destination, item.digest)
+        assert destination.read_bytes() == b"image"
+    assert "existing-github-token" not in dumps(manager.catalog()).decode()
+
+
+@pytest.mark.parametrize("tampered", [False, True])
 def test_github_catalog_and_app_payload_follow_checked_redirects(tmp_path, tampered):
     base = "https://github.com/example/apps/releases/download/initial"
     cdn = "https://release-assets.githubusercontent.com/github-production-release-asset/1/"

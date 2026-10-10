@@ -1,6 +1,6 @@
-# Installing the Updater v1.0.4 distribution
+# Installing the Updater v1.0.5 distribution
 
-The release is at <https://github.com/flamoris-jp/flamoris-updater/releases/tag/v1.0.4>.
+The release is at <https://github.com/flamoris-jp/flamoris-updater/releases/tag/v1.0.5>.
 The two indexed native bundles contain Updater and its Python dependencies; the
 system Python interpreter is not bundled. Requires Linux/systemd, **Python 3.12
 at `/usr/bin/python3.12`** and administrator privileges. Built/tested on Ubuntu
@@ -10,8 +10,8 @@ remain external work.
 
 ## Select and verify
 
-- x86_64: `flamoris-updater-1.0.4-linux-amd64.tar.gz`.
-- aarch64: `flamoris-updater-1.0.4-linux-arm64.tar.gz`.
+- x86_64: `flamoris-updater-1.0.5-linux-amd64.tar.gz`.
+- aarch64: `flamoris-updater-1.0.5-linux-arm64.tar.gz`.
 
 Download the selected archive and `SHA256SUMS` from the release into a normal
 working directory under `~/tmp/`. Before generating host-specific commands,
@@ -34,10 +34,10 @@ Choose an unused protected installation directory. The following is an example
 for amd64; substitute the arm64 filename on that architecture:
 
 ```bash
-sudo install -d -m 0755 /opt/flamoris-updater/1.0.4
-sudo tar --extract --gzip --file flamoris-updater-1.0.4-linux-amd64.tar.gz --directory /opt/flamoris-updater/1.0.4 --no-same-owner
-sudo chmod -R a-w /opt/flamoris-updater/1.0.4
-sudo /opt/flamoris-updater/1.0.4/bin/flamoris-updater bootstrap --root /srv/flamoris/apps
+sudo install -d -m 0755 /opt/flamoris-updater/1.0.5
+sudo tar --extract --gzip --file flamoris-updater-1.0.5-linux-amd64.tar.gz --directory /opt/flamoris-updater/1.0.5 --no-same-owner
+sudo chmod -R a-w /opt/flamoris-updater/1.0.5
+sudo /opt/flamoris-updater/1.0.5/bin/flamoris-updater bootstrap --root /srv/flamoris/apps
 ```
 
 Use only a verified archive. Do not extract over an existing installation or
@@ -56,7 +56,7 @@ Bootstrap creates:
 | Applications | `/srv/flamoris/apps` |
 | Initial Web | `http://127.0.0.1:8764` |
 
-Keep `/opt/flamoris-updater/1.0.4`: the supervisor remains there after later
+Keep `/opt/flamoris-updater/1.0.5`: the supervisor remains there after later
 self-updates. Bootstrap options `--directory`, `--root`, `--port` and
 `--public-origin` select alternate deployment bindings. `--base-path /updater`
 serves Web, API and MCP below that prefix. Keep `--public-origin` as a pure
@@ -66,19 +66,24 @@ origin (for example `https://updater.example.invalid`); do not include the path.
 
 Open the printed URL and register each repository's catalog. Current source needs no setup code, administrator, login or MCP key. MCP is `<public-origin><base-path>/mcp`. External proxy/tunnel access is configured separately. Application repositories publish their own catalogs and payloads.
 
-Version 1.0.4 removes Updater account/code/key setup. Published v1.0.3 retains
+Version 1.0.4 removed Updater account/code/key setup. Published v1.0.3 retains
 its former workflow and cannot replace an already configured catalog in the
 screen. Perform the [one-time catalog switch](UPGRADE_103.md), then use its
 existing self-update screen. Do not rerun bootstrap. The new Release asset is
-`https://github.com/flamoris-jp/flamoris-updater/releases/download/v1.0.4/catalog.json`.
-It declares 1.0.3 as the compatible predecessor and describes only Updater.
+`https://github.com/flamoris-jp/flamoris-updater/releases/download/v1.0.5/catalog.json`.
+It declares 1.0.3 and 1.0.4 as compatible predecessors and describes only Updater.
 Application catalogs and artifacts remain in their owning repositories.
 Publication success and actual-host acceptance must be checked separately.
 
-Version 1.0.4 supports at most five checked same-origin HTTPS redirects and an
+Version 1.0.5 adds private GitHub Release retrieval through the operator's
+existing GitHub access. See [private repository access](GITHUB_RELEASES.md).
+The normal user's GitHub CLI login must be selected for the root manager;
+service processes do not inherit an interactive login automatically.
+
+Version 1.0.5 supports at most five checked same-origin HTTPS redirects and an
 exact GitHub Release-to-`release-assets.githubusercontent.com` exception for
 catalogs, app payloads and supervisor bundles; see [installation](INSTALL.md).
-The earlier 1.0.1 package rejects automated-download redirects. Version 1.0.4
+The earlier 1.0.1 package rejects automated-download redirects. Version 1.0.5
 also prevents privileged launcher imports from writing unindexed bytecode caches;
 1.0.2 lacks that packaging correction. Existing 1.0.1
 installations require explicit administrator maintenance of all three services,
@@ -90,10 +95,10 @@ existing installation. Publication does not certify real-host maintenance.
 If Updater itself stops, its MCP cannot inspect/recover it. Use an independent
 administrator channel, preserve its journals and private diagnostic exports,
 and check queued Jobs before service restart. The full guide is
-[diagnostics](https://github.com/flamoris-jp/flamoris-updater/blob/v1.0.4/docs/DIAGNOSTICS.md).
+[diagnostics](https://github.com/flamoris-jp/flamoris-updater/blob/v1.0.5/docs/DIAGNOSTICS.md).
 
-Further contracts: [running](https://github.com/flamoris-jp/flamoris-updater/blob/v1.0.4/docs/RUNNING.md),
-[application release preparation](https://github.com/flamoris-jp/flamoris-updater/blob/v1.0.4/docs/INSTALL.md).
+Further contracts: [running](https://github.com/flamoris-jp/flamoris-updater/blob/v1.0.5/docs/RUNNING.md),
+[application release preparation](https://github.com/flamoris-jp/flamoris-updater/blob/v1.0.5/docs/INSTALL.md).
 
 ## HTTPS below a public path
 

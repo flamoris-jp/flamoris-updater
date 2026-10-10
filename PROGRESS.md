@@ -1,3 +1,13 @@
+## 2026-10-11 — Private repository Release downloads / 1.0.5
+
+Implemented the requested private GitHub Release catalog/payload path using existing operator credentials (GH_TOKEN, GITHUB_TOKEN or fixed GitHub CLI token lookup). A root service can select an existing normal user's login with FLAMORIS_GITHUB_USER; the fixed CLI command runs as that account. No Updater login, token UI, credential database, credential copy, public mirror or cross-repository payload collection is added.
+
+Only an initial GitHub browser-download 404 enters the API path. Release metadata and paginated asset lookup stay on constructed exact api.github.com endpoints; metadata redirects are refused. Binary API responses can stream or redirect to the existing exact asset CDN with Authorization/Cookies removed. Byte limits, closed responses, SHA-256 verification and immutable recipes are preserved. Signed/coordinator/registry fetches retain their original strict path. Public sources need no GitHub credentials or CLI.
+
+Local validation: **357 passed, 7 skipped** (Docker/PostgreSQL environment gates), Ruff check/format, schema export, documentation links and wheel build. Tests cover private catalog registration/refresh, app payload integrity/tampering, direct API streaming/CDN transfer, invalid responses, pagination/byte bounds, credential isolation, existing normal-user CLI lookup and unchanged public/self-update behavior. CI also exercises the real authenticated GitHub Release API against an immutable public fixture; that is not a claim of private-repository permissions on a deployment host.
+
+Version 1.0.5 prepares native amd64/arm64 distributions and an Updater-only catalog with explicit 1.0.3/1.0.4 predecessors. CI/publication evidence is pending at this source checkpoint. No actual host, service, GitHub login, runtime/model or installation has been changed. LIME's existing private Release remains owned by its own repository; host GitHub access and LIME's external runtime/identity prerequisites remain deployment acceptance.
+
 ## 2026-10-11 — Already configured 1.0.3 catalog handoff
 
 - Corrected the earlier screen-registration instructions: published 1.0.3 permits only first catalog configuration. Added a one-time root operator script using the installed original packages and the exact public snapshot digest; after catalog handoff, the existing supervisor self-update path selects 1.0.4.

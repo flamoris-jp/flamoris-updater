@@ -14,3 +14,5 @@ The listener stays loopback, and bootstrap retains an unprivileged Web OS accoun
 `--public-origin` specifies the exact public origin; `--base-path` places Web/API/MCP below a prefix. The external proxy must preserve Host and path. Forwarded headers cannot change the route boundary. Updater does not issue certificates, open ports or establish a tunnel.
 
 The internal advanced Core/Owner integration still uses signed operation/receipt and local OS-peer contracts. It is not exposed by the normal Web/CLI/MCP. Private GitHub access and app-owned service credentials are independent; removing Updater login does not make private releases public.
+
+The optional private GitHub Release path sends existing GitHub credentials only to exact api.github.com Release endpoints. Asset storage requests are credential-free, metadata redirects are rejected and payloads retain digest/budget checks. See [private repository access](GITHUB_RELEASES.md).
