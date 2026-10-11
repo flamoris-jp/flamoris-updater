@@ -1,3 +1,31 @@
+## 2026-10-11 — Operator feedback / 1.0.8 preparation
+
+Source adds a sticky header using actual hostname/version from `/health`, bounded
+per-host browser colour choices, catalog-switch guidance and recorded runtime
+placement. Setup operations show pending/completed/failed feedback with spaced
+buttons; generated settings explain empty-input generation without modifying
+published application catalogs. Non-JSON API responses are handled without
+echoing their bodies. Successful polling clears connection failures only;
+operation failures remain dismissible and no mutation is replayed. A changed
+runtime version reloads the page to fetch current assets.
+
+GitHub connection UI is deferred in Issue #32. Log-directory changes, user
+authentication, backup and app-owned migrations are outside this correction.
+Local validation: **377 passed, 7 skipped**, Ruff check/format, documentation
+links, JavaScript syntax and 1.0.8 wheel build passed. Environment-gated skips
+require disposable Docker/PostgreSQL/sockets. Chromium regression coverage is
+added to CI; the local environment cannot download its browser binary. CI and
+immutable 1.0.8 publication are pending at this checkpoint; no live 1.0.8 rollout
+or provider/GPU execution is claimed.
+
+Previous 1.0.7 status: PR #31 merged and both-CPU/native/Docker image-store CI
+and immutable release publication succeeded. A controlled physical-host recovery
+preserved the failed installation/settings, reached awaiting_setup, then passed
+Generation MCP 1.0.2 running/health and initial_setup_verified. The physical host
+also switched Web/manager to the published 1.0.7 bundle. This confirms startup,
+not inference or external runtime/provider readiness. The checkpoint below
+records the earlier pre-release state.
+
 ## 2026-10-11 — Docker image-store correction
 
 A physical-host install completed Docker load, then failed inspection because
