@@ -12,6 +12,8 @@ import re
 import socket
 import stat
 import subprocess
+import tarfile
+import tempfile
 import time
 from pathlib import Path
 from typing import Annotated, Literal
@@ -363,6 +365,44 @@ def run(argv, timeout=300):
             }
         )
         raise error from None
+
+
+def exported_config_matches(filename, expected):
+    """Read bounded config blobs without extracting any archive paths."""
+    try:
+        matching = set()
+        manifest = None
+        with tarfile.open(filename, mode="r|*") as archive:
+            for index, member in enumerate(archive):
+                if index >= 4096:
+                    raise UpdateError("quota_exceeded")
+                if not member.isfile() or member.size > 1024 * 1024:
+                    continue
+                if member.name == "manifest.json":
+                    if manifest is not None:
+                        raise UpdateError("artifact_mismatch")
+                    manifest = json.loads(archive.extractfile(member).read())
+                    continue
+                if not re.fullmatch(
+                    r"(?:[0-9a-f]{64}\.json|blobs/sha256/[0-9a-f]{64})", member.name
+                ):
+                    continue
+                raw = archive.extractfile(member).read()
+                if digest(raw) == expected:
+                    config = json.loads(raw)
+                    if isinstance(config, dict) and isinstance(config.get("rootfs"), dict):
+                        matching.add(member.name)
+        # A config blob elsewhere in a multi-image export is not proof that
+        # the selected runtime image uses it. Require one runnable image and
+        # its exact referenced config; these recipes are single-platform.
+        return (
+            isinstance(manifest, list)
+            and len(manifest) == 1
+            and isinstance(manifest[0], dict)
+            and manifest[0].get("Config") in matching
+        )
+    except (tarfile.TarError, ValueError, OSError):
+        raise UpdateError("artifact_mismatch") from None
 
 
 def inputs(app):
@@ -789,16 +829,31 @@ class Installer:
 
     def _stage(self, app):
         if isinstance(app, DockerApplication):
-            self.command(
+            loaded = self.command(
                 ["/usr/bin/docker", "load", "--input", app.image_archive.path], timeout=600
             )
-            image = json.loads(self.command(["/usr/bin/docker", "image", "inspect", app.image_id]))[
-                0
-            ]
+            resolved = False
+            try:
+                image = json.loads(
+                    self.command(["/usr/bin/docker", "image", "inspect", app.image_id])
+                )[0]
+            except UpdateError as error:
+                detail = getattr(error, "diagnostic", {})
+                if detail.get("kind") != "nonzero_exit" or detail.get("exit_code") != 1:
+                    raise
+                image = self._loaded_image(app, loaded)
+                resolved = True
+            runtime_id = image.get("Id")
+            if not resolved and runtime_id != app.image_id:
+                image = self._loaded_image(app, loaded)
+                runtime_id = image.get("Id")
+            if not isinstance(runtime_id, str) or not re.fullmatch(
+                r"sha256:[0-9a-f]{64}", runtime_id
+            ):
+                raise UpdateError("artifact_mismatch")
             labels = image.get("Config", {}).get("Labels") or {}
             if (
-                image.get("Id") != app.image_id
-                or labels.get("org.opencontainers.image.version") != app.release
+                labels.get("org.opencontainers.image.version") != app.release
                 or labels.get("org.opencontainers.image.title") != app.application_id
                 or image.get("Config", {}).get("Volumes")
                 or image.get("Os") != "linux"
@@ -811,6 +866,18 @@ class Installer:
                 raise UpdateError(
                     "artifact_mismatch", "Generation must include its matched Controller"
                 )
+            if runtime_id != app.image_id:
+                from .diagnostics import event
+
+                event(
+                    "docker.image.resolve",
+                    "verified",
+                    {
+                        "catalog_image_id": app.image_id,
+                        "runtime_image_id": runtime_id,
+                    },
+                )
+            return app.model_copy(update={"image_id": runtime_id})
         else:
             self.command([app.python, "-m", "venv", app.venv])
             self.command(
@@ -835,6 +902,36 @@ class Installer:
             )
             if result.strip().decode() != app.release:
                 raise UpdateError("artifact_mismatch")
+            return app
+
+    def _loaded_image(self, app, loaded):
+        """Bind containerd's manifest ID to the catalog's exact config digest.
+
+        Docker's bounded load response supplies candidate references. A fresh,
+        private export must contain the exact config blob before a candidate's
+        immutable runtime ID can be used. Labels alone never establish identity.
+        """
+        references = re.findall(r"^Loaded image(?: ID)?: ([^\s]+)$", loaded.decode(), re.M)
+        if not references or len(references) > 8:
+            raise UpdateError("artifact_mismatch")
+        for reference in references:
+            if len(reference) > 256 or reference.startswith("-"):
+                raise UpdateError("artifact_mismatch")
+            image = json.loads(self.command(["/usr/bin/docker", "image", "inspect", reference]))[0]
+            actual = image.get("Id", "")
+            if not re.fullmatch(r"sha256:[0-9a-f]{64}", actual):
+                raise UpdateError("artifact_mismatch")
+            with tempfile.TemporaryDirectory(prefix="flamoris-image-") as directory:
+                exported = Path(directory) / "image.tar"
+                self.command(
+                    ["/usr/bin/docker", "image", "save", "--output", str(exported), actual],
+                    timeout=600,
+                )
+                if exported.stat().st_size > 4 * 1024**3:
+                    raise UpdateError("quota_exceeded")
+                if exported_config_matches(exported, app.image_id):
+                    return image
+        raise UpdateError("artifact_mismatch")
 
     def _start(self, app, *, start=True):
         if isinstance(app, DockerApplication):
@@ -989,7 +1086,20 @@ class Installer:
                         persist()
                         from .diagnostics import effect as recorded_effect
 
-                        recorded_effect("installer." + name, lambda: effect(app))
+                        result = recorded_effect("installer." + name, lambda: effect(app))
+                        if name == "stage" and isinstance(
+                            result, (DockerApplication, NativeApplication)
+                        ):
+                            original = app
+                            app = result
+                            self.cfg = self.cfg.model_copy(
+                                update={
+                                    "applications": [
+                                        app if item == original else item
+                                        for item in self.cfg.applications
+                                    ]
+                                }
+                            )
                         record["phase"] = "step_succeeded"
                         persist()
                 record.update(

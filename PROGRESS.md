@@ -1,3 +1,22 @@
+## 2026-10-11 — Docker image-store correction
+
+A physical-host install completed Docker load, then failed inspection because
+the catalog config digest differs from containerd's visible runtime ID. A
+read-only export confirmed the exact catalog config SHA-256 and Linux/amd64.
+
+1.0.7 source verifies config content before recording the runtime ID, persists
+that binding through setup/layout/update, and retains artifact/CPU/labels and
+components checks. Stage-only offline recovery reuses verified inputs and
+preserves the failed Job. It refuses changed configuration/artifacts/settings,
+databases, later steps and existing target containers. No physical-host settings,
+Docker backend or journals were changed by this correction.
+
+Local pre-release suite: **373 passed, 7 skipped**; skips need disposable
+PostgreSQL, Docker or named sockets. Published Generation 1.0.2 acceptance on
+Docker 29 classic/containerd and amd64/arm64 is added to CI. CI, publication and
+physical-host recovery/start are pending here. See
+[Docker identity and recovery](docs/DOCKER_IMAGE_STORE.md).
+
 ## 2026-10-11 — Corrected initial-install releases and 1.0.3 handoff
 
 Updater 1.0.6 is published after PR #28, successful source/native CI and immutable publication (merge 83deb4d8687482d4c083ae8f0521c11ddd5eadfd). It permits empty optional Studio tokens and authorizes self-update from 1.0.3/1.0.4/1.0.5. Public app repositories now publish Agent, Generation, Intelligence, Hub and Studio 1.0.2; GPU Node Manager publishes 1.2.2. Their own amd64/arm64 workflows load/install the real artifact, start it and pass Updater health/running verification on disposable runners. Database-backed apps use disposable PostgreSQL and their existing app-owned initialization. No independent Updater DB migration is added; next-version app compatibility remains deferred.

@@ -1,9 +1,11 @@
 """Fresh local installation effects and failures; no production services or inference."""
 
+import io
 import json
 import os
 import platform
 import socket
+import tarfile
 
 import pytest
 from pydantic import ValidationError
@@ -97,6 +99,100 @@ def test_empty_install_succeeds_without_owner_endpoint_or_backup(installation):
     with pytest.raises(UpdateError) as e:
         installer.apply()
     assert e.value.code == "already_installed"
+
+
+@pytest.mark.parametrize("archive_style", ["classic", "oci"])
+@pytest.mark.parametrize("tampered", [False, True])
+def test_containerd_config_digest_binds_actual_runtime_id(installation, archive_style, tampered):
+    cfg, installer, calls, _ = installation
+    config = dumps({"rootfs": {"type": "layers", "diff_ids": []}, "os": "linux"})
+    expected = digest(config)
+    actual = digest(b"containerd-manifest")
+    app = cfg.applications[0].model_copy(update={"image_id": expected})
+    installer.cfg = cfg.model_copy(update={"applications": [app]})
+    original = installer.command
+
+    def command(argv, **kwargs):
+        if argv[1] == "load":
+            return b"Loaded image: repository-release:1.0.0\n"
+        if argv[1:3] == ["image", "inspect"]:
+            if argv[-1] == expected:
+                error = UpdateError("outcome_unknown")
+                error.diagnostic = {"kind": "nonzero_exit", "exit_code": 1}
+                raise error
+            image = json.loads(original(argv, **kwargs))[0]
+            image["Id"] = actual
+            return json.dumps([image]).encode()
+        if argv[1:3] == ["image", "save"]:
+            raw = config + b" " if tampered else config
+            name = (
+                expected[7:] + ".json"
+                if archive_style == "classic"
+                else "blobs/sha256/" + expected[7:]
+            )
+            with tarfile.open(argv[argv.index("--output") + 1], "w") as archive:
+                member = tarfile.TarInfo(name)
+                member.size = len(raw)
+                archive.addfile(member, io.BytesIO(raw))
+                manifest = dumps([{"Config": name, "RepoTags": [], "Layers": []}])
+                member = tarfile.TarInfo("manifest.json")
+                member.size = len(manifest)
+                archive.addfile(member, io.BytesIO(manifest))
+            return b""
+        if argv[1:3] == ["container", "inspect"]:
+            return json.dumps({"Image": actual, "State": {"Running": True}}).encode()
+        return original(argv, **kwargs)
+
+    installer.command = command
+    if tampered:
+        with pytest.raises(UpdateError) as error:
+            installer.apply(start=False)
+        assert error.value.code == "artifact_mismatch"
+        assert not any(argv[1] in {"run", "create"} for argv in calls)
+    else:
+        assert installer.apply(start=False)["phase"] == "awaiting_setup"
+        assert installer.cfg.applications[0].image_id == actual
+        assert [argv for argv in calls if argv[1] == "create"][0][-1] == actual
+        installer._verify_running(installer.cfg.applications[0])
+    assert app.image_id == expected
+
+
+def test_inspection_timeout_does_not_trigger_containerd_fallback(installation):
+    cfg, installer, calls, _ = installation
+    original = installer.command
+
+    def command(argv, **kwargs):
+        if argv[1:3] == ["image", "inspect"]:
+            error = UpdateError("outcome_unknown")
+            error.diagnostic = {"kind": "timeout", "timeout_seconds": 300}
+            raise error
+        return original(argv, **kwargs)
+
+    installer.command = command
+    with pytest.raises(UpdateError):
+        installer._stage(cfg.applications[0])
+    assert not any(argv[1:3] == ["image", "save"] for argv in calls)
+
+
+@pytest.mark.parametrize(
+    "manifest", [None, [{"Config": "other.json"}], [{"Config": "expected"}, {"Config": "other"}]]
+)
+def test_unreferenced_config_blob_does_not_prove_runtime_identity(tmp_path, manifest):
+    from flamoris_updater_adapters.install import exported_config_matches
+
+    raw = dumps({"rootfs": {"type": "layers", "diff_ids": []}})
+    expected = digest(raw)
+    filename = tmp_path / "export.tar"
+    with tarfile.open(filename, "w") as archive:
+        member = tarfile.TarInfo(expected[7:] + ".json")
+        member.size = len(raw)
+        archive.addfile(member, io.BytesIO(raw))
+        if manifest is not None:
+            body = dumps(manifest)
+            member = tarfile.TarInfo("manifest.json")
+            member.size = len(body)
+            archive.addfile(member, io.BytesIO(body))
+    assert exported_config_matches(filename, expected) is False
 
 
 def test_existing_data_rejected_before_package_or_service_effect(installation):
@@ -345,8 +441,8 @@ def test_real_docker_candidate_can_be_installed_and_become_ready(tmp_path):
         stopped = json.loads(subprocess.check_output(["/usr/bin/docker", "inspect", container]))[0]
         assert stopped["State"]["Running"] is False
         subprocess.check_call(["/usr/bin/docker", "start", container])
-        installer.health(cfg.applications[0])
-        installer._verify_running(cfg.applications[0])
+        installer.health(installer.cfg.applications[0])
+        installer._verify_running(installer.cfg.applications[0])
     finally:
         subprocess.run(
             ["/usr/bin/docker", "rm", "-f", container],

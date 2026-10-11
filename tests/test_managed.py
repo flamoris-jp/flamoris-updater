@@ -314,6 +314,122 @@ def install(e, application=APP):
     return job
 
 
+def failed_stage(e):
+    # Root-only user namespaces cannot chown to 10001; use an actual root-owned
+    # recipe for recovery metadata tests. Normal installation CI covers 10001.
+    for candidate in e.catalog["recipes"]:
+        for directory in candidate["application"]["directories"]:
+            directory.update(uid=0, gid=0)
+    e.manager.configure("https://releases.example.invalid/catalog.json")
+    factory = e.manager.installer
+
+    def failed(cfg):
+        instance = factory(cfg)
+
+        def stage(_app):
+            raise UpdateError("outcome_unknown")
+
+        instance._stage = stage
+        return instance
+
+    e.manager.installer = failed
+    job = e.manager.start(
+        "install",
+        Start(
+            application_id=APP,
+            release="1.0.0",
+            request_key="failed-stage",
+            settings={"TOKEN": "keep-private-value"},
+        ),
+    )
+    e.manager.run_job(job["job_id"])
+    e.manager.installer = factory
+    assert e.manager.journal.get("managed_job", job["job_id"])["phase"] == "recovery_required"
+    return job
+
+
+def test_stage_recovery_retains_configuration_and_job_evidence(managed):
+    from flamoris_updater_adapters.docker_stage_recovery import recover
+
+    e = managed
+    job = failed_stage(e)
+    env = e.tmp / "apps" / APP / "config/runtime.env"
+    before = env.read_bytes()
+    calls = len(e.calls)
+    assert recover(e.manager, job["job_id"])["applied"] is False
+    assert not any(c[1] in {"load", "create", "run"} for c in e.calls[calls:])
+    assert recover(e.manager, job["job_id"], apply=True)["phase"] == "awaiting_setup"
+    assert env.read_bytes() == before
+    assert e.manager.journal.get("managed_app", APP)["job_id"] == job["job_id"]
+    recovered = e.manager.journal.get("managed_job", job["job_id"])
+    assert recovered["recovered_failure"]["error"] == "outcome_unknown"
+    e.manager.start_setup(APP)
+    e.manager.complete(APP)
+    with pytest.raises(UpdateError):
+        recover(e.manager, job["job_id"], apply=True)
+
+
+@pytest.mark.parametrize(
+    "change", ["configuration", "container", "later_step", "settings", "archive"]
+)
+def test_stage_recovery_refuses_changed_or_later_state(managed, change):
+    from flamoris_updater_adapters.docker_stage_recovery import recover
+    from flamoris_updater_adapters.journal import Journal
+
+    e = managed
+    job = failed_stage(e)
+    if change == "configuration":
+        (e.tmp / "apps" / APP / "config/runtime.env").write_bytes(b"modified")
+    elif change == "container":
+        e.containers[APP] = {"Image": "other", "State": {"Running": False}}
+    elif change == "settings":
+        (e.tmp / "manager/settings" / APP / "values.json").write_bytes(dumps({"TOKEN": "changed"}))
+    elif change == "archive":
+        (e.tmp / "manager/packages" / job["job_id"] / "image.tar").write_bytes(b"changed")
+    else:
+        journal = Journal(e.tmp / "manager/installer")
+        record = journal.get("initial_install", APP)
+        record["step"] = "provision"
+        with journal.transaction() as db:
+            journal.put("initial_install", APP, record, db)
+    calls = len(e.calls)
+    with pytest.raises(UpdateError):
+        recover(e.manager, job["job_id"], apply=True)
+    assert not any(c[1] in {"load", "create", "run"} for c in e.calls[calls:])
+    assert e.manager.journal.get("managed_job", job["job_id"])["phase"] == "recovery_required"
+
+
+def test_resolved_runtime_id_is_persisted_for_setup(managed):
+    e = managed
+    e.manager.configure("https://releases.example.invalid/catalog.json")
+    factory = e.manager.installer
+    actual = digest(b"containerd-runtime")
+
+    def installer(cfg):
+        instance = factory(cfg)
+        stage, command = instance._stage, instance.command
+
+        def resolve(app):
+            stage(app)
+            return app.model_copy(update={"image_id": actual})
+
+        def execute(argv, **kwargs):
+            result = command(argv, **kwargs)
+            if argv[1] in {"run", "create"}:
+                e.containers[APP]["Image"] = argv[-1]
+            return result
+
+        instance._stage, instance.command = resolve, execute
+        return instance
+
+    e.manager.installer = installer
+    job = install(e)
+    assert e.manager.journal.get("managed_app", APP)["profile"]["image_id"] == actual
+    assert e.manager.layout(APP, job["job_id"])["candidate"]["image_id"] == actual
+    e.manager.start_setup(APP)
+    e.manager.complete(APP)
+
+
 def update(e, release):
     job = e.manager.start(
         "update", Start(application_id=APP, release=release, request_key="update-" + release)
