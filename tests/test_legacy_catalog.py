@@ -31,7 +31,7 @@ def legacy(tmp_path):
         manager.journal.put(
             "managed_job", "history", {"phase": "succeeded", "result": "preserve"}, db
         )
-    raw = Path("catalogs/flamoris-20261011.json").read_bytes()
+    raw = Path("catalogs/flamoris-install-20261011.json").read_bytes()
     assert digest(raw) == SCRIPT["DIGEST"]
     yield manager, decode(Catalog, raw)
     manager.client.close()

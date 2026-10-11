@@ -1,6 +1,6 @@
 # Updating an already configured 1.0.3 installation
 
-Version 1.0.3 has one catalog and no screen action to replace its URL after setup. Its existing self-update screen can select 1.0.4 only after that catalog contains the new recipe. Version 1.0.4 adds multiple repository catalog registration; it cannot retroactively add that action to the running 1.0.3 screen.
+Version 1.0.3 has one catalog and no screen action to replace its URL after setup. Its existing self-update screen can select 1.0.6 only after that catalog contains the new recipe. Version 1.0.4 adds multiple repository catalog registration; it cannot retroactively add that action to the running 1.0.3 screen.
 
 For an installation that has not completed its first setup, use the [initial-install catalog](../catalogs/README.md) during that existing setup. For an already configured installation, perform the following one-time operator maintenance, then use the ordinary self-update screen. Do not rerun bootstrap, create a new manager state or delete the original supervisor bundle.
 
@@ -32,6 +32,6 @@ Place the reviewed script in a root-owned file/directory. Find the existing `set
    sudo systemctl start flamoris-updater-manager.service flamoris-updater-supervisor.service
    ```
 
-5. Refresh the existing screen and select Updater 1.0.4. The original 1.0.3 login still applies until the update succeeds. After success, use the simplified screen to register the [individual repository catalogs](../catalogs/README.md).
+5. Refresh the existing screen and select Updater 1.0.6. The original 1.0.3 login still applies until the update succeeds. After success, use the simplified screen to register the [individual repository catalogs](../catalogs/README.md).
 
 The maintenance transaction and catalog parsing were verified against 1.0.3 source with isolated local journals, including unchanged history/settings and rejection before writes. This is not a real-host upgrade result; live unit paths, unfinished Jobs, runtime prerequisites and post-update health still require the normal host checks.
