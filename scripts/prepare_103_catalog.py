@@ -7,8 +7,8 @@ import subprocess
 import sys
 from pathlib import Path
 
-URL = "https://raw.githubusercontent.com/flamoris-jp/flamoris-updater/main/catalogs/flamoris-20261011.json"
-DIGEST = "sha256:283913682218ed78f24e641c102b7fc744156dad4fe21dfc107f139d65d4861f"
+URL = "https://raw.githubusercontent.com/flamoris-jp/flamoris-updater/main/catalogs/flamoris-install-20261011.json"
+DIGEST = "sha256:cf486a0b95a817be4f140782a452da63c6ecafb5c829d5ae33af3c6cbb1189ff"
 
 
 def bind(manager, catalog, *, check=False):
@@ -112,7 +112,7 @@ def main():
         print(
             "Catalog validated; no records changed"
             if args.check
-            else "Catalog switched; restart original services and select 1.0.4"
+            else "Catalog switched; restart original services and select 1.0.6"
         )
     finally:
         manager.client.close()
