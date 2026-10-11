@@ -551,6 +551,8 @@ class Manager:
 
             for setting in recipe.settings if action == "install" else []:
                 value = settings[setting.key]
+                if not value and not setting.required and not setting.generate:
+                    continue
                 if (
                     (
                         setting.kind == "port"
