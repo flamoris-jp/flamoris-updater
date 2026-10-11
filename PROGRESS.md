@@ -1,3 +1,25 @@
+## 2026-10-11 — Fresh installation and first accepted managed app update
+
+The operator reported Updater 1.0.8 accepted on both selected hosts and completed
+the new app installations/initial setup after the authorized reset. This is
+separate from the publication-only checkpoints below.
+
+Studio independently published 1.0.3 in
+[#76](https://github.com/flamoris-jp/flamoris-studio/pull/76), declaring compatibility
+only from 1.0.2 without schema/migration changes. Its ordinary Updater tool API
+update progressed accepted → intent → succeeded and reported release 1.0.3,
+environment preserved, no update-time inference and no GPU transition.
+The existing update path retained settings/data and the stopped previous executable;
+no Updater implementation or immutable initial-install catalog was changed.
+
+After that update, the operator separately confirmed Studio Assistant conversation,
+model switching and conversation continuation. These user-level outcomes belong
+to [Studio's acceptance](https://github.com/flamoris-jp/flamoris-studio/blob/main/docs/REAL_MACHINE_ACCEPTANCE.md)
+and [AI PROGRESS §4.21](https://github.com/flamoris-jp/flamoris-ai/blob/main/PROGRESS.md),
+not to installer liveness. Studio Controller generation and remaining account/client
+checks stay open. No other app's upgrade compatibility, automatic rollback or
+end-to-end provider result is inferred from this update.
+
 ## 2026-10-11 — Operator feedback / 1.0.8 published
 
 PR #33 merged at 230a0d90a229d17eca10f92bf0c2d278cd7ee4db. Final-head CI
