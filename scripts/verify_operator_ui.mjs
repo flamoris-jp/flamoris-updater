@@ -111,7 +111,9 @@ try {
   await start.click();
   await page.getByRole("button", {name:"起動中…", exact:true}).waitFor();
   assert.equal(await page.getByRole("button", {name:"起動中…", exact:true}).isDisabled(), true);
-  while (!releaseStart) await new Promise(resolve => setTimeout(resolve, 10));
+  const startDeadline = Date.now() + 5000;
+  while (!releaseStart && Date.now() < startDeadline) await new Promise(resolve => setTimeout(resolve, 10));
+  assert.ok(releaseStart, "Start request must reach the fixture within five seconds");
   assert.equal(calls.filter(c => c.name === "updater_install_start").length, 1);
   releaseStart();
   await page.getByText("起動処理が完了しました。", {exact:false}).waitFor();

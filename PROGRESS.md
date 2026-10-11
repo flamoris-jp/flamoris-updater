@@ -11,8 +11,12 @@ runtime version reloads the page to fetch current assets.
 
 GitHub connection UI is deferred in Issue #32. Log-directory changes, user
 authentication, backup and app-owned migrations are outside this correction.
-Local validation, CI and immutable 1.0.8 publication are in progress; no live
-1.0.8 rollout or provider/GPU execution is claimed.
+Local validation: **377 passed, 7 skipped**, Ruff check/format, documentation
+links, JavaScript syntax and 1.0.8 wheel build passed. Environment-gated skips
+require disposable Docker/PostgreSQL/sockets. Chromium regression coverage is
+added to CI; the local environment cannot download its browser binary. CI and
+immutable 1.0.8 publication are pending at this checkpoint; no live 1.0.8 rollout
+or provider/GPU execution is claimed.
 
 Previous 1.0.7 status: PR #31 merged and both-CPU/native/Docker image-store CI
 and immutable release publication succeeded. A controlled physical-host recovery
