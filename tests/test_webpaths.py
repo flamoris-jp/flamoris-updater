@@ -1,4 +1,5 @@
 import re
+import socket
 
 import httpx
 import pytest
@@ -27,7 +28,11 @@ def test_browser_assets_api_and_mcp_share_public_prefix(tmp_path, prefix):
         for asset in re.findall(r'(?:src|href)="([^"]*/static/[^"]+)"', html):
             assert asset.startswith(prefix + "/static/")
             assert client.get(asset).status_code == 200
-        assert client.get(prefix + "/health").status_code == 200
+        health = client.get(prefix + "/health")
+        assert health.status_code == 200
+        assert health.json()["hostname"] == socket.gethostname()
+        assert health.json()["version"]
+        assert "no-store" in health.headers["cache-control"]
         assert client.post(prefix + "/api/v1/tools/updater_apps_list", json={}).status_code == 200
         assert mcp_call(client, "", "tools/list", path=prefix + "/mcp").status_code == 200
         assert client.get(prefix + "/health", headers={"Host": "evil.invalid"}).status_code == 403

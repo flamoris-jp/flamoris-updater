@@ -1,4 +1,5 @@
 import asyncio
+import socket
 import threading
 from contextlib import asynccontextmanager, nullcontext
 from pathlib import Path
@@ -96,6 +97,7 @@ def create_app(coordinator, origin, run_worker=True, *, base_path=""):
         return JSONResponse(
             {
                 **runtime_identity(),
+                "hostname": socket.gethostname(),
                 "journal_version": 1,
                 "mode": coordinator.journal.meta("mode"),
                 "epoch": int(coordinator.journal.meta("epoch")),

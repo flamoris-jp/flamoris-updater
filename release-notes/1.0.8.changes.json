@@ -1,0 +1,11 @@
+{
+  "format_version": 1,
+  "application_id": "flamoris-updater",
+  "release": "1.0.8",
+  "entries": [
+    {"category": "fix", "summary": "Handle non-JSON API responses and reconnect without replaying operations", "affected": ["web", "self-update"], "breaking": false},
+    {"category": "improvement", "summary": "Display sticky host identity, per-host browser themes, setup feedback and generated-setting hints", "affected": ["web", "first-setup"], "breaking": false}
+  ],
+  "restart_required": true,
+  "recovery_conditions": "Preserve settings and Jobs. After a lost operation response, read durable history rather than automatically resending the operation."
+}

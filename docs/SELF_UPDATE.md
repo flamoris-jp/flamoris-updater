@@ -7,6 +7,12 @@ release publication or installation on a real host.
 
 ## Version 1.0.6 catalog
 
+Version 1.0.8 prepares the same immutable publication flow with explicit
+1.0.3/1.0.4/1.0.5/1.0.6/1.0.7 predecessors. Once published, register
+`https://github.com/flamoris-jp/flamoris-updater/releases/download/v1.0.8/catalog.json`
+alongside the application catalogs and select 1.0.8 in the existing screen.
+The older snapshot procedure below remains relevant to configured 1.0.3.
+
 The publication workflow generates `catalog.json` from both verified Native bundle
 summaries. It points directly to this repository's immutable v1.0.6 Release assets,
 sets `compatible_from` to `["1.0.3", "1.0.4", "1.0.5"]`, and includes the catalog in `SHA256SUMS`.
