@@ -102,7 +102,6 @@ function renderApplication(app) {
     button("保持中の旧版を削除", card, async () => {
       if (!confirm("旧版の実行ファイルを削除します。設定とデータは保持します。")) return;
       await tool("updater_previous_delete", {application_id:app.application_id});
-      await refresh();
     });
   }
   if (installed?.phase === "awaiting_setup") {
@@ -122,7 +121,6 @@ function renderApplication(app) {
       try { await tool("updater_install_complete", {application_id:app.application_id}); }
       catch (error) { status.textContent = "動作確認は完了していません。エラー表示を確認してください。"; throw error; }
       showNotice(app.application_id + ": 初回設定後の起動状態・ヘルスを確認しました。");
-      await refresh();
     }, "確認中…");
     return;
   }
@@ -169,7 +167,6 @@ function renderApplication(app) {
       const result = await tool(installed ? "updater_update" : "updater_install", {application_id:app.application_id, release:select.value, request_key:crypto.randomUUID(), settings});
       fields.replaceChildren();
       showNotice("処理を受け付けました。ジョブ: " + result.job_id);
-      await refresh();
     }, "受付中…");
   });
 }
@@ -236,7 +233,6 @@ async function refresh(releases = false) {
           $("connection").textContent = "Updaterを更新中。接続は自動回復します。";
           const result = await tool("updater_self_update", {release:select.value, request_key:crypto.randomUUID()});
           showNotice("Updaterの更新を受け付けました。ジョブ: " + result.job_id);
-          await refresh();
         }, "更新を受付中…");
       } else element("p", "現在利用できる互換更新はありません。", $("self-update"));
       selfSnapshot = selfJson;
@@ -262,7 +258,6 @@ async function refreshCatalogs() {
     element("span", item.url, row);
     button("登録解除", row, async () => {
       await tool("updater_catalog_remove", {url:item.url});
-      await refresh();
     });
   }
 }
@@ -274,7 +269,6 @@ $("catalog-form").addEventListener("submit", event => {
     await tool("updater_catalog_add", args);
     form.reset();
     showNotice("カタログを登録しました。");
-    await refresh();
   }, "登録中…");
 });
 async function poll(releases = false) {

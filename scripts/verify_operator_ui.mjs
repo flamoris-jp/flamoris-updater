@@ -18,6 +18,7 @@ let releaseStart;
 let delayStart = false;
 let completeFails = false;
 let selfResponseLost = false;
+let disconnectAfterAccept = false;
 let failure = null;
 let hostname = "node-a";
 let phase = "awaiting_setup";
@@ -63,6 +64,7 @@ await context.route("https://updater.example.invalid/**", async route => {
   if (name === "updater_self_update") {
     selfPhase = "accepted";
     if (selfResponseLost) return route.fulfill({status:502, contentType:"text/html", body:"<html>private-proxy-page</html>"});
+    if (disconnectAfterAccept) failure = {name:"health", response:{status:502, contentType:"text/html", body:"<html>private-proxy-page</html>"}};
     return json({job_id:"job-" + "b".repeat(32), phase:selfPhase});
   }
   throw new Error("Unexpected fixture endpoint: " + endpoint);
@@ -131,20 +133,33 @@ try {
   await verify.click();
   await page.getByText(appID + ": 初回設定後の起動状態・ヘルスを確認しました。", {exact:true}).waitFor();
 
+  disconnectAfterAccept = true;
+  await page.getByRole("button", {name:"Updaterを更新", exact:true}).click();
+  await page.waitForFunction(() => document.getElementById("connection").textContent.includes("HTTP 502"));
+  assert.equal(await page.locator("#message").isVisible(), false, "Accepted update plus a failed read is a connection issue, not a mutation failure");
+  assert.match(await page.locator("#notice").textContent(), /更新を受け付けました.*ジョブ/);
+  assert.equal(calls.filter(c => c.name === "updater_self_update").length, 1);
+  disconnectAfterAccept = false;
+  failure = null;
+  selfPhase = null;
+  await page.evaluate(() => poll());
+  await page.waitForFunction(() => document.getElementById("connection").textContent === "接続済み");
+
+  const mutationBaseline = calls.filter(c => c.name === "updater_self_update").length;
   selfResponseLost = true;
   await page.getByRole("button", {name:"Updaterを更新", exact:true}).click();
   await page.locator("#message").waitFor({state:"visible"});
   assert.match(await page.locator("#error-text").textContent(), /HTTP 502.*自動再送しません/);
   await page.evaluate(() => poll());
   await page.evaluate(() => poll());
-  assert.equal(calls.filter(c => c.name === "updater_self_update").length, 1, "Lost mutation response must never be replayed");
+  assert.equal(calls.filter(c => c.name === "updater_self_update").length, mutationBaseline + 1, "Lost mutation response must never be replayed");
   assert.equal(await page.getByRole("button", {name:"Updaterを更新", exact:true}).isDisabled(), true);
   selfPhase = "succeeded";
   version = "1.0.9";
   await page.evaluate(() => poll());
   await page.waitForFunction(() => document.getElementById("version").textContent === "Updater 1.0.9");
   await page.waitForFunction(() => !document.getElementById("notice").textContent, null, {timeout:8000});
-  assert.equal(calls.filter(c => c.name === "updater_self_update").length, 1);
+  assert.equal(calls.filter(c => c.name === "updater_self_update").length, mutationBaseline + 1);
 
   for (const viewport of [{width:1440, height:900}, {width:390, height:844}]) {
     await page.setViewportSize(viewport);
