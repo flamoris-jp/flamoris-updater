@@ -134,6 +134,10 @@ def test_containerd_config_digest_binds_actual_runtime_id(installation, archive_
                 member = tarfile.TarInfo(name)
                 member.size = len(raw)
                 archive.addfile(member, io.BytesIO(raw))
+                manifest = dumps([{"Config": name, "RepoTags": [], "Layers": []}])
+                member = tarfile.TarInfo("manifest.json")
+                member.size = len(manifest)
+                archive.addfile(member, io.BytesIO(manifest))
             return b""
         if argv[1:3] == ["container", "inspect"]:
             return json.dumps({"Image": actual, "State": {"Running": True}}).encode()
@@ -168,6 +172,27 @@ def test_inspection_timeout_does_not_trigger_containerd_fallback(installation):
     with pytest.raises(UpdateError):
         installer._stage(cfg.applications[0])
     assert not any(argv[1:3] == ["image", "save"] for argv in calls)
+
+
+@pytest.mark.parametrize(
+    "manifest", [None, [{"Config": "other.json"}], [{"Config": "expected"}, {"Config": "other"}]]
+)
+def test_unreferenced_config_blob_does_not_prove_runtime_identity(tmp_path, manifest):
+    from flamoris_updater_adapters.install import exported_config_matches
+
+    raw = dumps({"rootfs": {"type": "layers", "diff_ids": []}})
+    expected = digest(raw)
+    filename = tmp_path / "export.tar"
+    with tarfile.open(filename, "w") as archive:
+        member = tarfile.TarInfo(expected[7:] + ".json")
+        member.size = len(raw)
+        archive.addfile(member, io.BytesIO(raw))
+        if manifest is not None:
+            body = dumps(manifest)
+            member = tarfile.TarInfo("manifest.json")
+            member.size = len(body)
+            archive.addfile(member, io.BytesIO(body))
+    assert exported_config_matches(filename, expected) is False
 
 
 def test_existing_data_rejected_before_package_or_service_effect(installation):

@@ -370,11 +370,18 @@ def run(argv, timeout=300):
 def exported_config_matches(filename, expected):
     """Read bounded config blobs without extracting any archive paths."""
     try:
+        matching = set()
+        manifest = None
         with tarfile.open(filename, mode="r|*") as archive:
             for index, member in enumerate(archive):
                 if index >= 4096:
                     raise UpdateError("quota_exceeded")
                 if not member.isfile() or member.size > 1024 * 1024:
+                    continue
+                if member.name == "manifest.json":
+                    if manifest is not None:
+                        raise UpdateError("artifact_mismatch")
+                    manifest = json.loads(archive.extractfile(member).read())
                     continue
                 if not re.fullmatch(
                     r"(?:[0-9a-f]{64}\.json|blobs/sha256/[0-9a-f]{64})", member.name
@@ -383,8 +390,17 @@ def exported_config_matches(filename, expected):
                 raw = archive.extractfile(member).read()
                 if digest(raw) == expected:
                     config = json.loads(raw)
-                    return isinstance(config, dict) and isinstance(config.get("rootfs"), dict)
-        return False
+                    if isinstance(config, dict) and isinstance(config.get("rootfs"), dict):
+                        matching.add(member.name)
+        # A config blob elsewhere in a multi-image export is not proof that
+        # the selected runtime image uses it. Require one runnable image and
+        # its exact referenced config; these recipes are single-platform.
+        return (
+            isinstance(manifest, list)
+            and len(manifest) == 1
+            and isinstance(manifest[0], dict)
+            and manifest[0].get("Config") in matching
+        )
     except (tarfile.TarError, ValueError, OSError):
         raise UpdateError("artifact_mismatch") from None
 
