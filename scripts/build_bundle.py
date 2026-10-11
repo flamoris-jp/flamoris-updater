@@ -18,6 +18,7 @@ ENTRYPOINTS = {
     "flamoris-updater-helper": "flamoris_updater_adapters.helper",
     "flamoris-updater-host": "flamoris_updater_adapters.host_api",
     "flamoris-updater-recovery": "flamoris_updater_adapters.recovery_cli",
+    "flamoris-updater-docker-recovery": "flamoris_updater_adapters.docker_stage_recovery_cli",
     "flamoris-update-migration": "flamoris_update_migration.runner",
 }
 

@@ -26,6 +26,7 @@ from flamoris_update_core.models import ID, Digest, Model, VersionRange
 from flamoris_update_core.wire import decode, digest, dumps, loads, version
 
 from .artifacts import Fetcher, origin
+from .config import protected_read
 from .diagnostics import (
     LayoutRequest,
     Log,
@@ -591,9 +592,10 @@ class Manager:
         self.wakeup.set()
         return job
 
-    def _profile(self, recipe, identity):
+    def _profile(self, recipe, identity, *, reuse=False):
         package = self.state / "packages" / identity
-        package.mkdir(parents=True, mode=0o700)
+        if not reuse:
+            package.mkdir(parents=True, mode=0o700)
         settings = loads(
             (self.state / "settings" / recipe.application_id / "values.json").read_bytes()
         )
@@ -605,6 +607,9 @@ class Manager:
         }
         for name, item in recipe.downloads.items():
             destination = package / name
+            if reuse:
+                File(path=str(destination), digest=item.digest).verify()
+                continue
             destination.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
             recorded_effect(
                 "artifact.download",
@@ -613,6 +618,11 @@ class Manager:
             )
         for name, template in recipe.generated.items():
             destination = package / name
+            if reuse:
+                expected = Template(template).substitute(values).encode()
+                if protected_read(str(destination), private=True) != expected:
+                    raise UpdateError("artifact_mismatch")
+                continue
             destination.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
             try:
                 recorded_effect(
@@ -854,6 +864,8 @@ class Manager:
                     self.save_layout(identity, app, installer)
                     # Application setup/health is explicitly a later step.
                     effect("install", lambda: installer.apply(start=False))
+                    app = installer.cfg.applications[0]
+                    self.save_layout(identity, app, installer)
                     installed = {
                         "application_id": app.application_id,
                         "release": app.release,
@@ -917,7 +929,8 @@ class Manager:
                         recorded_effect(
                             "artifact.verify", f.verify, {"path": f.path, "digest": f.digest}
                         )
-                    effect("stage", lambda: installer._stage(app))
+                    app = effect("stage", lambda: installer._stage(app)) or app
+                    self.save_layout(identity, app, installer)
                     retained = self._retained(old, identity)
                     retained["package_id"] = installed["job_id"]
                     job["retained_candidate"] = retained
