@@ -1,4 +1,13 @@
-## 2026-10-11 — Operator feedback / 1.0.8 preparation
+## 2026-10-11 — Operator feedback / 1.0.8 published
+
+PR #33 merged at 230a0d90a229d17eca10f92bf0c2d278cd7ee4db. Final-head CI
+38109294145 and merged-source CI 38109376712 each passed all nine jobs, including
+Chromium operator feedback/reconnection/lost-response/desktop/mobile regression
+tests, both CPU Native bundles, disposable PostgreSQL initialization and the
+Docker 29 classic/containerd acceptance matrix. Publication 38109376676 passed
+both architecture builds and published immutable v1.0.8 with 15 uploaded assets.
+Catalog asset SHA-256: 8117159d9b1423f37d64ecd2e05c5745b483ecdf62e0869b2282cad6a46b1208.
+Live 1.0.8 rollout remains separate. The checkpoint below describes preparation.
 
 Source adds a sticky header using actual hostname/version from `/health`, bounded
 per-host browser colour choices, catalog-switch guidance and recorded runtime

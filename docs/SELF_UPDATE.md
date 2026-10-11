@@ -7,8 +7,8 @@ release publication or installation on a real host.
 
 ## Version 1.0.6 catalog
 
-Version 1.0.8 prepares the same immutable publication flow with explicit
-1.0.3/1.0.4/1.0.5/1.0.6/1.0.7 predecessors. Once published, register
+Version 1.0.8 is published with the same immutable flow and explicit
+1.0.3/1.0.4/1.0.5/1.0.6/1.0.7 predecessors. Register
 `https://github.com/flamoris-jp/flamoris-updater/releases/download/v1.0.8/catalog.json`
 alongside the application catalogs and select 1.0.8 in the existing screen.
 The older snapshot procedure below remains relevant to configured 1.0.3.
