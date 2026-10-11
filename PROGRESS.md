@@ -1,3 +1,7 @@
+## 2026-10-11 — Initial installation correction / 1.0.6
+
+Optional non-generated typed settings accept empty values; supplied values retain format validation. This fixes Studio installation with unused Generation/Agent tokens. Required/generated setting handling and app-owned database initialization are unchanged. Regression coverage uses both omitted and explicit-empty tokens and rejects malformed supplied values. Patch distribution authorizes 1.0.3, 1.0.4 and 1.0.5 self-update. Local/CI/publication and live acceptance are recorded separately; verification and publication are pending at this checkpoint.
+
 ## 2026-10-11 — Private repository Release downloads / 1.0.5
 
 Implemented the requested private GitHub Release catalog/payload path using existing operator credentials (GH_TOKEN, GITHUB_TOKEN or fixed GitHub CLI token lookup). A root service can select an existing normal user's login with FLAMORIS_GITHUB_USER; the fixed CLI command runs as that account. No Updater login, token UI, credential database, credential copy, public mirror or cross-repository payload collection is added.

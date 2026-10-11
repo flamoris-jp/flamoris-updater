@@ -1038,3 +1038,30 @@ def test_one_offline_repository_does_not_block_another_refresh_or_catalog_remova
     offline.add(second)
     e.manager.remove_source(first)
     assert e.manager.sources() == [second]
+
+
+@pytest.mark.parametrize("token", [None, "", "x" * 40, "bad token"])
+def test_optional_studio_tokens_allow_empty_but_validate_supplied_values(managed, token):
+    e = managed
+    candidate = recipe(application="flamoris-studio")
+    candidate["settings"] = [
+        {"key": key, "label": key, "secret": True, "kind": "url_password"}
+        for key in ["GENERATION_TOKEN", "AGENT_TOKEN"]
+    ]
+    e.catalog["recipes"] = [candidate]
+    e.manager.configure("https://releases.example.invalid/catalog.json")
+    args = Start(
+        application_id="flamoris-studio",
+        release="1.0.0",
+        request_key="optional-tokens",
+        settings={} if token is None else {"GENERATION_TOKEN": token, "AGENT_TOKEN": token},
+    )
+    if token == "bad token":
+        with pytest.raises(UpdateError) as error:
+            e.manager.start("install", args)
+        assert error.value.code == "invalid_input"
+        return
+    job = e.manager.start("install", args)
+    assert job["phase"] == "accepted"
+    stored = loads((e.manager.state / "settings/flamoris-studio/values.json").read_bytes())
+    assert stored == {"GENERATION_TOKEN": token or "", "AGENT_TOKEN": token or ""}
