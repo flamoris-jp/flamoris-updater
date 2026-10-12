@@ -64,3 +64,12 @@ The protected `install-profile --profile /absolute/private.json --check` / `inst
 Docker application profiles may declare `components`, a mapping of 1–16 component IDs to stable SemVer strings. The immutable image must carry an exactly matching JSON object in `net.flamoris.components`; missing, invalid, extra or changed entries stop installation before container creation. This field is metadata, with no executable hooks. Existing image/digest, release/title, platform and volume checks still apply.
 
 Generation 1.0.3 declares `{"flamoris-generation-controller":"1.0.1"}` and requires Updater 1.0.9 or newer. Older Generation catalogs without `components` retain the existing Controller 1.0.0 check. Other applications without component metadata keep their previous behavior. Upgrade Updater before installing a catalog that uses this field. Source/CI evidence does not establish publication or a real-host rollout.
+
+## Component changes during managed updates (1.0.10)
+
+`components` describes the candidate executable image and can change in an
+explicitly compatible Docker update. The image's component label must still
+match the candidate catalog exactly. Retained mount, port, environment/security
+and other runtime bindings remain unchanged. Use Updater 1.0.10 or newer to
+upgrade a legacy Generation installation to Controller 1.0.1; 1.0.9 can install
+that catalog but incorrectly rejects the component metadata during an update.

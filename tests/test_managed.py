@@ -246,7 +246,10 @@ def managed(tmp_path, monkeypatch):
                                 "Labels": {
                                     "org.opencontainers.image.version": app.release,
                                     "org.opencontainers.image.title": app.application_id,
-                                    "net.flamoris.components": '{"flamoris-generation-controller":"1.0.0"}',
+                                    "net.flamoris.components": json.dumps(
+                                        app.components
+                                        or {"flamoris-generation-controller": "1.0.0"}
+                                    ),
                                 }
                             },
                         }
@@ -1181,3 +1184,48 @@ def test_optional_studio_tokens_allow_empty_but_validate_supplied_values(managed
     assert job["phase"] == "accepted"
     stored = loads((e.manager.state / "settings/flamoris-studio/values.json").read_bytes())
     assert stored == {"GENERATION_TOKEN": token or "", "AGENT_TOKEN": token or ""}
+
+
+@pytest.mark.parametrize("declared_before", [False, True])
+def test_component_version_update_retains_runtime_bindings_and_operator_bytes(
+    managed, declared_before
+):
+    e = managed
+    if declared_before:
+        e.catalog["recipes"][0]["application"]["components"] = {
+            "flamoris-generation-controller": "1.0.0"
+        }
+    e.catalog["recipes"][1]["application"]["components"] = {
+        "flamoris-generation-controller": "1.0.1"
+    }
+    e.manager.configure("https://releases.example.invalid/catalog.json")
+    install(e)
+    e.manager.start_setup(APP)
+    e.manager.complete(APP)
+    old = e.manager.journal.get("managed_app", APP)["profile"]
+    env = e.tmp / "apps" / APP / "config/runtime.env"
+    env.write_bytes(env.read_bytes() + b"OPERATOR_SETTING=retained\\n")
+    retained = env.read_bytes()
+    assert update(e, "1.1.0")["phase"] == "succeeded"
+    new = e.manager.journal.get("managed_app", APP)["profile"]
+    assert new["components"] == {"flamoris-generation-controller": "1.0.1"}
+    assert new["mounts"] == old["mounts"]
+    assert new["environment_file"] == old["environment_file"]
+    assert env.read_bytes() == retained
+
+
+def test_component_upgrade_does_not_permit_mount_changes(managed):
+    e = managed
+    e.catalog["recipes"][1]["application"]["components"] = {
+        "flamoris-generation-controller": "1.0.1"
+    }
+    e.catalog["recipes"][1]["application"]["mounts"][0]["target"] = "/other"
+    e.manager.configure("https://releases.example.invalid/catalog.json")
+    install(e)
+    e.manager.start_setup(APP)
+    e.manager.complete(APP)
+    calls = len(e.calls)
+    result = update(e, "1.1.0")
+    assert result["error"] == "invalid_profile"
+    assert e.manager.journal.get("managed_app", APP)["release"] == "1.0.0"
+    assert not any(call[1] in {"stop", "rename", "run", "create"} for call in e.calls[calls:])

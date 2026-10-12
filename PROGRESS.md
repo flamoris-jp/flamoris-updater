@@ -1,3 +1,7 @@
+# Managed component update correction — 2026-10-12
+
+Updater 1.0.10 separates candidate embedded component versions from retained Docker runtime bindings. Required by the authorized Generation update: 1.0.9 rejects a compatible Controller version change as invalid_profile. Three regression cases cover legacy/declared component metadata and continued mount protection. Immutable release and self-update compatibility are prepared; CI/publication/live rollout remain pending.
+
 # Updater 1.0.9 published — 2026-10-12
 
 - [PR #42](https://github.com/flamoris-jp/flamoris-updater/pull/42) merged at `fe5ef0b7e447ab82689cfa32d06350964fc17cff`; Issue #41 is closed.
