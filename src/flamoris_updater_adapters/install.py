@@ -1014,7 +1014,9 @@ class Installer:
                 from .outputs import TARGET, VARIABLE, check_directory
 
                 source = app.output_directories["yue2"]
-                check_directory(source, [d.path for d in app.directories] + [self.cfg.state_directory])
+                check_directory(
+                    source, [d.path for d in app.directories] + [self.cfg.state_directory]
+                )
                 if source:
                     argv += ["--mount", f"type=bind,src={source},dst={TARGET}"]
                 argv += ["--env", VARIABLE + "=" + (TARGET if source else "")]
@@ -1086,11 +1088,22 @@ class Installer:
                 source = app.output_directories["yue2"]
                 mounts = [m for m in observed.get("Mounts", []) if m.get("Destination") == TARGET]
                 if (
-                    (source and (len(mounts) != 1 or mounts[0].get("Type") != "bind" or mounts[0].get("Source") != source or mounts[0].get("RW") is not True))
+                    (
+                        source
+                        and (
+                            len(mounts) != 1
+                            or mounts[0].get("Type") != "bind"
+                            or mounts[0].get("Source") != source
+                            or mounts[0].get("RW") is not True
+                        )
+                    )
                     or (not source and mounts)
-                    or VARIABLE + "=" + (TARGET if source else "") not in (observed.get("Config", {}).get("Env") or [])
+                    or VARIABLE + "=" + (TARGET if source else "")
+                    not in (observed.get("Config", {}).get("Env") or [])
                 ):
-                    raise UpdateError("outcome_unknown", "Configured output binding was not applied")
+                    raise UpdateError(
+                        "outcome_unknown", "Configured output binding was not applied"
+                    )
         else:
             for u in app.units:
                 if self.command(["/usr/bin/systemctl", "is-active", u.name]).strip() != b"active":
@@ -1181,4 +1194,3 @@ class Installer:
 def configured(filename):
     path(filename)
     return Installer(decode(Configuration, protected_read(filename, private=True, root_only=True)))
-

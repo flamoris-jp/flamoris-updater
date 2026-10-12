@@ -161,4 +161,3 @@ def test_catalog_cannot_authorize_same_version_or_downgrade(distribution, predec
     with pytest.raises(ValueError, match="older"):
         module.assemble(inputs, output, "1.0.11", "a" * 40, root, compatible_from=[predecessor])
     assert not output.exists()
-

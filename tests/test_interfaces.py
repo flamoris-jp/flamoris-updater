@@ -100,4 +100,3 @@ def test_removed_import_tools_rejected_by_web_and_mcp(web, name):
     assert mcp_call(web, "", "tools/call", {"name": name, "arguments": {}}).json()["result"][
         "isError"
     ]
-

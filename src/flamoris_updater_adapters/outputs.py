@@ -42,7 +42,22 @@ def directory_syntax(value):
         or ".." in p.parts
         or any(c in value for c in ",\n\r\0")
         or len(p.parts) < 3
-        or any(p.is_relative_to(root) for root in ("/etc", "/usr", "/root", "/run", "/proc", "/sys", "/dev", "/bin", "/sbin", "/lib", "/lib64"))
+        or any(
+            p.is_relative_to(root)
+            for root in (
+                "/etc",
+                "/usr",
+                "/root",
+                "/run",
+                "/proc",
+                "/sys",
+                "/dev",
+                "/bin",
+                "/sbin",
+                "/lib",
+                "/lib64",
+            )
+        )
     ):
         raise ValueError("An existing, separate absolute media directory is required")
 
@@ -52,10 +67,22 @@ def writable_by_runtime(source):
     for permission in ("-r", "-w", "-x"):
         try:
             result = subprocess.run(
-                ["/usr/bin/setpriv", "--reuid=10001", "--regid=10001", "--clear-groups",
-                 "--no-new-privs", "/usr/bin/test", permission, source],
-                stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                timeout=5, check=False, env={"PATH": "/usr/bin:/bin"},
+                [
+                    "/usr/bin/setpriv",
+                    "--reuid=10001",
+                    "--regid=10001",
+                    "--clear-groups",
+                    "--no-new-privs",
+                    "/usr/bin/test",
+                    permission,
+                    source,
+                ],
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=5,
+                check=False,
+                env={"PATH": "/usr/bin:/bin"},
             )
         except (OSError, subprocess.TimeoutExpired):
             return False
@@ -83,16 +110,17 @@ def check_directory(source, protected):
 def candidate_profile(profile, directories):
     from .install import DockerApplication
 
-    values = {**profile, "output_directories": {**profile.get("output_directories", {}), **directories}}
+    values = {
+        **profile,
+        "output_directories": {**profile.get("output_directories", {}), **directories},
+    }
     return decode(DockerApplication, dumps(values))
 
 
 def supported(app):
-    return (
-        app.application_id == GENERATION
-        and version((app.components or {}).get("flamoris-generation-controller", "0.0.0"))
-        >= version("1.0.1")
-    )
+    return app.application_id == GENERATION and version(
+        (app.components or {}).get("flamoris-generation-controller", "0.0.0")
+    ) >= version("1.0.1")
 
 
 def check_sources(manager, app):
@@ -114,7 +142,9 @@ def idle(manager, app):
     u = urlsplit(app.health_url)
     url = urlunsplit((u.scheme, u.netloc, "/api/v1/generation/system.health", "", ""))
     try:
-        with manager.client.stream("POST", url, headers={"Authorization": "Bearer " + token}, json={}, timeout=10) as response:
+        with manager.client.stream(
+            "POST", url, headers={"Authorization": "Bearer " + token}, json={}, timeout=10
+        ) as response:
             body = bytearray()
             for chunk in response.iter_bytes(chunk_size=65536):
                 if len(body) + len(chunk) > 262144:
@@ -148,12 +178,27 @@ def admit(manager, args):
             raise UpdateError("not_installed")
         app = candidate_profile(installed["profile"], args.directories)
         if not supported(app):
-            raise UpdateError("invalid_profile", "This installed image has no supported output binding")
-        if db.execute("SELECT 1 FROM records WHERE kind='managed_job' AND json_extract(payload,'$.phase') IN ('accepted','running','intent','recovery_required') LIMIT 1").fetchone():
+            raise UpdateError(
+                "invalid_profile", "This installed image has no supported output binding"
+            )
+        if db.execute(
+            "SELECT 1 FROM records WHERE kind='managed_job' AND json_extract(payload,'$.phase') IN ('accepted','running','intent','recovery_required') LIMIT 1"
+        ).fetchone():
             raise UpdateError("busy")
         check_sources(manager, app)
         identity = "job-" + secrets.token_hex(16)
-        job = dict(job_id=identity, application_id=args.application_id, release=installed["release"], from_release=installed["release"], action="configure_outputs", phase="accepted", step=None, created_at=int(time.time()), host=socket.gethostname(), platform=manager.hardware())
+        job = dict(
+            job_id=identity,
+            application_id=args.application_id,
+            release=installed["release"],
+            from_release=installed["release"],
+            action="configure_outputs",
+            phase="accepted",
+            step=None,
+            created_at=int(time.time()),
+            host=socket.gethostname(),
+            platform=manager.hardware(),
+        )
         plan = dict(profile_digest=digest(dumps(installed["profile"])), profile=app.model_dump())
         manager.journal.put("managed_output_configuration", identity, plan, db)
         manager.journal.put("managed_job", identity, job, db)
@@ -185,12 +230,22 @@ def run(manager, identity):
         try:
             installed = manager.journal.get("managed_app", job["application_id"])
             plan = manager.journal.get("managed_output_configuration", identity)
-            if not installed or installed["phase"] != "succeeded" or digest(dumps(installed["profile"])) != plan["profile_digest"]:
+            if (
+                not installed
+                or installed["phase"] != "succeeded"
+                or digest(dumps(installed["profile"])) != plan["profile_digest"]
+            ):
                 raise UpdateError("operation_conflict")
             log.secrets.extend(manager.secrets(installed["job_id"]))
             old = decode(DockerApplication, dumps(installed["profile"]))
             app = decode(DockerApplication, dumps(plan["profile"]))
-            cfg = Configuration(install_profile_version=1, expected_hostname=job["host"], platform=job["platform"], state_directory=str(manager.state / "installer"), applications=[app])
+            cfg = Configuration(
+                install_profile_version=1,
+                expected_hostname=job["host"],
+                platform=job["platform"],
+                state_directory=str(manager.state / "installer"),
+                applications=[app],
+            )
             installer = manager.installer(cfg)
             manager.save_layout(identity, app, installer)
             effect("verify_current", lambda: installer._verify_running(old))
@@ -205,7 +260,9 @@ def run(manager, identity):
             effect("verify_running", lambda: installer._verify_running(app))
             if installed["previous"]:
                 installed["older"].append(installed["previous"])
-            installed.update(profile=app.model_dump(), previous=retained, configuration_job_id=identity)
+            installed.update(
+                profile=app.model_dump(), previous=retained, configuration_job_id=identity
+            )
             manager.persist("managed_app", app.application_id, installed)
             job.update(phase="succeeded")
             manager.persist("managed_job", identity, job)
@@ -215,7 +272,11 @@ def run(manager, identity):
                 job.update(cleanup_pending=True, cleanup_failure=failure(error))
                 manager.persist("managed_job", identity, job)
         except BaseException as error:
-            job.update(phase="recovery_required", error=error.code if isinstance(error, UpdateError) else "outcome_unknown", failure=failure(error))
+            job.update(
+                phase="recovery_required",
+                error=error.code if isinstance(error, UpdateError) else "outcome_unknown",
+                failure=failure(error),
+            )
             manager.persist("managed_job", identity, job)
             if not isinstance(error, Exception):
                 raise

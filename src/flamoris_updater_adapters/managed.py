@@ -898,7 +898,14 @@ class Manager:
                     old = decode(type(app), dumps(installed["profile"]))
                     # Mutable paths/security/mounts/units remain exactly the recorded installation.
                     if isinstance(app, DockerApplication):
-                        changed = {"release", "image_id", "image_archive", "database", "components", "output_directories"}
+                        changed = {
+                            "release",
+                            "image_id",
+                            "image_archive",
+                            "database",
+                            "components",
+                            "output_directories",
+                        }
                         if app.model_dump(exclude=changed | {"files"}) != old.model_dump(
                             exclude=changed | {"files"}
                         ):
@@ -906,7 +913,17 @@ class Manager:
                                 "invalid_profile",
                                 "Release attempts to change retained runtime bindings",
                             )
-                        app = decode(DockerApplication, dumps({**app.model_dump(), "files": [f.model_dump() for f in old.files], "database": old.database.model_dump() if old.database else None, "output_directories": old.output_directories}))
+                        app = decode(
+                            DockerApplication,
+                            dumps(
+                                {
+                                    **app.model_dump(),
+                                    "files": [f.model_dump() for f in old.files],
+                                    "database": old.database.model_dump() if old.database else None,
+                                    "output_directories": old.output_directories,
+                                }
+                            ),
+                        )
                         from .outputs import check_sources
 
                         check_sources(self, app)
@@ -1197,4 +1214,3 @@ class _Memory:
 
     def __exit__(self, *_):
         pass
-

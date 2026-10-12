@@ -13,7 +13,7 @@
 
 ## Install and update
 
-導入後の YuE2 出力先は、Generation のカードから変更できます。
+1.0.11 では、導入後の YuE2 出力先は、Generation のカードから変更できます。
 [保存先の設定](docs/OUTPUT_DIRECTORIES.md)は既存フォルダを接続し、次回更新でも
 引き継ぎます。フォルダの作成・権限変更・生成物の削除は行いません。
 

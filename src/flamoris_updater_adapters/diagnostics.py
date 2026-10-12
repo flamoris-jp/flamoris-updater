@@ -306,7 +306,8 @@ def describe(app, root, unit_directory):
             output_directories=app.output_directories,
             output_mounts=[
                 dict(source=source, target="/data/music-output", read_only=False)
-                for source in app.output_directories.values() if source
+                for source in app.output_directories.values()
+                if source
             ],
             ports=[p.model_dump() for p in app.ports],
         )
@@ -317,4 +318,3 @@ def describe(app, root, unit_directory):
             units=[dict(name=u.name, path=str(Path(unit_directory) / u.name)) for u in app.units],
         )
     return result
-

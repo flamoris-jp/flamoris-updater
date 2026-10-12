@@ -35,7 +35,10 @@ def setup(e, monkeypatch):
 
 
 def configure(e, directory, key="output-choice"):
-    return e.manager.invoke("updater_outputs_configure", {"application_id": APP, "request_key": key, "directories": {"yue2": str(directory)}})
+    return e.manager.invoke(
+        "updater_outputs_configure",
+        {"application_id": APP, "request_key": key, "directories": {"yue2": str(directory)}},
+    )
 
 
 def test_configuration_survives_manager_restart_and_release_update(managed, monkeypatch):
@@ -61,15 +64,27 @@ def test_configuration_survives_manager_restart_and_release_update(managed, monk
     assert "FLAMORIS_YUE2_OUTPUT_ROOT=/data/music-output" in run
     assert env.read_bytes() == before
     assert (media / "existing.wav").read_bytes() == b"keep-existing"
-    assert (media.stat().st_mode, media.stat().st_uid, media.stat().st_gid) == (metadata.st_mode, metadata.st_uid, metadata.st_gid)
+    assert (media.stat().st_mode, media.stat().st_uid, media.stat().st_gid) == (
+        metadata.st_mode,
+        metadata.st_uid,
+        metadata.st_gid,
+    )
     from flamoris_updater_adapters.managed import Manager, Start
 
-    e.manager = Manager(e.manager.state, e.manager.root, installer=e.manager.installer, client=e.manager.client)
-    upgrade = e.manager.start("update", Start(application_id=APP, release="1.1.0", request_key="next-version"))
+    e.manager = Manager(
+        e.manager.state, e.manager.root, installer=e.manager.installer, client=e.manager.client
+    )
+    upgrade = e.manager.start(
+        "update", Start(application_id=APP, release="1.1.0", request_key="next-version")
+    )
     e.manager.run_job(upgrade["job_id"])
     outcome = e.manager.journal.get("managed_job", upgrade["job_id"])
-    assert outcome["phase"] == "succeeded", {k: outcome.get(k) for k in ("phase", "step", "error", "failure")}
-    assert e.manager.journal.get("managed_app", APP)["profile"]["output_directories"] == {"yue2": str(media)}
+    assert outcome["phase"] == "succeeded", {
+        k: outcome.get(k) for k in ("phase", "step", "error", "failure")
+    }
+    assert e.manager.journal.get("managed_app", APP)["profile"]["output_directories"] == {
+        "yue2": str(media)
+    }
     assert media.exists() and (media / "existing.wav").read_bytes() == b"keep-existing"
     assert env.read_bytes() == before
 
@@ -103,7 +118,9 @@ def test_invalid_media_directory_has_no_container_effect(managed, monkeypatch, b
     elif bad == "app":
         media = e.manager.root / APP / "data"
     else:
-        monkeypatch.setattr("flamoris_updater_adapters.outputs.writable_by_runtime", lambda _: False)
+        monkeypatch.setattr(
+            "flamoris_updater_adapters.outputs.writable_by_runtime", lambda _: False
+        )
     calls = len(e.calls)
     with pytest.raises(UpdateError):
         configure(e, media)
@@ -144,7 +161,19 @@ def test_changed_profile_between_admission_and_execution_stops(managed, monkeypa
     assert len(e.calls) == calls
 
 
-@pytest.mark.parametrize("source", ["/", "/srv", "/etc/secrets", "/run/docker", "/data/../private", "relative/path", "/data/media,readonly", "/data/media\nnext"])
+@pytest.mark.parametrize(
+    "source",
+    [
+        "/",
+        "/srv",
+        "/etc/secrets",
+        "/run/docker",
+        "/data/../private",
+        "relative/path",
+        "/data/media,readonly",
+        "/data/media\nnext",
+    ],
+)
 def test_reject_unsafe_directory_syntax(source):
     with pytest.raises(ValueError):
         directory_syntax(source)
@@ -167,12 +196,14 @@ def test_runtime_permission_check_observes_uid_and_parent_traversal(tmp_path):
 
 
 def test_idle_http_has_bounded_body_and_no_redirect(managed, monkeypatch):
-    from flamoris_updater_adapters.outputs import idle
     from flamoris_updater_adapters.install import DockerApplication
+    from flamoris_updater_adapters.outputs import idle
 
     e = managed
     setup(e, monkeypatch)
     app = DockerApplication.model_validate(e.manager.journal.get("managed_app", APP)["profile"])
-    e.manager.client = httpx.Client(transport=httpx.MockTransport(lambda _: httpx.Response(200, content=b"x" * 262145)))
+    e.manager.client = httpx.Client(
+        transport=httpx.MockTransport(lambda _: httpx.Response(200, content=b"x" * 262145))
+    )
     with pytest.raises(UpdateError):
         idle(e.manager, app)
