@@ -1,31 +1,95 @@
-# Self-update, MCP continuity and logging review
+# Updater自身のアップデート手順
 
-Updater supports Web/manager self-update and AI-readable effect/layout evidence.
-Updater credentials have been removed. External software/access setup,
-automatic failure recovery and application DB upgrades are outside this change. Source/CI evidence is not
-release publication or installation on a real host.
+既に導入されたUpdaterのWeb／managerを、独立したsupervisorで更新します。
+初回導入は[配布物の導入手順](DISTRIBUTION.md)へ進みます。自己更新でbootstrapを再実行しません。
 
-## Version 1.0.6 catalog
+## 1. 現在版・配置・実行中ジョブを確認する
 
-Version 1.0.8 is published with the same immutable flow and explicit
-1.0.3/1.0.4/1.0.5/1.0.6/1.0.7 predecessors. Register
-`https://github.com/flamoris-jp/flamoris-updater/releases/download/v1.0.8/catalog.json`
-alongside the application catalogs and select 1.0.8 in the existing screen.
-The older snapshot procedure below remains relevant to configured 1.0.3.
+管理画面のヘッダーと自己更新欄で稼働版を確認します。CLIなら、実際に導入されたlauncherと接続URLを使います。
 
-The publication workflow generates `catalog.json` from both verified Native bundle
-summaries. It points directly to this repository's immutable v1.0.6 Release assets,
-sets `compatible_from` to `["1.0.3", "1.0.4", "1.0.5"]`, and includes the catalog in `SHA256SUMS`.
-An already configured 1.0.3 cannot change catalog URLs from its screen. Use the
-[one-time catalog switch](UPGRADE_103.md), then select 1.0.6 from the existing
-self-update screen. An unconfigured installation can use the new catalog during
-its existing first setup. Preserve the original supervisor installation and all control records;
-do not run initial bootstrap over an existing installation.
+```bash
+updater_bin=/opt/flamoris-updater/1.0.8/bin/flamoris-updater
+updater_url=http://127.0.0.1:8764
+"$updater_bin" self-status --url "$updater_url"
+```
 
-Published self-update catalog URL:
-`https://github.com/flamoris-jp/flamoris-updater/releases/download/v1.0.6/catalog.json`.
-It contains no application payloads or application recipes. Register each
-application repository's own catalog separately after publication.
+これは1.0.8をそのパスへ初回導入した例です。既存環境では実際のlauncher配置とURLに置き換えます。
+公開パスが /updater ならURLにも含めます。loopback経由で公開originを指定する設定ではCLIの --public-originを使います。
+
+現在のself release、supported、installation、利用可能なreleasesを読み、
+現在の操作を妨げる未完了／recovery_requiredのジョブがある場合は[診断](DIAGNOSTICS.md)から再開します。
+同じ版が既に稼働していれば、それを再適用しません。
+
+## 2. 自己更新カタログを登録・再取得する
+
+管理画面で次の公式URLを登録します。既に登録済みなら追加せず、更新ボタンで再取得します。
+
+https://github.com/flamoris-jp/flamoris-updater/releases/latest/download/catalog.json
+
+CLIで新規登録する例:
+
+```bash
+printf '%s\n' '{"url":"https://github.com/flamoris-jp/flamoris-updater/releases/latest/download/catalog.json"}' |
+  "$updater_bin" call --url "$updater_url" --tool updater_catalog_add --arguments -
+"$updater_bin" apps --url "$updater_url"
+"$updater_bin" self-status --url "$updater_url"
+```
+
+appsは登録済み配布元をrefreshし、self-statusはその結果から自己更新候補を返します。
+登録解除はインストール済みアプリの削除ではありません。新しい配布元へ切り替えるときは、新URLを登録・確認してから不要な旧URLを解除します。
+
+1.0.8の初回表示は保存済み情報です。自動登録・自動確認は[#37](https://github.com/flamoris-jp/flamoris-updater/issues/37)の未実装要望です。
+
+## 3. 互換性のある公開済み版を選ぶ
+
+現行CPUと現在版に対応し、compatible_fromに現在版を含む候補を選びます。
+選定版の[Release](https://github.com/flamoris-jp/flamoris-updater/releases)とrelease notesも確認します。
+候補がない場合は「更新なし」であり、別の版を推測して実行しません。
+
+公開済み1.0.8のカタログは1.0.3／1.0.4／1.0.5／1.0.6／1.0.7を互換元に含みます。
+固定した1.0.8のカタログは
+https://github.com/flamoris-jp/flamoris-updater/releases/download/v1.0.8/catalog.json
+です。1.0.8導入済み環境で、この版を再度選ぶ手順ではありません。
+
+## 4. 更新を一度だけ開始し、返されたjob_idを記録する
+
+Webでは自己更新欄の版を選び「Updaterを更新」を押します。
+CLIの次の例は、カタログで1.0.8への互換更新が確認できた旧版環境だけで使います。
+
+```bash
+request_key="$(python3.12 -c 'import uuid; print(uuid.uuid4())')"
+"$updater_bin" self-update --url "$updater_url" \
+  --release 1.0.8 --request-key "$request_key"
+```
+
+開始前にrequest_key、開始後に返されたjob_idを記録します。
+応答が失われたときは新しいrequest_keyでやり直さず、同じキー・引数で既存ジョブを照会／再取得します。
+通常の進捗確認には次を使います。job-REPLACEは実際のIDに置き換えます。
+
+```bash
+"$updater_bin" job --url "$updater_url" --job-id job-REPLACE
+```
+
+自己更新中はWeb／API／MCPが一時的に切れます。接続回復後も同じジョブを確認します。
+読み取りの再接続と、更新操作の再実行を混同しません。自動rollback・失敗ジョブの自動再送はありません。
+
+## 5. 成功と保持を確認する
+
+ジョブがsucceededになり、ヘッダー／self-statusの稼働版が選定版と一致したことを確認します。
+設定・カタログ登録・履歴・アプリの導入記録は引き継ぎます。
+GPU切替やprovider推論を自己更新確認へ追加しません。
+
+supervisorは最初の本体配置に固定されており、自己更新でWeb／managerと一緒に置き換えません。
+**元の配置を削除しないでください。** 自己更新版はbootstrapの状態ディレクトリ内のreleasesへ配置されます。
+supervisor自身の交換は別の管理者メンテナンスです。
+
+## 古い版・途中状態の例外
+
+- 設定済み1.0.3で登録URLを変更できない場合は、[1.0.3専用のカタログ切替](UPGRADE_103.md)を使ってから既存画面で自己更新します。
+- 1.0.1の元supervisorにはGitHub Release redirect対応がありません。Web／managerだけの更新では解決せず、元の設定・ジョブ・配置を確認した管理者メンテナンスが必要です。
+- 管理画面が起動しない／更新が中断した場合は[診断・手動復旧](DIAGNOSTICS.md)へ進みます。既存の状態を消して初回bootstrapを通すことはしません。
+
+以下は実装契約と検証の詳細です。通常の手順は上記1〜5で完結します。
 
 ## Self-update contract
 
@@ -99,3 +163,4 @@ systemd and running service identity commands are controlled in the self Job
 tests. Native-bundle CI separately imports the actual packaged dependencies and
 checks its runtime identity on amd64/arm64. This does not certify real host
 service replacement, external clients, tunnels or application domain behavior.
+

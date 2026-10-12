@@ -1,3 +1,23 @@
+## 2026-10-12 — AI-readable installation and self-update guides
+
+Documentation now separates first bootstrap from managed Updater self-update.
+DISTRIBUTION uses published 1.0.8 as a pinned example with CPU selection,
+download/checksum, protected extraction, bootstrap, catalog registration and
+completion checks. SELF_UPDATE describes current Web/CLI catalog refresh,
+compatibility, request/Job identity, reconnection and retained original supervisor.
+README, documentation index, RUNNING and agent handoff link those entry points.
+This is documentation only; no runtime, Release asset, immutable catalog, service,
+configuration, provider or deployed version is changed.
+
+Catalog automation is registered in [Issue #37](https://github.com/flamoris-jp/flamoris-updater/issues/37).
+Current 1.0.8 initially displays saved catalog information; the refresh button
+fetches registered URLs. Automatic source population and opening/reload checks
+remain unimplemented, alongside job-history UI #36 and GitHub access UI #32.
+
+Validation covers local Markdown destinations, Bash syntax and documented CLI/tool
+names against current source. Release names and checksums were inspected through
+the connected GitHub integration; commands were not run on a production host.
+
 ## 2026-10-11 — Fresh installation and first accepted managed app update
 
 The operator reported Updater 1.0.8 accepted on both selected hosts and completed
@@ -624,3 +644,4 @@ their approved restart policy. Docker bindings now require an explicit
 and post-start attestation rejects drift. Linux verification is **140 passed, 2
 skipped**, with Ruff, format and documentation-link checks successful. PR review
 and CI at the new revision remain pending. No live service or host was changed.
+

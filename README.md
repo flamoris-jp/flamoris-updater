@@ -13,6 +13,8 @@
 
 ## Install and update
 
+AIと利用者向けに、[Updater自身の初回インストール](docs/DISTRIBUTION.md)と[Updater自身のアップデート](docs/SELF_UPDATE.md)を分けて案内しています。導入済み環境ではbootstrapを再実行せず、既存画面・CLIから自己更新します。
+
 Linux/systemd、Python 3.12とレビュー済みのUpdaterパッケージが必要です。
 
 ```bash
@@ -50,3 +52,4 @@ CoreとFLAMORISラッパは同じリポジトリ内です。Dedicated WebはStud
 ## License
 
 Apache License 2.0. External applications, models and media retain their own licenses.
+

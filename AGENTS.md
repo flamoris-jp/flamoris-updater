@@ -91,9 +91,11 @@ Use the repository documentation, Issues, tests, logs, and source code as primar
 
 ## Current simplified operator flow (2026-10-11)
 
+- For Updater's own installation/update, start with docs/DISTRIBUTION.md (new installation) or docs/SELF_UPDATE.md (existing installation), then docs/RUNNING.md. Preserve the existing bootstrap configuration, original supervisor placement and request/Job identity; follow the selected release's compatibility instead of re-running bootstrap.
 - Application repositories own their builds/releases/payloads. Do not recreate a central all-app/all-platform candidate build or flat distribution in Updater.
 - Catalogs only describe release URLs, digests, settings and compatibility; allow independent repository catalogs in one operator screen. One source failure must not block another source's release check.
 - Updater user authentication is removed by explicit user instruction: no administrator creation, setup code, login/session, CLI/MCP token, persistent integration key or grant UI. Do not reintroduce those prerequisites.
 - Keep local OS service-account/helper-peer separation, confined installation paths, bounded typed operations, digest verification, preserved settings/data, durable Jobs and side-by-side versions. These are installer mechanics, not end-user authentication.
 - Historical signed Core/Owner contracts are separate internal integration mechanisms, not requirements for ordinary install/update. Read the current README, RUNNING, INSTALL and TRANSPORT before using historical design documents.
 - Source changes do not claim app-repository release publication or real-host rollout. Published 1.0.3 keeps its former behavior until a new release is prepared.
+
