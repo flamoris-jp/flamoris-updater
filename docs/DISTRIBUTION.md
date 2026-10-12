@@ -1,104 +1,139 @@
-# Installing the Updater v1.0.5 distribution
+# Updater自身の初回インストール手順
 
-The release is at <https://github.com/flamoris-jp/flamoris-updater/releases/tag/v1.0.5>.
-The two indexed native bundles contain Updater and its Python dependencies; the
-system Python interpreter is not bundled. Requires Linux/systemd, **Python 3.12
-at `/usr/bin/python3.12`** and administrator privileges. Built/tested on Ubuntu
-24.04 amd64/arm64. Windows/macOS and other Python versions are not supported by
-these native bundles. Python/venv, Docker, PostgreSQL and HTTPS access provisioning
-remain external work.
+この文書は、AIと利用者が**Updater本体を初めて導入する**ための手順です。
+既にUpdaterがある場合は、この手順を再実行せず[自己更新手順](SELF_UPDATE.md)へ進みます。
+アプリのインストールはUpdater導入後の別工程です。
 
-## Select and verify
+## 0. 初回導入か自己更新かを決める
 
-- x86_64: `flamoris-updater-1.0.5-linux-amd64.tar.gz`.
-- aarch64: `flamoris-updater-1.0.5-linux-arm64.tar.gz`.
+| 現在の状態 | 選ぶ手順 |
+| --- | --- |
+| Updaterのサービス・設定・実行履歴がない | 本書の初回導入 |
+| Updaterが導入済みで管理画面を開ける | [自己更新](SELF_UPDATE.md) |
+| 導入途中・更新失敗・管理画面を開けない | [調査・手動復旧](DIAGNOSTICS.md)。既存状態を確認して再開する |
+| 設定済み1.0.3で新しいカタログを登録できない | [1.0.3専用のカタログ切替](UPGRADE_103.md)後、自己更新 |
 
-Download the selected archive and `SHA256SUMS` from the release into a normal
-working directory under `~/tmp/`. Before generating host-specific commands,
-confirm the working directory, protected installation destination and application
-root with the operator. Prepare Python, privileges, HTTPS routing,  and the direct HTTPS catalog URL before starting. No GitHub token is needed for this public distribution. GitHub asset downloads redirect; a browser or `curl --location`
-handles those redirects. Check the selected archive against the release checksum:
+実機の状態が必要なAIはServer Managerの観測を使います。会話履歴やREADMEの版を稼働版の代わりにしません。
+この文書のコマンド例はLinuxで利用者が実行するもので、読んだだけで実機操作が許可されるものではありません。
+
+## 1. 必要な環境と選定版
+
+- Linux/systemd、管理者権限。
+- **/usr/bin/python3.12**。Native bundleはPython依存ライブラリを含みますが、Python本体は含みません。
+- 対応CPUはx86_64（linux-amd64）またはaarch64（linux-arm64）。配布物の参照環境はUbuntu 24.04です。
+- GitHubのHTTPS配布物を取得できること。公開Updaterの取得にGitHubログインは不要です。
+- 後でDockerアプリを導入する場合はDocker、Agent／Studioを導入する場合は到達可能なPostgreSQLを別途用意します。Updaterだけのbootstrapに、それらのアプリ設定は不要です。
+
+まず[公開Release](https://github.com/flamoris-jp/flamoris-updater/releases)で導入する版と対応CPUのNative archiveを確認します。
+以下は**公開済み1.0.8を固定して導入する例**です。将来の版では、そのReleaseの配布物・手順を確認して選定版を変更します。
+wheelやソースを本番でビルドする手順ではありません。
+
+事前に作業ディレクトリ、未使用の本体配置先、アプリ配置先、公開URLが必要かを確認します。
+以下の /opt/flamoris-updater/1.0.8 は検証済み配布物の展開先です。ソースリポジトリを/optへcloneしません。
+
+## 2. 配布物を取得・検証する
+
+通常ユーザーの作業ディレクトリで実行します。
 
 ```bash
+set -euo pipefail
+release=1.0.8
+case "$(uname -m)" in
+  x86_64) platform=linux-amd64 ;;
+  aarch64) platform=linux-arm64 ;;
+  *) echo "Unsupported CPU architecture" >&2; exit 1 ;;
+esac
+
+workdir="$HOME/tmp/flamoris-updater-$release-$platform"
+mkdir -p "$workdir"
+cd "$workdir"
+archive="flamoris-updater-$release-$platform.tar.gz"
+release_url="https://github.com/flamoris-jp/flamoris-updater/releases/download/v$release"
+
+curl --fail --location --output "$archive" "$release_url/$archive"
+curl --fail --location --output SHA256SUMS "$release_url/SHA256SUMS"
+test -s "$archive"
 sha256sum --check SHA256SUMS --ignore-missing
 ```
 
-The selected archive must be present and report `OK`. Missing files ignored by
-this command are other release assets; they do not certify an absent archive.
-Trust the release's HTTPS source. Checksums/indexes detect mismatched bytes; they
-are not an independent signature or proof of real-host acceptance.
+選んだarchiveが存在し、そのファイル名について **OK** と表示されたことを確認してから進みます。
+ignore-missingで省略されるのは他のRelease assetであり、手元にないarchiveの検証成功を意味しません。
+SHA-256は公開Releaseとの内容一致の確認です。
 
-## Initial installation
+## 3. 未使用の配置先へ展開する
 
-Choose an unused protected installation directory. The following is an example
-for amd64; substitute the arm64 filename on that architecture:
+同じシェルで、手順2の検証が成功した後に実行します。
 
 ```bash
-sudo install -d -m 0755 /opt/flamoris-updater/1.0.5
-sudo tar --extract --gzip --file flamoris-updater-1.0.5-linux-amd64.tar.gz --directory /opt/flamoris-updater/1.0.5 --no-same-owner
-sudo chmod -R a-w /opt/flamoris-updater/1.0.5
-sudo /opt/flamoris-updater/1.0.5/bin/flamoris-updater bootstrap --root /srv/flamoris/apps
+install_dir="/opt/flamoris-updater/$release"
+test ! -e "$install_dir"
+sudo install -d -o root -g root -m 0755 "$install_dir"
+sudo tar --extract --gzip --file "$archive" --directory "$install_dir" --no-same-owner
+sudo chmod -R a-w "$install_dir"
 ```
 
-Use only a verified archive. Do not extract over an existing installation or
-clone/build source inside the production directory. Bootstrap refuses existing
-Updater state/services; investigate collisions rather than deleting them blindly.
+配置先が存在する場合は上書きせず、既存導入／途中状態を確認します。
+アーカイブにはbin/flamoris-updaterとbin/flamoris-updater-serviceが含まれます。
+配布物の内部ファイル・indexを変更したり、後からpipで依存を足したりしません。
 
-Bootstrap creates:
+## 4. bootstrapを一度だけ実行する
 
-| Binding | Default |
+ローカルloopbackで利用する初回導入例です。
+
+```bash
+sudo "$install_dir/bin/flamoris-updater" bootstrap --root /srv/flamoris/apps
+```
+
+bootstrapは既存の状態・サービスを上書きせず、専用OSアカウントと次のサービスを作成し、URLをJSONで返します。
+
+| 作成するもの | デフォルト |
 | --- | --- |
-| Web service | `flamoris-updater.service`, dedicated unprivileged account |
-| Local manager | `flamoris-updater-manager.service`, root with peer-checked Unix socket |
-| Pinned supervisor | `flamoris-updater-supervisor.service`, original executable directory |
-| Bootstrap configuration | `/var/lib/flamoris-updater/setup.json` |
-| Web / manager state | `/var/lib/flamoris-updater/web` / `/var/lib/flamoris-updater/helper` |
-| Applications | `/srv/flamoris/apps` |
-| Initial Web | `http://127.0.0.1:8764` |
+| Web | flamoris-updater.service |
+| ローカル管理処理 | flamoris-updater-manager.service |
+| 自己更新を制御するsupervisor | flamoris-updater-supervisor.service |
+| 設定 | /var/lib/flamoris-updater/setup.json |
+| 状態・履歴 | /var/lib/flamoris-updater/web と /var/lib/flamoris-updater/helper |
+| アプリ配置先 | /srv/flamoris/apps |
+| 管理画面 | http://127.0.0.1:8764 |
 
-Keep `/opt/flamoris-updater/1.0.5`: the supervisor remains there after later
-self-updates. Bootstrap options `--directory`, `--root`, `--port` and
-`--public-origin` select alternate deployment bindings. `--base-path /updater`
-serves Web, API and MCP below that prefix. Keep `--public-origin` as a pure
-origin (for example `https://updater.example.invalid`); do not include the path.
+別の値を選ぶ場合はbootstrapの --directory、--root、--portを使います。
+既存proxy等で https://updater.example.invalid/updater/ を公開する場合の初回例は次です。
+**上のbootstrapを実行した後に、もう一度実行するコマンドではありません。**
 
-## Catalog screen and MCP in current source
+```bash
+sudo "$install_dir/bin/flamoris-updater" bootstrap \
+  --root /srv/flamoris/apps \
+  --public-origin https://updater.example.invalid \
+  --base-path /updater
+```
 
-Open the printed URL and register each repository's catalog. Current source needs no setup code, administrator, login or MCP key. MCP is `<public-origin><base-path>/mcp`. External proxy/tunnel access is configured separately. Application repositories publish their own catalogs and payloads.
+public-originはパスを含まないorigin、base-pathはパスです。選定したURLとproxy側のHost・パスを一致させます。
+127.0.0.1はUpdaterを導入したマシン自身です。別端末から開く接続は[通信仕様](TRANSPORT.md)に沿って外部proxy／トンネルで用意します。
+Updater自身はproxy・証明書・トンネルを設定しません。
 
-Version 1.0.4 removed Updater account/code/key setup. Published v1.0.3 retains
-its former workflow and cannot replace an already configured catalog in the
-screen. Perform the [one-time catalog switch](UPGRADE_103.md), then use its
-existing self-update screen. Do not rerun bootstrap. The new Release asset is
-`https://github.com/flamoris-jp/flamoris-updater/releases/download/v1.0.5/catalog.json`.
-It declares 1.0.3 and 1.0.4 as compatible predecessors and describes only Updater.
-Application catalogs and artifacts remain in their owning repositories.
-Publication success and actual-host acceptance must be checked separately.
+## 5. 管理画面とカタログを確認する
 
-Version 1.0.5 adds private GitHub Release retrieval through the operator's
-existing GitHub access. See [private repository access](GITHUB_RELEASES.md).
-The normal user's GitHub CLI login must be selected for the root manager;
-service processes do not inherit an interactive login automatically.
+1. bootstrapが返したURLを開く。Updater独自のログイン・セットアップコード・MCPキーは不要です。
+2. Updater自身のカタログを登録する:
+   https://github.com/flamoris-jp/flamoris-updater/releases/latest/download/catalog.json
+3. 必要なアプリの配布元カタログを[カタログ一覧](../catalogs/README.md)から登録する。
+4. 画面の更新ボタンで配布元を確認し、表示された現在版・利用可能な版を確認する。
 
-Version 1.0.5 supports at most five checked same-origin HTTPS redirects and an
-exact GitHub Release-to-`release-assets.githubusercontent.com` exception for
-catalogs, app payloads and supervisor bundles; see [installation](INSTALL.md).
-The earlier 1.0.1 package rejects automated-download redirects. Version 1.0.5
-also prevents privileged launcher imports from writing unindexed bytecode caches;
-1.0.2 lacks that packaging correction. Existing 1.0.1
-installations require explicit administrator maintenance of all three services,
-including the pinned supervisor, with current Job/journal/binding inspection.
-Replacing Web/manager alone leaves the old supervisor downloader. Preserve the
-original runtime and all control records; do not run initial bootstrap over an
-existing installation. Publication does not certify real-host maintenance.
+**1.0.8ではカタログの自動登録・初回表示時の外部再取得は未実装です。**
+登録URLは保存されますが、初回表示は保存済み情報で、更新ボタンが登録済みURLを再取得します。
+自動確認・表示は[#37](https://github.com/flamoris-jp/flamoris-updater/issues/37)で追跡します。
 
-If Updater itself stops, its MCP cannot inspect/recover it. Use an independent
-administrator channel, preserve its journals and private diagnostic exports,
-and check queued Jobs before service restart. The full guide is
-[diagnostics](https://github.com/flamoris-jp/flamoris-updater/blob/v1.0.5/docs/DIAGNOSTICS.md).
+Updater導入とアプリ導入は分けます。アプリは選択→設定→インストール→アプリ自身の初回設定→動作確認の順です。
+ControllerはGeneration MCPに同居するlibraryで、追加daemonとして重複導入しません。
 
-Further contracts: [running](https://github.com/flamoris-jp/flamoris-updater/blob/v1.0.5/docs/RUNNING.md),
-[application release preparation](https://github.com/flamoris-jp/flamoris-updater/blob/v1.0.5/docs/INSTALL.md).
+## 6. 完了判断と次の更新
+
+画面の稼働版、選定した配置、接続、カタログ表示を確認してUpdater初回導入の完了とします。
+これだけでアプリ間通信・GPU・生成providerの利用まで完了したとはしません。
+
+以後は[自己更新手順](SELF_UPDATE.md)を使い、bootstrapを繰り返しません。
+最初の本体配置はsupervisorが使い続けるため、自己更新後も削除しません。
+詳細なCLI・通常アプリ操作は[実行手順](RUNNING.md)、問題時は[診断](DIAGNOSTICS.md)を参照してください。
 
 ## HTTPS below a public path
 

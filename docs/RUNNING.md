@@ -1,5 +1,7 @@
 # Running Updater
 
+Start with [initial Updater installation](DISTRIBUTION.md) or [updating an existing Updater](SELF_UPDATE.md). This page describes the underlying commands and application flow.
+
 Linux/systemd and Python 3.12 are required. Docker apps use the local daemon. Agent/Studio need reachable PostgreSQL and their application-owned initialization credentials.
 
 ## Bootstrap
@@ -44,3 +46,4 @@ The versions/application above are illustrative. CLI install can use a protected
 The pinned supervisor stages and verifies compatible Updater bundles and replaces Web/manager while preserving settings/history. Keep its original installation; supervisor replacement is administrator maintenance. Web/MCP temporarily disconnect and reconnect at the same URL. Logs/layout and durable Job IDs remain available. See [self-update](SELF_UPDATE.md) and [diagnostics](DIAGNOSTICS.md). Server Manager remains the source for actual infrastructure state.
 
 The administrator-only `install-profile` path and internal Core/Owner migration integration remain separate. Ordinary `serve --config` now uses generated `BootstrapConfig`, not the old signed multi-host Web configuration. Removed account/key commands and old grant/plan APIs are not normal operator interfaces.
+
