@@ -1,3 +1,13 @@
+# Updater 1.0.9 published — 2026-10-12
+
+- [PR #42](https://github.com/flamoris-jp/flamoris-updater/pull/42) merged at `fe5ef0b7e447ab82689cfa32d06350964fc17cff`; Issue #41 is closed.
+- [v1.0.9](https://github.com/flamoris-jp/flamoris-updater/releases/tag/v1.0.9) is published with both native CPU bundles, SDK/source/schema assets and the self-update catalog. Explicit predecessors are 1.0.3 through 1.0.8.
+- Reviewed PR CI and merged-source CI each passed all nine jobs: PostgreSQL initial installation, both native bundles, all four Docker store/platform combinations, package/schema/documentation checks and operator UI fixtures. Publication passed both architecture builds and exact-byte assembly.
+- Published tag matches the accepted merge. Catalog/distribution bytes and all 14 published checksums match GitHub Release asset digests. Catalog SHA-256 is `592a5dc14731c6a3d47d2acb2bcf3303f821cdbe720680d395005fdceb51762d`.
+- Docker profiles now declare exact embedded components; legacy Generation catalogs retain Controller 1.0.0 checks. The new Generation consumer was checked in its own distribution CI; its separate reference-feature PR is not merged by this Updater release.
+- Current main installation/self-update examples now select 1.0.9, while the installed 1.0.8 launcher example remains valid. The immutable Release attachment retains its earlier pinned 1.0.8 installation example; the current guide explains how to select 1.0.9.
+- No real-host rollout, setting/journal change, provider call or GPU transition occurred. Deferred catalog/history/help UI issues are not included. Earlier checkpoints below remain historical records.
+
 # Embedded component release verification (2026-10-12)
 
 - Source prepares Updater 1.0.9 for Generation 1.0.3 with Controller 1.0.1.

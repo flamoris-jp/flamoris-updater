@@ -38,7 +38,7 @@ printf '%s\n' '{"url":"https://github.com/flamoris-jp/flamoris-updater/releases/
 appsは登録済み配布元をrefreshし、self-statusはその結果から自己更新候補を返します。
 登録解除はインストール済みアプリの削除ではありません。新しい配布元へ切り替えるときは、新URLを登録・確認してから不要な旧URLを解除します。
 
-1.0.8の初回表示は保存済み情報です。自動登録・自動確認は[#37](https://github.com/flamoris-jp/flamoris-updater/issues/37)の未実装要望です。
+1.0.9までの初回表示は保存済み情報です。自動登録・自動確認は[#37](https://github.com/flamoris-jp/flamoris-updater/issues/37)の未実装要望です。
 
 ## 3. 互換性のある公開済み版を選ぶ
 
@@ -46,20 +46,20 @@ appsは登録済み配布元をrefreshし、self-statusはその結果から自�
 選定版の[Release](https://github.com/flamoris-jp/flamoris-updater/releases)とrelease notesも確認します。
 候補がない場合は「更新なし」であり、別の版を推測して実行しません。
 
-公開済み1.0.8のカタログは1.0.3／1.0.4／1.0.5／1.0.6／1.0.7を互換元に含みます。
-固定した1.0.8のカタログは
-https://github.com/flamoris-jp/flamoris-updater/releases/download/v1.0.8/catalog.json
-です。1.0.8導入済み環境で、この版を再度選ぶ手順ではありません。
+公開済み1.0.9のカタログは1.0.3／1.0.4／1.0.5／1.0.6／1.0.7／1.0.8を互換元に含みます。
+固定した1.0.9のカタログは
+https://github.com/flamoris-jp/flamoris-updater/releases/download/v1.0.9/catalog.json
+です。1.0.9導入済み環境で、この版を再度選ぶ手順ではありません。
 
 ## 4. 更新を一度だけ開始し、返されたjob_idを記録する
 
 Webでは自己更新欄の版を選び「Updaterを更新」を押します。
-CLIの次の例は、カタログで1.0.8への互換更新が確認できた旧版環境だけで使います。
+CLIの次の例は、カタログで1.0.9への互換更新が確認できた旧版環境だけで使います。
 
 ```bash
 request_key="$(python3.12 -c 'import uuid; print(uuid.uuid4())')"
 "$updater_bin" self-update --url "$updater_url" \
-  --release 1.0.8 --request-key "$request_key"
+  --release 1.0.9 --request-key "$request_key"
 ```
 
 開始前にrequest_key、開始後に返されたjob_idを記録します。

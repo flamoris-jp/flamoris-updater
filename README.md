@@ -33,7 +33,7 @@ DB・システムバックアップ、未管理アプリの取り込み、任意
 
 PrivateなGitHub Releaseにも対応しています。既存のGitHub CLI認証または実行環境のGitHubトークンを使い、カタログ・配布物を元のリポジトリから取得します。[設定方法](docs/GITHUB_RELEASES.md)を参照してください。
 
-**Source status:** この構成のソース実装とテスト結果は[PROGRESS.md](PROGRESS.md)に記載しています。[管理画面の改善](docs/WEB_UI.md)を含むv1.0.8と1.0.3〜1.0.7からの自己更新カタログ、各アプリのリポジトリ所有の配布物・カタログは公開済みです。[カタログ一覧と初回設定](catalogs/README.md)を参照してください。公開の確認と実機反映は別です。
+**Source status:** この構成のソース実装とテスト結果は[PROGRESS.md](PROGRESS.md)に記載しています。[管理画面の改善](docs/WEB_UI.md)を含むv1.0.9と1.0.3〜1.0.8からの自己更新カタログ、各アプリのリポジトリ所有の配布物・カタログは公開済みです。[カタログ一覧と初回設定](catalogs/README.md)を参照してください。公開の確認と実機反映は別です。
 
 ## Development
 
