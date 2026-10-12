@@ -9,10 +9,10 @@ import pytest
 from test_managed import APP, install
 from test_managed import managed as managed_fixture
 
-managed = managed_fixture
-
 from flamoris_update_core.errors import UpdateError
 from flamoris_updater_adapters.outputs import check_directory, directory_syntax
+
+managed = managed_fixture
 
 pytestmark = pytest.mark.skipif(os.geteuid() != 0, reason="Root filesystem CI")
 

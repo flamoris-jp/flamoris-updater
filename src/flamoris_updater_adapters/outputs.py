@@ -4,10 +4,10 @@ Only the wrapper's known output bindings are configurable. No directories,
 permissions, provider configuration or existing media are created or changed.
 """
 
-import os
 import secrets
 import socket
 import stat
+import subprocess
 import time
 from pathlib import Path
 from typing import Literal
@@ -49,17 +49,19 @@ def directory_syntax(value):
 
 def writable_by_runtime(source):
     """Ask the kernel about UID/GID 10001, including ACLs and parent traversal."""
-    pid = os.fork()
-    if pid == 0:
+    for permission in ("-r", "-w", "-x"):
         try:
-            os.setgroups([])
-            os.setgid(10001)
-            os.setuid(10001)
-            allowed = os.access(source, os.R_OK | os.W_OK | os.X_OK)
-        except OSError:
-            allowed = False
-        os._exit(0 if allowed else 1)
-    return os.waitpid(pid, 0)[1] == 0
+            result = subprocess.run(
+                ["/usr/bin/setpriv", "--reuid=10001", "--regid=10001", "--clear-groups",
+                 "--no-new-privs", "/usr/bin/test", permission, source],
+                stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                timeout=5, check=False, env={"PATH": "/usr/bin:/bin"},
+            )
+        except (OSError, subprocess.TimeoutExpired):
+            return False
+        if result.returncode:
+            return False
+    return True
 
 
 def check_directory(source, protected):
