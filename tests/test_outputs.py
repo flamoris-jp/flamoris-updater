@@ -6,7 +6,10 @@ from pathlib import Path
 
 import httpx
 import pytest
-from test_managed import APP, install, managed  # noqa: F401
+from test_managed import APP, install
+from test_managed import managed as managed_fixture
+
+managed = managed_fixture
 
 from flamoris_update_core.errors import UpdateError
 from flamoris_updater_adapters.outputs import check_directory, directory_syntax
