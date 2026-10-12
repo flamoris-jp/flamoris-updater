@@ -1,3 +1,22 @@
+## 2026-10-12 — Application input and post-install guides
+
+The six runnable app repositories now receive FIRST_SETUP guides based on their
+current release/install-recipe.json definitions: input purpose, value source,
+defaults versus generated secrets, paired tokens, app-owned post-install tasks
+and completion checks. APPLICATION_SETUP links the six owner guides and explains
+DB administration, local secret retrieval and URL/model identities. README links
+that entry point. This is documentation; neither published recipes nor deployed
+settings are rewritten.
+
+[Issue #39](https://github.com/flamoris-jp/flamoris-updater/issues/39) tracks
+field-help/catalog metadata and post-install UI guidance. Current UI still shows
+labels plus the existing generate hint. No provider, DB, service or GPU operation
+is executed by this documentation work.
+
+Validation: every declared recipe setting has a guide row; keys/defaults and
+generation flags checked against current app-owned recipes and Updater source;
+relative destinations checked against current repository trees.
+
 ## 2026-10-12 — AI-readable installation and self-update guides
 
 Documentation now separates first bootstrap from managed Updater self-update.
