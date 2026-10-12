@@ -1,3 +1,10 @@
+# Embedded component release verification (2026-10-12)
+
+- Source prepares Updater 1.0.9 for Generation 1.0.3 with Controller 1.0.1.
+- Docker install profiles may declare bounded `components` versions; the inspected image label must match exactly. Application repositories own this contract.
+- Legacy Generation profiles without a declaration still require Controller 1.0.0. Artifact digests, runtime image IDs, release/title, platform and volume checks remain required.
+- Unit/CI verification is separate from publication and real-host installation. No deferred UI/catalog/history work is included.
+
 ## 2026-10-12 — Application input and post-install guides
 
 The six runnable app repositories now receive FIRST_SETUP guides based on their

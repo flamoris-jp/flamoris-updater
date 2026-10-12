@@ -101,6 +101,84 @@ def test_empty_install_succeeds_without_owner_endpoint_or_backup(installation):
     assert e.value.code == "already_installed"
 
 
+@pytest.mark.parametrize(
+    "declared, observed, accepted",
+    [
+        (None, '{"flamoris-generation-controller":"1.0.0"}', True),
+        (None, '{"flamoris-generation-controller":"1.0.1"}', False),
+        (
+            {"flamoris-generation-controller": "1.0.1"},
+            '{"flamoris-generation-controller":"1.0.1"}',
+            True,
+        ),
+        (
+            {"flamoris-generation-controller": "1.0.1"},
+            '{"flamoris-generation-controller":"1.0.0"}',
+            False,
+        ),
+        ({"flamoris-generation-controller": "1.0.1"}, "{}", False),
+        ({"flamoris-generation-controller": "1.0.1"}, None, False),
+        ({"flamoris-generation-controller": "1.0.1"}, "invalid", False),
+        (
+            {"flamoris-generation-controller": "1.0.1"},
+            '{"flamoris-generation-controller":"1.0.1","extra":"1.0.0"}',
+            False,
+        ),
+        (
+            {"flamoris-generation-controller": "1.0.1"},
+            '{"flamoris-generation-controller":"1.0.0","flamoris-generation-controller":"1.0.1"}',
+            False,
+        ),
+        ({"flamoris-generation-controller": "1.0.1"}, " " * 16385, False),
+    ],
+)
+def test_install_verifies_catalog_embedded_components(installation, declared, observed, accepted):
+    cfg, installer, calls, _ = installation
+    app_data = cfg.applications[0].model_dump(mode="json")
+    app_data["components"] = declared
+    cfg_data = cfg.model_dump(mode="json")
+    cfg_data["applications"] = [app_data]
+    installer.cfg = Configuration.model_validate(cfg_data)
+    original = installer.command
+
+    def command(argv, **kwargs):
+        raw = original(argv, **kwargs)
+        if argv[1:3] == ["image", "inspect"]:
+            inspected = json.loads(raw)
+            inspected[0]["Config"]["Labels"]["net.flamoris.components"] = observed
+            return json.dumps(inspected).encode()
+        return raw
+
+    installer.command = command
+    assert decode(Configuration, dumps(installer.cfg)) == installer.cfg
+    if accepted:
+        assert installer.apply(start=False)["phase"] == "awaiting_setup"
+    else:
+        with pytest.raises(UpdateError) as error:
+            installer.apply(start=False)
+        assert error.value.code == "artifact_mismatch"
+        assert not any(argv[1] in {"run", "create"} for argv in calls)
+
+
+@pytest.mark.parametrize(
+    "components",
+    [
+        {},
+        {"wrong/id": "1.0.1"},
+        {"flamoris-generation-controller": "latest"},
+        {"flamoris-generation-controller": True},
+        {"other": "1.0.1"},
+        {f"component-{i}": "1.0.1" for i in range(17)},
+    ],
+)
+def test_component_catalog_metadata_is_bounded_and_typed(installation, components):
+    cfg, _, _, _ = installation
+    data = cfg.model_dump(mode="json")
+    data["applications"][0]["components"] = components
+    with pytest.raises(ValidationError):
+        Configuration.model_validate(data)
+
+
 @pytest.mark.parametrize("archive_style", ["classic", "oci"])
 @pytest.mark.parametrize("tampered", [False, True])
 def test_containerd_config_digest_binds_actual_runtime_id(installation, archive_style, tampered):

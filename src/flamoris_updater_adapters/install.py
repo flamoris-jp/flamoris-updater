@@ -24,7 +24,7 @@ from pydantic import Field, model_validator
 
 from flamoris_update_core.errors import UpdateError
 from flamoris_update_core.models import Digest, Model
-from flamoris_update_core.wire import decode, digest, dumps, version
+from flamoris_update_core.wire import decode, digest, dumps, loads, version
 
 from .config import protected_read
 from .journal import Journal, durable_write, exclusive
@@ -38,6 +38,8 @@ VERSIONS = {
     "flamoris-gpu-node-manager": "1.2.0",
 }
 Name = Annotated[str, Field(pattern=r"^[a-z][a-z0-9_-]{0,62}$")]
+ComponentId = Annotated[str, Field(pattern=r"^[a-z0-9][a-z0-9._-]{0,127}$")]
+ComponentVersion = Annotated[str, Field(strict=True, max_length=64)]
 
 
 def path(value: str) -> Path:
@@ -190,9 +192,20 @@ class DockerApplication(Application):
     ports: list[Port] = Field(default_factory=list, max_length=16)
     mounts: list[Mount] = Field(default_factory=list, max_length=64)
     hostname: Name | None = None
+    components: dict[ComponentId, ComponentVersion] | None = Field(
+        default=None, min_length=1, max_length=16
+    )
 
     @model_validator(mode="after")
     def docker(self):
+        if self.components is not None:
+            for release in self.components.values():
+                version(release)
+            if (
+                self.application_id == "flamoris-generation-mcp"
+                and "flamoris-generation-controller" not in self.components
+            ):
+                raise ValueError("Generation must declare its embedded Controller version")
         if self.application_id == "flamoris-gpu-node-manager":
             raise ValueError("GPU Node Manager remains native")
         if self.network == "host" and self.ports:
@@ -238,6 +251,24 @@ class DockerApplication(Application):
         ):
             raise ValueError("Agent and Studio installations require their initial database")
         return self
+
+
+def verify_components(app: DockerApplication, labels: dict):
+    """Match application-owned component metadata, preserving legacy Generation catalogs."""
+    expected = app.components
+    if expected is None and app.application_id == "flamoris-generation-mcp":
+        expected = {"flamoris-generation-controller": "1.0.0"}
+    if expected is None:
+        return
+    raw = labels.get("net.flamoris.components")
+    try:
+        if not isinstance(raw, str) or len(raw) > 16384:
+            raise ValueError("Missing or oversized component metadata")
+        actual = loads(raw.encode("utf-8"), 16384)
+    except (ValueError, TypeError, UpdateError):
+        raise UpdateError("artifact_mismatch", "Invalid embedded component metadata") from None
+    if actual != expected:
+        raise UpdateError("artifact_mismatch", "Embedded components do not match the catalog")
 
 
 class Unit(Model):
@@ -860,12 +891,7 @@ class Installer:
                 or image.get("Architecture") != self.cfg.platform.split("/")[1]
             ):
                 raise UpdateError("artifact_mismatch")
-            if app.application_id == "flamoris-generation-mcp" and json.loads(
-                labels.get("net.flamoris.components", "{}")
-            ) != {"flamoris-generation-controller": "1.0.0"}:
-                raise UpdateError(
-                    "artifact_mismatch", "Generation must include its matched Controller"
-                )
+            verify_components(app, labels)
             if runtime_id != app.image_id:
                 from .diagnostics import event
 

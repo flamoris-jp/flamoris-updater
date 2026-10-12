@@ -1,0 +1,18 @@
+{
+  "format_version": 1,
+  "application_id": "flamoris-updater",
+  "release": "1.0.9",
+  "entries": [
+    {
+      "category": "fix",
+      "summary": "Verify application-declared embedded Docker component versions while preserving legacy Generation checks",
+      "affected": [
+        "installation",
+        "catalogs"
+      ],
+      "breaking": false
+    }
+  ],
+  "restart_required": true,
+  "recovery_conditions": "Preserve settings, data and Jobs. Update Updater before installing catalogs that declare embedded components."
+}
