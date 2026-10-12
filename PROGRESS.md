@@ -1,3 +1,13 @@
+# Operator media directory configuration — 2026-10-12
+
+Updater 1.0.11 source adds a bounded YuE2 output directory choice for already
+managed Generation/Controller 1.0.1+ deployments. Web, MCP and CLI share durable
+configuration Jobs; actual runtime directory access and authenticated idle
+status are checked, private settings/data stay untouched, and compatible updates
+retain the recorded choice. Root tests cover configure/restart/update/disable,
+recovery, path isolation and permissions. CI, release publication and real-host
+configuration acceptance are pending; source does not claim them complete.
+
 # Managed component update correction — 2026-10-12
 
 Updater 1.0.10 separates candidate embedded component versions from retained Docker runtime bindings. Required by the authorized Generation update: 1.0.9 rejects a compatible Controller version change as invalid_profile. Three regression cases cover legacy/declared component metadata and continued mount protection. Immutable release and self-update compatibility are prepared; CI/publication/live rollout remain pending.
@@ -684,4 +694,5 @@ their approved restart policy. Docker bindings now require an explicit
 and post-start attestation rejects drift. Linux verification is **140 passed, 2
 skipped**, with Ruff, format and documentation-link checks successful. PR review
 and CI at the new revision remain pending. No live service or host was changed.
+
 

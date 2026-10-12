@@ -14,6 +14,7 @@ from flamoris_updater_adapters.config import (
 )
 from flamoris_updater_adapters.inputs import TOOLS
 from flamoris_updater_adapters.install import Configuration
+from flamoris_updater_adapters.managed import MANAGED_TOOLS
 from flamoris_updater_adapters.managed import Catalog as InstallCatalog
 from flamoris_updater_adapters.releases import Catalog
 from flamoris_updater_adapters.setup import BootstrapConfig
@@ -51,6 +52,13 @@ def main():
     (root / "mcp-tools.schema.json").write_text(
         json.dumps(
             {name: model.model_json_schema() for name, (model, _, _) in TOOLS.items()}, indent=2
+        )
+        + "\n"
+    )
+    (root / "managed-tools.schema.json").write_text(
+        json.dumps(
+            {name: model.model_json_schema() for name, (model, _, _) in MANAGED_TOOLS.items()},
+            indent=2,
         )
         + "\n"
     )

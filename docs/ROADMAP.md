@@ -6,7 +6,8 @@
 | Web first setup | Immediate catalog screen, multiple repository sources, displayed storage root | Browser/access/proxy deployment acceptance |
 | Per-app installation | Recipe settings, prebuilt Native/Docker, app-owned new DB initialization, `awaiting_setup` → verification | Real first setup for every app/external connection |
 | Updates | Same registry/Jobs, staged code, retained settings/data, declared compatibility/dependencies, switch/health | Real supported next-release acceptance |
-| Web/MCP/CLI | Same fifteen managed operations and durable status/history; credential-free operator interface | Client reconnect/access operational acceptance |
+| Web/MCP/CLI | Same sixteen managed operations and durable status/history; credential-free operator interface | Client reconnect/access operational acceptance |
+| Media directory configuration | Known YuE2 output binding, durable operator choice, runtime/idle checks, retained across updates | Real-host output configuration/publication acceptance |
 | Updater self-update | Indexed compatible bundle; independent supervisor replaces Web/manager and preserves control stores | Real systemd acceptance; pinned bootstrap supervisor maintenance |
 | Diagnostic logs | Durable app/self effect timelines, typed command failures and recorded layout via scoped read-only MCP; private offline mirrors | Real-host observations/AI-authored recovery procedure and manual recovery when Updater stops |
 | Old versions | Current plus one previous; post-success executable/cache cleanup and explicit previous deletion | Actual host capacity/ownership verification |
@@ -16,3 +17,4 @@
 No DB/system backup, unmanaged adoption, private CA or per-owner client certificate feature remains. PostgreSQL/external runtimes/models and Server Manager remain independent. Generation Controller is embedded in the Generation package.
 
 Publication and full-host certification are not prerequisites for controlled first-install tests. CI/source evidence must not be called live deployment. The old detailed design documents preserve design history; [running](RUNNING.md), [installation](INSTALL.md), [self-update](SELF_UPDATE.md), exported models and [progress](../PROGRESS.md) define current behavior. The pinned bootstrap supervisor remains separate maintenance, outside app executable cleanup.
+

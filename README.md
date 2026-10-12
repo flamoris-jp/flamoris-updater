@@ -13,6 +13,10 @@
 
 ## Install and update
 
+1.0.11 では、導入後の YuE2 出力先は、Generation のカードから変更できます。
+[保存先の設定](docs/OUTPUT_DIRECTORIES.md)は既存フォルダを接続し、次回更新でも
+引き継ぎます。フォルダの作成・権限変更・生成物の削除は行いません。
+
 各アプリの入力値と、導入後のサービス・接続設定は[共通設定ガイド](docs/APPLICATION_SETUP.md)から確認できます。tokenやDB接続値の用途・取得元・空欄で生成される値・相手と同じ値を使う項目を分けて案内しています。
 
 AIと利用者向けに、[Updater自身の初回インストール](docs/DISTRIBUTION.md)と[Updater自身のアップデート](docs/SELF_UPDATE.md)を分けて案内しています。導入済み環境ではbootstrapを再実行せず、既存画面・CLIから自己更新します。
@@ -54,4 +58,5 @@ CoreとFLAMORISラッパは同じリポジトリ内です。Dedicated WebはStud
 ## License
 
 Apache License 2.0. External applications, models and media retain their own licenses.
+
 

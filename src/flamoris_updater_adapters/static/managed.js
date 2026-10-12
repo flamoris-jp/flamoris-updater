@@ -124,6 +124,26 @@ function renderApplication(app) {
     }, "確認中…");
     return;
   }
+  if (installed?.phase === "succeeded" && app.application_id === "flamoris-generation-mcp" && installed.profile?.components?.["flamoris-generation-controller"] && !newer("1.0.1", installed.profile.components["flamoris-generation-controller"])) {
+    const outputForm = element("form", undefined, card);
+    const label = element("label", "YuE2の出力先", outputForm);
+    const input = element("input", undefined, label);
+    input.name = "yue2_output_directory";
+    input.type = "text";
+    input.maxLength = 4096;
+    input.value = installed.profile.output_directories?.yue2 || "";
+    input.placeholder = "既存フォルダの絶対パス";
+    element("small", "生成が完了してから変更してください。空欄にすると公開コピーを停止します。", label).className = "hint";
+    const save = element("button", "出力先を保存", outputForm);
+    save.type = "submit";
+    outputForm.addEventListener("submit", event => {
+      event.preventDefault();
+      runAction(save, async () => {
+        const result = await tool("updater_outputs_configure", {application_id:app.application_id, request_key:crypto.randomUUID(), directories:{yue2:input.value}});
+        showNotice("出力先の変更を受け付けました。ジョブ: " + result.job_id);
+      }, "受付中…");
+    });
+  }
   const choices = app.releases.filter(r => !installed || (newer(r.release, installed.release) && r.compatible_from.includes(installed.release)));
   if (!choices.length) {
     element("p", installed ? "現在利用できる互換更新はありません。" : "インストール可能なリリースがありません。", card);
@@ -200,9 +220,11 @@ async function refresh(releases = false) {
       for (const card of $("applications").querySelectorAll("article")) {
         const draft = drafts.find(d => d.app === card.querySelector("h2").textContent);
         const select = card.querySelector("select");
-        if (!draft || !select || ![...select.options].some(o => o.value === draft.release)) continue;
-        select.value = draft.release;
-        select.dispatchEvent(new Event("change"));
+        if (!draft) continue;
+        if (select && [...select.options].some(o => o.value === draft.release)) {
+          select.value = draft.release;
+          select.dispatchEvent(new Event("change"));
+        }
         for (const input of card.querySelectorAll("input")) if (Object.hasOwn(draft.values, input.name)) input.value = draft.values[input.name];
       }
       appSnapshot = snapshot;
@@ -284,3 +306,4 @@ async function poll(releases = false) {
 $("refresh").addEventListener("click", () => poll(true));
 poll();
 setInterval(() => poll(), 3000);
+

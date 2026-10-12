@@ -267,6 +267,20 @@ def managed(tmp_path, monkeypatch):
                 containers[app.container_name] = {
                     "Image": app.image_id,
                     "State": {"Running": argv[1] == "run"},
+                    "Config": {"Env": [argv[i + 1] for i, a in enumerate(argv) if a == "--env"]},
+                    "Mounts": [
+                        {
+                            "Type": "bind",
+                            "Source": source,
+                            "Destination": "/data/music-output",
+                            "RW": True,
+                        }
+                        for source in [
+                            argv[i + 1].split(",src=", 1)[1].split(",dst=", 1)[0]
+                            for i, a in enumerate(argv)
+                            if a == "--mount" and argv[i + 1].endswith("dst=/data/music-output")
+                        ]
+                    ],
                 }
             if argv[1] == "start":
                 containers[argv[-1]]["State"]["Running"] = True
@@ -285,6 +299,10 @@ def managed(tmp_path, monkeypatch):
     def http(request):
         if request.url.path == "/catalog.json":
             return httpx.Response(200, content=dumps(catalog))
+        if request.url.path == "/api/v1/generation/system.health":
+            return httpx.Response(
+                200, json={"busy": fail.get("busy", False), "active_job_id": None}
+            )
         return httpx.Response(200, content=b"image")
 
     client = httpx.Client(transport=httpx.MockTransport(http))

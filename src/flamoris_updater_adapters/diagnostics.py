@@ -303,6 +303,12 @@ def describe(app, root, unit_directory):
             network=app.network,
             environment_file=app.environment_file,
             mounts=[m.model_dump() for m in app.mounts],
+            output_directories=app.output_directories,
+            output_mounts=[
+                dict(source=source, target="/data/music-output", read_only=False)
+                for source in app.output_directories.values()
+                if source
+            ],
             ports=[p.model_dump() for p in app.ports],
         )
     else:

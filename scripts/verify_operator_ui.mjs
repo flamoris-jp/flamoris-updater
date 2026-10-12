@@ -22,6 +22,8 @@ let disconnectAfterAccept = false;
 let failure = null;
 let hostname = "node-a";
 let phase = "awaiting_setup";
+let outputInstalled = false;
+let outputDirectory = "";
 let selfPhase = null;
 let version = "1.0.8";
 const runtime = "/var/lib/flamoris-updater/releases/" + "a".repeat(64);
@@ -47,6 +49,7 @@ await context.route("https://updater.example.invalid/**", async route => {
   if (name === "health") return json({hostname, version, runtime_root:runtime + "/site-packages"});
   if (name === "updater_apps_list") return json({root:"/srv/flamoris/apps", catalog_errors:[], items:[
     {application_id:appID, installation:{release:"1.0.0", phase}, releases:[]},
+    ...(outputInstalled ? [{application_id:"flamoris-generation-mcp", installation:{release:"1.0.4", phase:"succeeded", profile:{components:{"flamoris-generation-controller":"1.0.1"}, output_directories:{yue2:outputDirectory}}}, releases:[]}] : []),
     {application_id:generationID, installation:null, releases:[{release:"1.0.2", compatible_from:[], settings:[{key:"CONTROLLER_TOKEN", label:"Controllerトークン", secret:true, default:"", required:false, generate:true}]}]}
   ]});
   if (name === "updater_managed_history") return json({items:selfPhase ? [{application_id:"flamoris-updater", release:"1.0.9", job_id:"job-" + "b".repeat(32), action:"self_update", phase:selfPhase}] : []});
@@ -61,6 +64,10 @@ await context.route("https://updater.example.invalid/**", async route => {
     phase = "succeeded";
     return json({application_id:appID, phase});
   }
+  if (name === "updater_outputs_configure") {
+    outputDirectory = input.directories.yue2;
+    return json({job_id:"job-" + "c".repeat(32), phase:"accepted"});
+  }
   if (name === "updater_self_update") {
     selfPhase = "accepted";
     if (selfResponseLost) return route.fulfill({status:502, contentType:"text/html", body:"<html>private-proxy-page</html>"});
@@ -70,6 +77,20 @@ await context.route("https://updater.example.invalid/**", async route => {
   throw new Error("Unexpected fixture endpoint: " + endpoint);
 });
 try {
+  outputInstalled = true;
+  await page.goto("https://updater.example.invalid/updater/");
+  await page.waitForFunction(() => document.getElementById("connection").textContent === "接続済み");
+  const output = page.locator("input[name='yue2_output_directory']");
+  await output.fill("/srv/media/music");
+  await page.waitForTimeout(3200);
+  assert.equal(await output.inputValue(), "/srv/media/music");
+  await page.getByRole("button", {name:"出力先を保存", exact:true}).click();
+  await page.waitForFunction(() => document.getElementById("notice").textContent.includes("出力先の変更を受け付けました"));
+  const outputCall = calls.find(c => c.name === "updater_outputs_configure");
+  assert.equal(outputCall.input.application_id, "flamoris-generation-mcp");
+  assert.deepEqual(outputCall.input.directories, {yue2:"/srv/media/music"});
+  assert.ok(outputCall.input.request_key);
+  outputInstalled = false;
   for (const prefix of ["", "/updater", "/tools/updater"]) {
     await page.goto("https://updater.example.invalid" + prefix + "/");
     await page.waitForFunction(() => document.getElementById("connection").textContent === "接続済み");
@@ -179,3 +200,4 @@ try {
   await context.close();
   await browser.close();
 }
+

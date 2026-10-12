@@ -49,6 +49,7 @@ from .install import (
     path,
 )
 from .journal import Journal, durable_write, exclusive
+from .outputs import ConfigureOutputs
 from .self_update import SELF, SelfRelease, SelfStart
 
 MANAGED_TARGETS = [*VERSIONS, SELF]
@@ -95,6 +96,8 @@ class Recipe(Model):
 
     @model_validator(mode="after")
     def identity(self):
+        if self.application.get("output_directories"):
+            raise ValueError("Media directories belong to the operator, not release recipes")
         if self.application_id == SELF or version(self.release) < version(
             VERSIONS.get(self.application_id, "0.0.0")
         ):
@@ -158,6 +161,11 @@ class CatalogSource(Model):
 
 
 MANAGED_TOOLS = {
+    "updater_outputs_configure": (
+        ConfigureOutputs,
+        "Configure an existing YuE2 media directory, preserving it across updates",
+        "execute",
+    ),
     "updater_catalogs_list": (Model, "Registered repository catalogs", "read"),
     "updater_catalog_add": (CatalogSource, "Add one repository catalog", "execute"),
     "updater_catalog_remove": (CatalogSource, "Remove a catalog without deleting apps", "execute"),
@@ -448,6 +456,10 @@ class Manager:
             return record
         if name in {"updater_install", "updater_update"}:
             return self.start("install" if name.endswith("install") else "update", args)
+        if name == "updater_outputs_configure":
+            from .outputs import admit
+
+            return admit(self, args)
         if name == "updater_install_complete":
             return self.complete(args.application_id)
         if name == "updater_install_start":
@@ -809,6 +821,11 @@ class Manager:
         )
 
     def run_job(self, identity):
+        pending = self.journal.get("managed_job", identity)
+        if pending and pending["action"] == "configure_outputs":
+            from .outputs import run
+
+            return run(self, identity)
         with (
             exclusive(self.state / "manager.lock"),
             recording(self.journal, identity) as log,
@@ -881,7 +898,14 @@ class Manager:
                     old = decode(type(app), dumps(installed["profile"]))
                     # Mutable paths/security/mounts/units remain exactly the recorded installation.
                     if isinstance(app, DockerApplication):
-                        changed = {"release", "image_id", "image_archive", "database", "components"}
+                        changed = {
+                            "release",
+                            "image_id",
+                            "image_archive",
+                            "database",
+                            "components",
+                            "output_directories",
+                        }
                         if app.model_dump(exclude=changed | {"files"}) != old.model_dump(
                             exclude=changed | {"files"}
                         ):
@@ -889,7 +913,20 @@ class Manager:
                                 "invalid_profile",
                                 "Release attempts to change retained runtime bindings",
                             )
-                        app = app.model_copy(update={"files": old.files, "database": old.database})
+                        app = decode(
+                            DockerApplication,
+                            dumps(
+                                {
+                                    **app.model_dump(),
+                                    "files": [f.model_dump() for f in old.files],
+                                    "database": old.database.model_dump() if old.database else None,
+                                    "output_directories": old.output_directories,
+                                }
+                            ),
+                        )
+                        from .outputs import check_sources
+
+                        check_sources(self, app)
                     else:
                         if [u.name for u in app.units] != [
                             u.name for u in old.units

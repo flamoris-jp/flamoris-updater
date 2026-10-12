@@ -191,6 +191,7 @@ class DockerApplication(Application):
     network: Literal["host", "bridge"] = "host"
     ports: list[Port] = Field(default_factory=list, max_length=16)
     mounts: list[Mount] = Field(default_factory=list, max_length=64)
+    output_directories: dict[Literal["yue2"], str] = Field(default_factory=dict, max_length=1)
     hostname: Name | None = None
     components: dict[ComponentId, ComponentVersion] | None = Field(
         default=None, min_length=1, max_length=16
@@ -198,6 +199,18 @@ class DockerApplication(Application):
 
     @model_validator(mode="after")
     def docker(self):
+        if self.output_directories:
+            from .outputs import TARGET, directory_syntax, supported
+
+            if not supported(self):
+                raise ValueError("Image has no supported configurable media output")
+            for source in self.output_directories.values():
+                directory_syntax(source)
+            if any(
+                Path(m.target).is_relative_to(TARGET) or Path(TARGET).is_relative_to(m.target)
+                for m in self.mounts
+            ):
+                raise ValueError("Media binding overlaps a retained mount")
         if self.components is not None:
             for release in self.components.values():
                 version(release)
@@ -997,6 +1010,16 @@ class Installer:
                     f"type=bind,src={m.source},dst={m.target}"
                     + (",readonly" if m.read_only else ""),
                 ]
+            if app.output_directories:
+                from .outputs import TARGET, VARIABLE, check_directory
+
+                source = app.output_directories["yue2"]
+                check_directory(
+                    source, [d.path for d in app.directories] + [self.cfg.state_directory]
+                )
+                if source:
+                    argv += ["--mount", f"type=bind,src={source},dst={TARGET}"]
+                argv += ["--env", VARIABLE + "=" + (TARGET if source else "")]
             if app.application_id == "flamoris-mcp-hub":
                 env = environment(protected_read(app.environment_file, private=True))
                 port = env.get("FLAMORIS_MCP_HUB_PORT", "8765")
@@ -1059,6 +1082,28 @@ class Installer:
                 or observed.get("State", {}).get("Running") is not True
             ):
                 raise UpdateError("outcome_unknown")
+            if app.output_directories:
+                from .outputs import TARGET, VARIABLE
+
+                source = app.output_directories["yue2"]
+                mounts = [m for m in observed.get("Mounts", []) if m.get("Destination") == TARGET]
+                if (
+                    (
+                        source
+                        and (
+                            len(mounts) != 1
+                            or mounts[0].get("Type") != "bind"
+                            or mounts[0].get("Source") != source
+                            or mounts[0].get("RW") is not True
+                        )
+                    )
+                    or (not source and mounts)
+                    or VARIABLE + "=" + (TARGET if source else "")
+                    not in (observed.get("Config", {}).get("Env") or [])
+                ):
+                    raise UpdateError(
+                        "outcome_unknown", "Configured output binding was not applied"
+                    )
         else:
             for u in app.units:
                 if self.command(["/usr/bin/systemctl", "is-active", u.name]).strip() != b"active":

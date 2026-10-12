@@ -1,6 +1,6 @@
 # Managed Web, MCP and command API
 
-Bootstrap mode exposes fifteen typed tools through credential-free `/mcp` (Streamable HTTP) and `/api/v1/tools/{name}`. With `--base-path /updater`, these endpoints become `/updater/mcp` and
+Bootstrap mode exposes sixteen typed tools through credential-free `/mcp` (Streamable HTTP) and `/api/v1/tools/{name}`. With `--base-path /updater`, these endpoints become `/updater/mcp` and
 `/updater/api/v1/tools/{name}`. Preserve the configured public path at the proxy;
 Host/Origin remain the pure public origin. Web/CLI/MCP call the same facade and root manager. CLI convenience commands construct the same requests; no caller-selected shell/path/source code is accepted.
 
@@ -14,6 +14,7 @@ Host/Origin remain the pure public origin. Web/CLI/MCP call the same facade and 
 | `updater_apps_list` | Optional `refresh`; available releases/settings, per-app installation/current/previous |
 | `updater_install` | `application_id`, `release`, `request_key`, optional settings; durable install Job |
 | `updater_update` | Same identity/key, no changed settings; explicitly compatible update Job |
+| `updater_outputs_configure` | `application_id`, `request_key`, `directories.yue2`; existing media directory or empty to disable; [configuration Job](OUTPUT_DIRECTORIES.md) |
 | `updater_install_start` | `application_id`; start staged app for its own setup |
 | `updater_install_complete` | `application_id`; verify initial app health/runtime and complete record |
 | `updater_previous_delete` | `application_id`; delete retained previous executables without changing config/data |
@@ -27,3 +28,4 @@ No login, Bearer token, setup code or integration key is used. Web/CLI/MCP opera
 Install Jobs end at `awaiting_setup`; after app setup/start, verify to become `succeeded`. Updates progress through recorded download/stage/stop/switch/health/runtime checks. Lost or partial effects become `recovery_required` and are never blindly replayed or followed by old-version cleanup. Reusing a request key returns the same Job; changed arguments conflict. Job results never contain settings/password values.
 
 Internal Core/Owner signed-plan integration models remain separate from the normal endpoint. The MCP catalog advertises only managed tools; callers cannot submit old grants/plans or arbitrary shell commands.
+
