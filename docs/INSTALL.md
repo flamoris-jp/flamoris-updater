@@ -58,3 +58,9 @@ Settings are single-line bounded values; optional `generate` creates private URL
 ## Administrator-only profile path
 
 The protected `install-profile --profile /absolute/private.json --check` / `install-profile --profile ...` command from PR #11 remains available for controlled direct profile tests. Exact `install.Configuration` schema, package digests and hostname/platform checks apply. Installation records are per application, so a later app is permitted. It never imports an existing deployment. It is not the ordinary Web setup path and does not silently register its separate test profile as a simple managed app.
+
+## Embedded component versions (Updater 1.0.9 source)
+
+Docker application profiles may declare `components`, a mapping of 1–16 component IDs to stable SemVer strings. The immutable image must carry an exactly matching JSON object in `net.flamoris.components`; missing, invalid, extra or changed entries stop installation before container creation. This field is metadata, with no executable hooks. Existing image/digest, release/title, platform and volume checks still apply.
+
+Generation 1.0.3 declares `{"flamoris-generation-controller":"1.0.1"}` and requires Updater 1.0.9 or newer. Older Generation catalogs without `components` retain the existing Controller 1.0.0 check. Other applications without component metadata keep their previous behavior. Upgrade Updater before installing a catalog that uses this field. Source/CI evidence does not establish publication or a real-host rollout.
