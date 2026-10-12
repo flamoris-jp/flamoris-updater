@@ -1,3 +1,26 @@
+# Updater 1.0.11 published and operator acceptance — 2026-10-13
+
+- [PR #45](https://github.com/flamoris-jp/flamoris-updater/pull/45) merged at
+  `d85edef72b6e93633d8312bd4b185234d1fad15a`.
+  [v1.0.11](https://github.com/flamoris-jp/flamoris-updater/releases/tag/v1.0.11)
+  publishes both CPU bundles and explicit 1.0.3–1.0.10 self-update predecessors.
+- The accepted source [CI](https://github.com/flamoris-jp/flamoris-updater/actions/runs/38266910609)
+  passed all nine jobs: root/ordinary tests, operator UI, native bundles and four
+  Docker architecture/store combinations. Real disposable Docker fixtures install
+  published Generation 1.0.2, upgrade to 1.0.4, configure/disable output, verify
+  runtime UID writes and SGID, and preserve private settings/existing media.
+- An operator deployment verified Web/Manager self-update to 1.0.11, then saved
+  an existing media root through the Generation Web card. The configuration Job
+  succeeded at verify_running; Server Manager confirmed the replacement container
+  running and the previous one stopped.
+- A real five-second YuE2 test completed and reported publication written for
+  WAV, ABC and replay JSON. Separate private archives were materialized; Controller
+  returned to idle. This does not claim new Studio browser generation or an
+  operator file-browser/listening check of that new bundle.
+- Deployment paths, exact Jobs and permissions remain in private operations
+  documentation. No models, media, native runtimes or private Job/Workflow state
+  were relocated or manually cleaned. The records below are earlier checkpoints.
+
 # Operator media directory configuration — 2026-10-12
 
 Updater 1.0.11 source adds a bounded YuE2 output directory choice for already
