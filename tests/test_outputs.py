@@ -67,7 +67,8 @@ def test_configuration_survives_manager_restart_and_release_update(managed, monk
     e.manager = Manager(e.manager.state, e.manager.root, installer=e.manager.installer, client=e.manager.client)
     upgrade = e.manager.start("update", Start(application_id=APP, release="1.1.0", request_key="next-version"))
     e.manager.run_job(upgrade["job_id"])
-    assert e.manager.journal.get("managed_job", upgrade["job_id"])["phase"] == "succeeded"
+    outcome = e.manager.journal.get("managed_job", upgrade["job_id"])
+    assert outcome["phase"] == "succeeded", {k: outcome.get(k) for k in ("phase", "step", "error", "failure")}
     assert e.manager.journal.get("managed_app", APP)["profile"]["output_directories"] == {"yue2": str(media)}
     assert media.exists() and (media / "existing.wav").read_bytes() == b"keep-existing"
     assert env.read_bytes() == before

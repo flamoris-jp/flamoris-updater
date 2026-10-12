@@ -270,7 +270,7 @@ def managed(tmp_path, monkeypatch):
                     "Config": {"Env": [argv[i + 1] for i, a in enumerate(argv) if a == "--env"]},
                     "Mounts": [
                         {"Type": "bind", "Source": source, "Destination": "/data/music-output", "RW": True}
-                        for source in app.output_directories.values() if source
+                        for source in [argv[i + 1].split(",src=", 1)[1].split(",dst=", 1)[0] for i, a in enumerate(argv) if a == "--mount" and argv[i + 1].endswith("dst=/data/music-output")]
                     ],
                 }
             if argv[1] == "start":
