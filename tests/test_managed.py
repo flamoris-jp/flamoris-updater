@@ -267,6 +267,11 @@ def managed(tmp_path, monkeypatch):
                 containers[app.container_name] = {
                     "Image": app.image_id,
                     "State": {"Running": argv[1] == "run"},
+                    "Config": {"Env": [argv[i + 1] for i, a in enumerate(argv) if a == "--env"]},
+                    "Mounts": [
+                        {"Type": "bind", "Source": source, "Destination": "/data/music-output", "RW": True}
+                        for source in app.output_directories.values() if source
+                    ],
                 }
             if argv[1] == "start":
                 containers[argv[-1]]["State"]["Running"] = True
@@ -285,6 +290,8 @@ def managed(tmp_path, monkeypatch):
     def http(request):
         if request.url.path == "/catalog.json":
             return httpx.Response(200, content=dumps(catalog))
+        if request.url.path == "/api/v1/generation/system.health":
+            return httpx.Response(200, json={"busy": fail.get("busy", False), "active_job_id": None})
         return httpx.Response(200, content=b"image")
 
     client = httpx.Client(transport=httpx.MockTransport(http))
@@ -714,518 +721,663 @@ def test_manager_socket_peer_checks_precede_configuration_or_operations(managed)
         raw = dumps(
             {
                 "action": "configure",
-                "body": {"catalog_url": "https://releases.example.invalid/catalog.json"},
-            }
-        )
-        left.sendall(struct.pack("!I", len(raw)) + raw)
-        size = struct.unpack("!I", left.recv(4))[0]
-        response = loads(left.recv(size))
-        thread.join(3)
-        left.close()
-        right.close()
-        assert response == (
-            {"error": "forbidden", "message": "Operation rejected"}
-            if not allowed
-            else {"configured": True}
-        )
+                "body": {"catalog_url": "https://releases.exampl…19494 tokens truncated…
+            while True:
+                try:
+                    if app.application_id == "flamoris-mcp-hub":
+                        env = environment(protected_read(app.environment_file, private=True))
+                        headers = {
+                            "Accept": "application/json,text/event-stream",
+                            "Authorization": "Bearer " + env["FLAMORIS_MCP_HUB_CLIENT_TOKEN"],
+                        }
+                        request = {
+                            "jsonrpc": "2.0",
+                            "id": "installation-health",
+                            "method": "initialize",
+                            "params": {
+                                "protocolVersion": "2025-03-26",
+                                "capabilities": {},
+                                "clientInfo": {"name": "flamoris-updater", "version": "1.0.0"},
+                            },
+                        }
+                        with client.stream(
+                            "POST", app.health_url, json=request, headers=headers
+                        ) as response:
+                            if response.status_code == 200:
+                                for line in response.iter_lines():
+                                    if line.startswith("data: "):
+                                        line = line[6:]
+                                    if line.startswith("{"):
+                                        body = json.loads(line)
+                                        if (
+                                            body.get("result", {})
+                                            .get("serverInfo", {})
+                                            .get("version")
+                                            == app.release
+                                        ):
+                                            session = response.headers.get("mcp-session-id")
+                                            if session:
+                                                client.delete(
+                                                    app.health_url,
+                                                    headers={**headers, "mcp-session-id": session},
+                                                )
+                                            return
+                    else:
+                        r = client.get(app.health_url)
+                        if r.status_code == 200:
+                            return
+                except httpx.HTTPError:
+                    pass
+                if time.monotonic() >= deadline:
+                    raise UpdateError("outcome_unknown", "New application did not become healthy")
+                time.sleep(0.25)
 
-
-@pytest.mark.parametrize("prefix", ["", "/updater"])
-def test_bootstrap_writes_only_new_services_with_unprivileged_web_and_local_helper(
-    tmp_path, monkeypatch, prefix
-):
-    monkeypatch.setattr(os, "chown", lambda *_: None)
-    units = tmp_path / "units"
-    units.mkdir()
-    executable = tmp_path / "flamoris-updater-service"
-    executable.write_text("installed package launcher")
-    executable.chmod(0o755)
-    calls = []
-
-    def command(argv):
-        calls.append(argv)
-        return b"isolated-test-setup-token-long-value\n" if argv[0] == "/usr/bin/setpriv" else b""
-
-    base = tmp_path / "state"
-    result = bootstrap(
-        base,
-        tmp_path / "apps",
-        ORIGIN,
-        command=command,
-        account=SimpleNamespace(pw_uid=10002, pw_gid=10002),
-        executable=str(executable),
-        unit_directory=str(units),
-        base_path=prefix,
-    )
-    assert result["url"] == ORIGIN + (prefix + "/" if prefix else "")
-    assert "User=10002" in (units / "flamoris-updater.service").read_text()
-    cfg = json.loads((base / "setup.json").read_bytes())
-    assert cfg["base_path"] == prefix
-    assert cfg["listen_host"] == "127.0.0.1" and cfg["service_uid"] == 10002
-    assert "setup_token" not in result
-    assert not any(call[0] == "/usr/bin/setpriv" for call in calls)
-    with pytest.raises(UpdateError):
-        bootstrap(base, tmp_path / "apps", ORIGIN, command=command)
-
-
-def test_all_portable_recipes_compile_without_operator_profile_json(managed):
-    from flamoris_updater_adapters.install import VERSIONS
-
-    e = managed
-    e.manager.configure("https://releases.example.invalid/catalog.json")
-    for application, release in VERSIONS.items():
-        item = {
-            "application_id": application,
-            "release": release,
-            "platform": "linux/amd64",
-            "image_id": digest(b"image-id"),
-            "files": {
-                n: digest(b"image") for n in ["image.tar", "db/01_schema.sql", "manager.whl"]
-            },
+    def preflight(self):
+        if os.geteuid() != 0 or socket.gethostname() != self.cfg.expected_hostname:
+            raise UpdateError("forbidden", "Run locally as the expected host's administrator")
+        actual = {"x86_64": "linux/amd64", "aarch64": "linux/arm64"}.get(platform.machine())
+        if self.cfg.platform != actual:
+            raise UpdateError("unsupported_platform")
+        path(self.cfg.state_directory)
+        for app in self.cfg.applications:
+            for f in inputs(app):
+                f.verify()
+            for d in app.directories:
+                absent(d.path)
+            if isinstance(app, DockerApplication):
+                names = self.command(
+                    ["/usr/bin/docker", "container", "ls", "--all", "--format", "{{.Names}}"]
+                )
+                if app.container_name in names.decode().splitlines():
+                    raise UpdateError("not_empty")
+                source = next(f.source for f in app.files if f.destination == app.environment_file)
+                env = environment(protected_read(source.path, private=source.private))
+                if app.network == "host":
+                    host_keys = {
+                        "flamoris-ai-agent": "AGENT_HTTP_HOST",
+                        "flamoris-generation-mcp": "FLAMORIS_HTTP_HOST",
+                        "flamoris-intelligence-mcp": "FLAMORIS_INTELLIGENCE_HTTP_HOST",
+                    }
+                    host_key = host_keys.get(app.application_id)
+                    if host_key and env.get(host_key) not in {"127.0.0.1", "::1"}:
+                        raise UpdateError(
+                            "invalid_profile", "Host-network services must bind loopback explicitly"
+                        )
+                for mount in app.mounts:
+                    if mount.read_only and not any(
+                        Path(mount.source).is_relative_to(d.path) for d in app.directories
+                    ):
+                        if not Path(mount.source).is_absolute() or not Path(mount.source).exists():
+                            raise UpdateError(
+                                "invalid_profile", "External read-only storage is missing"
+                            )
+            else:
+                path(app.python)
+                for unit in app.units:
+                    absent(str(self.unit_directory / unit.name))
+                    fragment = self.command(
+                        [
+                            "/usr/bin/systemctl",
+                            "show",
+                            unit.name,
+                            "--property=FragmentPath",
+                            "--value",
+                        ]
+                    )
+                    if fragment.strip():
+                        raise UpdateError("not_empty")
+                    content = protected_read(unit.source.path).decode()
+                    commands = [
+                        line.strip()
+                        for line in content.splitlines()
+                        if line.strip().startswith("Exec")
+                    ]
+                    if (
+                        len(commands) != 1
+                        or not commands[0].startswith(f"ExecStart={app.venv}/bin/{app.entrypoint} ")
+                        or "\\\n" in content
+                    ):
+                        raise UpdateError(
+                            "invalid_profile", "Native unit must start the installed manager"
+                        )
+            if app.database:
+                self._database_preflight(app)
+        return {
+            "applications": [
+                {"application_id": a.application_id, "release": a.release}
+                for a in self.cfg.applications
+            ],
+            "backup_required": False,
         }
-        built = build_recipe(item, "https://releases.example.invalid/candidate")
-        with e.manager.journal.transaction() as db:
-            e.manager.journal.put(
-                "manager_catalog",
-                "current",
-                {"catalog_version": 1, "recipes": [built.model_dump()]},
-                db,
+
+    def _database_preflight(self, app):
+        db = app.database
+        with self.connect(db) as conn:
+            if (
+                conn.execute("SELECT 1 FROM pg_database WHERE datname=%s", (db.name,)).fetchone()
+                or conn.execute(
+                    "SELECT 1 FROM pg_roles WHERE rolname=ANY(%s)", ([db.owner, db.runtime_role],)
+                ).fetchone()
+            ):
+                raise UpdateError(
+                    "not_empty", "Application database and dedicated roles must be absent"
+                )
+        if isinstance(app, DockerApplication):
+            from psycopg.conninfo import conninfo_to_dict
+
+            source = next(f.source for f in app.files if f.destination == app.environment_file)
+            env = environment(protected_read(source.path, private=source.private))
+            admin = conninfo_to_dict(
+                protected_read(db.admin_dsn.path, private=True).decode().strip()
             )
-        args = Start(
-            application_id=application,
-            release=release,
-            request_key=application,
-            settings={
-                "ADMIN_DSN": "postgresql://admin@database.example.invalid/postgres",
-                "PGHOST": "database.example.invalid",
+            if app.application_id == "flamoris-ai-agent":
+                runtime = {
+                    "dbname": env.get("PGDATABASE"),
+                    "user": env.get("PGUSER"),
+                    "host": env.get("PGHOST", ""),
+                    "port": env.get("PGPORT", "5432"),
+                    "password": env.get("PGPASSWORD"),
+                }
+            else:
+                runtime = conninfo_to_dict(
+                    env.get("STUDIO_DATABASE_URL", "").replace(
+                        "postgresql+psycopg://", "postgresql://", 1
+                    )
+                )
+            if (
+                runtime.get("dbname") != db.name
+                or runtime.get("user") != db.runtime_role
+                or runtime.get("password")
+                != protected_read(db.runtime_password.path, private=True).decode().rstrip("\n")
+                or any(
+                    runtime.get(k, "5432" if k == "port" else "")
+                    != admin.get(k, "5432" if k == "port" else "")
+                    for k in ("host", "port")
+                )
+            ):
+                raise UpdateError(
+                    "invalid_profile",
+                    "Runtime credentials must target the new database and runtime role",
+                )
+        if db.studio_migration_environment:
+            from psycopg.conninfo import conninfo_to_dict
+
+            env = environment(protected_read(db.studio_migration_environment.path, private=True))
+            url = env.get("STUDIO_DATABASE_URL", "").replace(
+                "postgresql+psycopg://", "postgresql://", 1
+            )
+            target = conninfo_to_dict(url)
+            admin = conninfo_to_dict(
+                protected_read(db.admin_dsn.path, private=True).decode().strip()
+            )
+            if (
+                target.get("dbname") != db.name
+                or target.get("user") != db.owner
+                or target.get("password")
+                != protected_read(db.owner_password.path, private=True).decode().rstrip("\n")
+                or any(
+                    target.get(k, "5432" if k == "port" else "")
+                    != admin.get(k, "5432" if k == "port" else "")
+                    for k in ("host", "port")
+                )
+            ):
+                raise UpdateError(
+                    "invalid_profile", "Studio migration must target the new database and owner"
+                )
+
+    def _database_create(self, app):
+        from psycopg import sql
+
+        from .diagnostics import effect
+
+        db = app.database
+        with self.connect(db) as conn:
+            for role, password in (
+                (db.owner, db.owner_password),
+                (db.runtime_role, db.runtime_password),
+            ):
+                value = protected_read(password.path, private=True).decode().rstrip("\n")
+                effect(
+                    "database.create_role",
+                    lambda: conn.execute(
+                        sql.SQL(
+                            "CREATE ROLE {} LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE PASSWORD {}"
+                        ).format(sql.Identifier(role), sql.Literal(value))
+                    ),
+                    {"role": role},
+                )
+            effect(
+                "database.create",
+                lambda: conn.execute(
+                    sql.SQL("CREATE DATABASE {} OWNER {}").format(
+                        sql.Identifier(db.name), sql.Identifier(db.owner)
+                    )
+                ),
+                {"database": db.name, "owner_role": db.owner},
+            )
+            effect(
+                "database.restrict_public",
+                lambda: conn.execute(
+                    sql.SQL("REVOKE ALL ON DATABASE {} FROM PUBLIC").format(sql.Identifier(db.name))
+                ),
+                {"database": db.name},
+            )
+            effect(
+                "database.grant_runtime",
+                lambda: conn.execute(
+                    sql.SQL("GRANT CONNECT ON DATABASE {} TO {}").format(
+                        sql.Identifier(db.name), sql.Identifier(db.runtime_role)
+                    )
+                ),
+                {"database": db.name, "runtime_role": db.runtime_role},
+            )
+        with self.connect(db, db.name) as conn:
+            for f in db.sql_files:
+                f.verify()
+                effect(
+                    "database.apply_initial_sql",
+                    lambda: conn.execute(protected_read(f.path, limit=16 * 1024**2).decode()),
+                    {"file": f.path, "digest": f.digest},
+                )
+        if db.studio_migration_environment:
+            self.command(
+                [
+                    "/usr/bin/docker",
+                    "run",
+                    "--rm",
+                    "--network",
+                    "host",
+                    "--env-file",
+                    db.studio_migration_environment.path,
+                    app.image_id,
+                    "alembic",
+                    "upgrade",
+                    "head",
+                ],
+                timeout=300,
+            )
+        with self.connect(db, db.name) as conn:
+            schemas = (
+                ["public"]
+                if app.application_id == "flamoris-studio"
+                else ["core", "runtime", "chat", "memory", "relay", "ops"]
+            )
+            for schema in schemas:
+                conn.execute(
+                    sql.SQL("GRANT USAGE ON SCHEMA {} TO {}").format(
+                        sql.Identifier(schema), sql.Identifier(db.runtime_role)
+                    )
+                )
+                conn.execute(
+                    sql.SQL(
+                        "GRANT SELECT,INSERT,UPDATE,DELETE ON ALL TABLES IN SCHEMA {} TO {}"
+                    ).format(sql.Identifier(schema), sql.Identifier(db.runtime_role))
+                )
+                conn.execute(
+                    sql.SQL("GRANT USAGE,SELECT ON ALL SEQUENCES IN SCHEMA {} TO {}").format(
+                        sql.Identifier(schema), sql.Identifier(db.runtime_role)
+                    )
+                )
+                for privileges, objects in (
+                    ("SELECT,INSERT,UPDATE,DELETE", "TABLES"),
+                    ("USAGE,SELECT", "SEQUENCES"),
+                ):
+                    conn.execute(
+                        sql.SQL(
+                            "ALTER DEFAULT PRIVILEGES FOR ROLE {} IN SCHEMA {} GRANT "
+                            + privileges
+                            + " ON "
+                            + objects
+                            + " TO {}"
+                        ).format(
+                            sql.Identifier(db.owner),
+                            sql.Identifier(schema),
+                            sql.Identifier(db.runtime_role),
+                        )
+                    )
+
+    def _files(self, app):
+        from .diagnostics import effect
+
+        for d in app.directories:
+            absent(d.path)
+            effect(
+                "files.create_directory",
+                lambda: Path(d.path).mkdir(parents=True, mode=d.mode),
+                {"path": d.path, "mode": d.mode},
+            )
+        for f in app.files:
+            p = Path(f.destination)
+            p.parent.mkdir(parents=True, exist_ok=True)
+
+            def copy_file():
+                durable_write(
+                    p, protected_read(f.source.path, private=f.source.private), mode=f.mode
+                )
+                os.chown(p, f.uid, f.gid)
+
+            effect(
+                "files.copy_configuration",
+                copy_file,
+                {"destination": str(p), "mode": f.mode, "private": f.source.private},
+            )
+        # Ownership is applied only to new, explicit roots, never external model trees.
+        for d in app.directories:
+
+            def ownership():
+                os.chown(d.path, d.uid, d.gid)
+                os.chmod(d.path, d.mode)
+
+            effect("files.set_ownership", ownership, d.model_dump())
+
+    def _stage(self, app):
+        if isinstance(app, DockerApplication):
+            loaded = self.command(
+                ["/usr/bin/docker", "load", "--input", app.image_archive.path], timeout=600
+            )
+            resolved = False
+            try:
+                image = json.loads(
+                    self.command(["/usr/bin/docker", "image", "inspect", app.image_id])
+                )[0]
+            except UpdateError as error:
+                detail = getattr(error, "diagnostic", {})
+                if detail.get("kind") != "nonzero_exit" or detail.get("exit_code") != 1:
+                    raise
+                image = self._loaded_image(app, loaded)
+                resolved = True
+            runtime_id = image.get("Id")
+            if not resolved and runtime_id != app.image_id:
+                image = self._loaded_image(app, loaded)
+                runtime_id = image.get("Id")
+            if not isinstance(runtime_id, str) or not re.fullmatch(
+                r"sha256:[0-9a-f]{64}", runtime_id
+            ):
+                raise UpdateError("artifact_mismatch")
+            labels = image.get("Config", {}).get("Labels") or {}
+            if (
+                labels.get("org.opencontainers.image.version") != app.release
+                or labels.get("org.opencontainers.image.title") != app.application_id
+                or image.get("Config", {}).get("Volumes")
+                or image.get("Os") != "linux"
+                or image.get("Architecture") != self.cfg.platform.split("/")[1]
+            ):
+                raise UpdateError("artifact_mismatch")
+            verify_components(app, labels)
+            if runtime_id != app.image_id:
+                from .diagnostics import event
+
+                event(
+                    "docker.image.resolve",
+                    "verified",
+                    {
+                        "catalog_image_id": app.image_id,
+                        "runtime_image_id": runtime_id,
+                    },
+                )
+            return app.model_copy(update={"image_id": runtime_id})
+        else:
+            self.command([app.python, "-m", "venv", app.venv])
+            self.command(
+                [
+                    app.venv + "/bin/python",
+                    "-m",
+                    "pip",
+                    "install",
+                    "--no-index",
+                    "--no-deps",
+                    *[f.path for f in app.wheels],
+                ],
+                timeout=600,
+            )
+            self.command([app.venv + "/bin/python", "-m", "pip", "check"])
+            result = self.command(
+                [
+                    app.venv + "/bin/python",
+                    "-c",
+                    f"import importlib.metadata; print(importlib.metadata.version({app.distribution!r}))",
+                ]
+            )
+            if result.strip().decode() != app.release:
+                raise UpdateError("artifact_mismatch")
+            return app
+
+    def _loaded_image(self, app, loaded):
+        """Bind containerd's manifest ID to the catalog's exact config digest.
+
+        Docker's bounded load response supplies candidate references. A fresh,
+        private export must contain the exact config blob before a candidate's
+        immutable runtime ID can be used. Labels alone never establish identity.
+        """
+        references = re.findall(r"^Loaded image(?: ID)?: ([^\s]+)$", loaded.decode(), re.M)
+        if not references or len(references) > 8:
+            raise UpdateError("artifact_mismatch")
+        for reference in references:
+            if len(reference) > 256 or reference.startswith("-"):
+                raise UpdateError("artifact_mismatch")
+            image = json.loads(self.command(["/usr/bin/docker", "image", "inspect", reference]))[0]
+            actual = image.get("Id", "")
+            if not re.fullmatch(r"sha256:[0-9a-f]{64}", actual):
+                raise UpdateError("artifact_mismatch")
+            with tempfile.TemporaryDirectory(prefix="flamoris-image-") as directory:
+                exported = Path(directory) / "image.tar"
+                self.command(
+                    ["/usr/bin/docker", "image", "save", "--output", str(exported), actual],
+                    timeout=600,
+                )
+                if exported.stat().st_size > 4 * 1024**3:
+                    raise UpdateError("quota_exceeded")
+                if exported_config_matches(exported, app.image_id):
+                    return image
+        raise UpdateError("artifact_mismatch")
+
+    def _start(self, app, *, start=True):
+        if isinstance(app, DockerApplication):
+            argv = [
+                "/usr/bin/docker",
+                "run" if start else "create",
+                *(["--detach"] if start else []),
+                "--name",
+                app.container_name,
+                "--restart",
+                "unless-stopped",
+                "--init",
+                "--read-only",
+                "--no-healthcheck",
+                "--cap-drop",
+                "ALL",
+                "--security-opt",
+                "no-new-privileges",
+                "--pids-limit",
+                "256",
+                "--tmpfs",
+                "/tmp:rw,nosuid,noexec,size=64m",
+                "--user",
+                "10001:10001",
+                "--network",
+                app.network,
+                "--env-file",
+                app.environment_file,
+            ]
+            if app.hostname:
+                argv += ["--hostname", app.hostname]
+            for port in app.ports:
+                argv += ["--publish", f"127.0.0.1:{port.host}:{port.container}"]
+            for m in app.mounts:
+                argv += [
+                    "--mount",
+                    f"type=bind,src={m.source},dst={m.target}"
+                    + (",readonly" if m.read_only else ""),
+                ]
+            if app.output_directories:
+                from .outputs import TARGET, VARIABLE, check_directory
+
+                source = app.output_directories["yue2"]
+                check_directory(source, [d.path for d in app.directories] + [self.cfg.state_directory])
+                if source:
+                    argv += ["--mount", f"type=bind,src={source},dst={TARGET}"]
+                argv += ["--env", VARIABLE + "=" + (TARGET if source else "")]
+            if app.application_id == "flamoris-mcp-hub":
+                env = environment(protected_read(app.environment_file, private=True))
+                port = env.get("FLAMORIS_MCP_HUB_PORT", "8765")
+                if not port.isdecimal() or not 1 <= int(port) <= 65535:
+                    raise UpdateError("invalid_profile")
+                self.command(
+                    [
+                        *argv,
+                        app.image_id,
+                        "flamoris-mcp-hub",
+                        "--host",
+                        "127.0.0.1" if app.network == "host" else "0.0.0.0",
+                        "--port",
+                        port,
+                        "--mcp-path",
+                        "/mcp",
+                    ]
+                )
+            else:
+                self.command([*argv, app.image_id])
+        else:
+            from .diagnostics import effect
+
+            for unit in app.units:
+                effect(
+                    "unit.write",
+                    lambda: durable_write(
+                        self.unit_directory / unit.name,
+                        protected_read(unit.source.path),
+                        mode=0o644,
+                    ),
+                    {"unit": unit.name, "path": str(self.unit_directory / unit.name)},
+                )
+            self.command(["/usr/bin/systemctl", "daemon-reload"])
+            self.command(
+                [
+                    "/usr/bin/systemctl",
+                    "enable",
+                    *(["--now"] if start else []),
+                    *[u.name for u in app.units],
+                ]
+            )
+
+    def _verify_running(self, app):
+        if isinstance(app, DockerApplication):
+            observed = json.loads(
+                self.command(
+                    [
+                        "/usr/bin/docker",
+                        "container",
+                        "inspect",
+                        "--format",
+                        "{{json .}}",
+                        app.container_name,
+                    ]
+                )
+            )
+            if (
+                observed.get("Image") != app.image_id
+                or observed.get("State", {}).get("Running") is not True
+            ):
+                raise UpdateError("outcome_unknown")
+            if app.output_directories:
+                from .outputs import TARGET, VARIABLE
+
+                source = app.output_directories["yue2"]
+                mounts = [m for m in observed.get("Mounts", []) if m.get("Destination") == TARGET]
+                if (
+                    (source and (len(mounts) != 1 or mounts[0].get("Type") != "bind" or mounts[0].get("Source") != source or mounts[0].get("RW") is not True))
+                    or (not source and mounts)
+                    or VARIABLE + "=" + (TARGET if source else "") not in (observed.get("Config", {}).get("Env") or [])
+                ):
+                    raise UpdateError("outcome_unknown", "Configured output binding was not applied")
+        else:
+            for u in app.units:
+                if self.command(["/usr/bin/systemctl", "is-active", u.name]).strip() != b"active":
+                    raise UpdateError("outcome_unknown")
+
+    def apply(self, *, start=True):
+        directory = path(self.cfg.state_directory)
+        journal = Journal(directory)
+        binding = digest(dumps(self.cfg))
+        with exclusive(directory / "initial-install.lock"):
+            for app in self.cfg.applications:
+                previous = journal.get("initial_install", app.application_id)
+                if previous:
+                    raise UpdateError(
+                        "already_installed"
+                        if previous["phase"] == "succeeded"
+                        else "recovery_required"
+                    )
+            from .diagnostics import effect as recorded_effect
+
+            recorded_effect("installer.preflight", self.preflight)
+            record = {
+                "profile_digest": binding,
+                "phase": "accepted",
+                "application_id": None,
+                "step": None,
             }
-            if application in {"flamoris-ai-agent", "flamoris-studio"}
-            else {},
-        )
-        job = e.manager.start("install", args)
-        compiled = e.manager._profile(built, job["job_id"])
-        assert compiled.applications[0].application_id == application
-        e.manager.persist("managed_job", job["job_id"], {**job, "phase": "succeeded"})
+
+            def persist():
+                with journal.transaction() as db:
+                    for app in self.cfg.applications:
+                        journal.put("initial_install", app.application_id, record, db)
+                    journal.event(db, "initial_install", binding, record["phase"])
+                journal.flush_export()
+
+            persist()
+            try:
+                for app in self.cfg.applications:
+                    steps = [("files", self._files), ("stage", self._stage)]
+                    if app.database:
+                        steps.append(("database", self._database_create))
+                    steps.append(
+                        ("start" if start else "provision", lambda a: self._start(a, start=start))
+                    )
+                    if start:
+                        steps += [("health", self.health), ("verify_running", self._verify_running)]
+                    for name, effect in steps:
+                        for f in inputs(app):
+                            f.verify()
+                        record.update(phase="intent", application_id=app.application_id, step=name)
+                        persist()
+                        from .diagnostics import effect as recorded_effect
+
+                        result = recorded_effect("installer." + name, lambda: effect(app))
+                        if name == "stage" and isinstance(
+                            result, (DockerApplication, NativeApplication)
+                        ):
+                            original = app
+                            app = result
+                            self.cfg = self.cfg.model_copy(
+                                update={
+                                    "applications": [
+                                        app if item == original else item
+                                        for item in self.cfg.applications
+                                    ]
+                                }
+                            )
+                        record["phase"] = "step_succeeded"
+                        persist()
+                record.update(
+                    phase="succeeded" if start else "awaiting_setup", application_id=None, step=None
+                )
+                persist()
+                return {
+                    "phase": record["phase"],
+                    "applications": [
+                        {"application_id": a.application_id, "release": a.release}
+                        for a in self.cfg.applications
+                    ],
+                    "backup_created": False,
+                }
+            except BaseException:
+                record["phase"] = "recovery_required"
+                persist()
+                raise
 
 
-def wheel(release):
-    buffer = io.BytesIO()
-    with zipfile.ZipFile(buffer, "w") as archive:
-        prefix = "flamoris_gpu_node_manager-" + release + ".dist-info/"
-        archive.writestr(
-            prefix + "METADATA",
-            "Metadata-Version: 2.1\nName: flamoris-gpu-node-manager\nVersion: " + release + "\n",
-        )
-        archive.writestr(
-            prefix + "WHEEL",
-            "Wheel-Version: 1.0\nGenerator: test\nRoot-Is-Purelib: true\nTag: py3-none-any\n",
-        )
-        archive.writestr(prefix + "RECORD", "")
-        archive.writestr(
-            prefix + "entry_points.txt", "[console_scripts]\ngpu-node-manager = fake_manager:main\n"
-        )
-        archive.writestr("fake_manager.py", "def main():\n    return None\n")
-    return buffer.getvalue()
+def configured(filename):
+    path(filename)
+    return Installer(decode(Configuration, protected_read(filename, private=True, root_only=True)))
 
-
-def test_native_real_offline_venvs_keep_runtime_profiles_and_only_one_previous(
-    tmp_path, monkeypatch
-):
-    app = "flamoris-gpu-node-manager"
-    releases = ["1.2.0", "1.3.0", "1.4.0"]
-    blobs = {release: wheel(release) for release in releases}
-    recipes = []
-    interpreter = tmp_path / "python312"
-    binary = str(Path(sys.executable).resolve())
-    interpreter.write_text(
-        "#!/usr/bin/python3\nimport os,sys\nos.execv("
-        + repr(binary)
-        + ",["
-        + repr(binary)
-        + ",*sys.argv[1:]])\n"
-    )
-    interpreter.chmod(0o755)
-    for release in releases:
-        filename = "flamoris_gpu_node_manager-" + release + "-py3-none-any.whl"
-        built = build_recipe(
-            {
-                "application_id": app,
-                "release": release,
-                "platform": "linux/amd64",
-                "compatible_from": releases[: releases.index(release)],
-                "files": {filename: digest(blobs[release])},
-            },
-            "https://releases.example.invalid/" + release,
-        )
-        spec = built.application.copy()
-        spec["python"] = str(interpreter)
-        recipes.append(built.model_copy(update={"application": spec}))
-    catalog = Catalog(catalog_version=1, recipes=recipes)
-
-    def http(request):
-        if request.url.path == "/catalog.json":
-            return httpx.Response(200, content=dumps(catalog))
-        return httpx.Response(200, content=blobs[request.url.path.split("/")[1]])
-
-    units = tmp_path / "units"
-    units.mkdir()
-    active = set()
-
-    def installer(cfg):
-        def command(argv, timeout=300):
-            if argv[0] == "/usr/bin/systemctl":
-                if argv[1] in {"start", "enable"} and (argv[1] == "start" or "--now" in argv):
-                    active.update(u.name for u in cfg.applications[0].units)
-                if argv[1] == "stop":
-                    active.clear()
-                if argv[1] == "is-active":
-                    return b"active" if argv[2] in active else b"inactive"
-                return b""
-            return subprocess.check_output(argv, stderr=subprocess.DEVNULL, timeout=timeout)
-
-        return Installer(cfg, command=command, health=lambda _: None, unit_directory=str(units))
-
-    monkeypatch.setattr("platform.machine", lambda: "x86_64")
-    manager = Manager(
-        tmp_path / "manager",
-        tmp_path / "apps",
-        installer=installer,
-        client=httpx.Client(transport=httpx.MockTransport(http)),
-    )
-    manager.configure("https://releases.example.invalid/catalog.json")
-    job = manager.start(
-        "install", Start(application_id=app, release=releases[0], request_key="native")
-    )
-    manager.run_job(job["job_id"])
-    assert manager.journal.get("managed_job", job["job_id"])["phase"] == "awaiting_setup", (
-        manager.journal.get("managed_job", job["job_id"])
-    )
-    assert not active
-    runtime = tmp_path / "apps" / app / "runtimes" / "operator.yaml"
-    runtime.write_text("operator-owned runtime settings")
-    manager.start_setup(app)
-    manager.complete(app)
-    for release in releases[1:]:
-        job = manager.start(
-            "update", Start(application_id=app, release=release, request_key=release)
-        )
-        manager.run_job(job["job_id"])
-        assert manager.journal.get("managed_job", job["job_id"])["phase"] == "succeeded"
-    directory = tmp_path / "apps" / app / "releases"
-    assert sorted(p.name for p in directory.iterdir()) == ["1.3.0", "1.4.0"]
-    assert "releases/1.4.0/bin/gpu-node-manager" in next(units.iterdir()).read_text()
-    manager.delete_previous(app)
-    assert sorted(p.name for p in directory.iterdir()) == ["1.4.0"]
-    assert runtime.read_text() == "operator-owned runtime settings"
-
-
-def read_all_logs(manager, job):
-    items, after = [], 0
-    while True:
-        page = manager.invoke(
-            "updater_managed_log_get",
-            {"application_id": APP, "job_id": job["job_id"], "after": after, "limit": 10},
-        )
-        items.extend(page["items"])
-        if not page["has_more"]:
-            return items
-        after = page["next_after"]
-
-
-def test_diagnostics_cover_install_setup_failed_update_and_layout(managed):
-    e = managed
-    e.manager.configure("https://releases.example.invalid/catalog.json")
-    first = install(e)
-    e.manager.start_setup(APP)
-    e.manager.complete(APP)
-    initial = read_all_logs(e.manager, first)
-    assert {
-        "installer.files",
-        "installer.stage",
-        "installer.provision",
-        "setup.health",
-        "setup.verify_running",
-    } <= {r["operation"] for r in initial}
-    assert any(r["operation"] == "docker.start" and r["outcome"] == "completed" for r in initial)
-    e.fail["health"] = True
-    failed = update(e, "1.1.0")
-    timeline = read_all_logs(e.manager, failed)
-    assert any(r["operation"] == "switch" and r["outcome"] == "completed" for r in timeline)
-    assert any(r["operation"] == "health" and r["outcome"] == "failed" for r in timeline)
-    assert failed["failure"]["error"] == "outcome_unknown"
-    layout = e.manager.invoke(
-        "updater_managed_layout_get", {"application_id": APP, "job_id": failed["job_id"]}
-    )
-    assert layout["live_state"] is False
-    assert layout["current"]["release"] == "1.0.0"
-    assert layout["candidate"]["release"] == "1.1.0"
-    assert layout["candidate"]["previous_layout"]["release"] == "1.0.0"
-    assert layout["current"]["configuration"][0]["path"].endswith("config/runtime.env")
-    assert layout["current"]["mounts"][0]["source"].endswith("data")
-    assert b"keep-private-value" not in dumps(layout)
-    assert b"keep-private-value" not in dumps(timeline)
-    assert b"private diagnostic" not in dumps(timeline)
-    for p in (e.tmp / "manager/diagnostics").glob("job-*"):
-        assert b"keep-private-value" not in p.read_bytes()
-    with pytest.raises(UpdateError) as mismatch:
-        e.manager.invoke(
-            "updater_managed_log_get",
-            {"application_id": "flamoris-studio", "job_id": failed["job_id"]},
-        )
-    assert mismatch.value.code == "invalid_input"
-
-
-def test_mcp_reads_evidence_without_an_integration_key(managed):
-    e = managed
-    e.manager.configure("https://releases.example.invalid/catalog.json")
-    job = install(e)
-    c = coordinator(e)
-    with TestClient(create_app(c, ORIGIN, run_worker=False), base_url=ORIGIN) as client:
-        response = mcp_call(
-            client,
-            "",
-            "tools/call",
-            {
-                "name": "updater_managed_log_get",
-                "arguments": {"application_id": APP, "job_id": job["job_id"]},
-            },
-        )
-        assert response.status_code == 200
-        assert not response.json()["result"]["isError"]
-
-
-def test_interrupted_intent_keeps_timeline_and_is_not_replayed(managed):
-    from flamoris_updater_adapters.diagnostics import event, recording
-
-    e = managed
-    e.manager.configure("https://releases.example.invalid/catalog.json")
-    job = e.manager.start(
-        "install",
-        Start(
-            application_id=APP,
-            release="1.0.0",
-            request_key="interrupted-log",
-            settings={"TOKEN": "keep-private-value"},
-        ),
-    )
-    with recording(e.manager.journal, job["job_id"]):
-        event("switch", "intent")
-    job.update(phase="intent", step="switch")
-    e.manager.persist("managed_job", job["job_id"], job)
-    e.manager.stopping.set()
-    e.manager.worker()
-    assert not e.calls
-    record = e.manager.journal.get("managed_job", job["job_id"])
-    assert record["failure"]["kind"] == "interrupted"
-    entries = read_all_logs(e.manager, job)
-    assert entries[0]["outcome"] == "intent"
-    assert entries[1]["operation"] == "job.interrupted" and entries[1]["outcome"] == "unknown"
-
-
-def test_prefixed_catalog_screen_and_mcp_without_first_setup(managed):
-    c = coordinator(managed)
-    with TestClient(
-        create_app(c, ORIGIN, run_worker=False, base_path="/updater"), base_url=ORIGIN
-    ) as client:
-        assert "リポジトリのカタログ" in client.get("/updater/").text
-        for asset in ["managed.js", "style.css"]:
-            assert client.get("/updater/static/" + asset).status_code == 200
-        assert (
-            client.post(
-                "/updater/api/v1/tools/updater_catalog_add",
-                json={"url": "https://releases.example.invalid/catalog.json"},
-            ).status_code
-            == 200
-        )
-        assert mcp_call(client, "", "tools/list", path="/updater/mcp").status_code == 200
-        assert client.get("/api/v1/tools/updater_apps_list").status_code == 404
-
-
-def test_repository_catalogs_refresh_independently_without_payload_copy(managed):
-    e = managed
-    second = "example-private-manager"
-    sources = {
-        "https://github.com/example/generation/releases/latest/download/catalog.json": {
-            "catalog_version": 1,
-            "recipes": [recipe()],
-        },
-        "https://catalog.example.invalid/private/catalog.json": {
-            "catalog_version": 1,
-            "recipes": [recipe(application=second)],
-        },
-    }
-    requested = []
-
-    def respond(request):
-        url = str(request.url)
-        requested.append(url)
-        return (
-            httpx.Response(200, content=dumps(sources[url]))
-            if url in sources
-            else httpx.Response(200, content=b"image")
-        )
-
-    e.manager.client = httpx.Client(transport=httpx.MockTransport(respond))
-    urls = list(sources)
-    for url in urls:
-        e.manager.invoke("updater_catalog_add", {"url": url})
-    assert e.manager.sources() == urls
-    assert all(url in sources for url in requested)  # Catalog registration downloads no payload.
-    apps = e.manager.invoke("updater_apps_list", {})["items"]
-    assert {app["application_id"] for app in apps} == {APP, second}
-    install(e)
-    e.manager.start_setup(APP)
-    e.manager.complete(APP)
-    install(e, second)
-    e.manager.start_setup(second)
-    e.manager.complete(second)
-    sources[urls[0]]["recipes"].append(recipe("1.1.0"))
-    e.manager.invoke("updater_apps_list", {"refresh": True})
-    assert update(e, "1.1.0")["phase"] == "succeeded"
-    assert e.manager.journal.get("managed_app", second)["release"] == "1.0.0"
-    e.manager.invoke("updater_catalog_remove", {"url": urls[1]})
-    assert e.manager.sources() == urls[:1]
-    app = next(
-        a
-        for a in e.manager.invoke("updater_apps_list", {})["items"]
-        if a["application_id"] == second
-    )
-    assert app["installation"]["phase"] == "succeeded" and app["releases"] == []
-    assert second in e.containers
-
-
-def test_catalog_conflict_and_failed_refresh_leave_existing_sources_intact(managed):
-    e = managed
-    e.manager.configure("https://releases.example.invalid/catalog.json")
-    original = e.manager.catalog()
-    changed = recipe()
-    changed["downloads"]["image.tar"]["digest"] = digest(b"changed")
-    e.manager.client = httpx.Client(
-        transport=httpx.MockTransport(
-            lambda request: httpx.Response(
-                200, content=dumps({"catalog_version": 1, "recipes": [changed]})
-            )
-        )
-    )
-    with pytest.raises(UpdateError):
-        e.manager.configure("https://another.example.invalid/catalog.json")
-    assert e.manager.sources() == ["https://releases.example.invalid/catalog.json"]
-    assert e.manager.catalog() == original
-    assert e.manager.catalog(refresh=True) == original
-    assert e.manager.catalog_errors
-    assert e.manager.catalog() == original
-
-
-def test_legacy_single_catalog_record_still_loads_without_web_account(managed):
-    e = managed
-    e.manager.configure("https://releases.example.invalid/catalog.json")
-    with e.manager.journal.transaction() as db:
-        e.manager.journal.put(
-            "manager_config", "source", {"url": "https://releases.example.invalid/catalog.json"}, db
-        )
-    c = coordinator(e)
-    assert c.managed_invoke("local", "updater_apps_list", {})["items"]
-    assert e.manager.catalog(refresh=True).recipes
-
-
-def test_one_offline_repository_does_not_block_another_refresh_or_catalog_removal(managed):
-    e = managed
-    first = "https://first.example.invalid/catalog.json"
-    second = "https://second.example.invalid/catalog.json"
-    catalogs = {
-        first: {"catalog_version": 1, "recipes": [recipe()]},
-        second: {"catalog_version": 1, "recipes": [recipe(application="example-other-app")]},
-    }
-    offline = set()
-
-    def respond(request):
-        url = str(request.url)
-        if url in offline:
-            return httpx.Response(503)
-        return httpx.Response(200, content=dumps(catalogs[url]))
-
-    e.manager.client = httpx.Client(transport=httpx.MockTransport(respond))
-    e.manager.configure(first)
-    offline.add(first)
-    # Registration needs only the newly selected repository, not every source online.
-    e.manager.configure(second)
-    catalogs[second]["recipes"].append(recipe("1.1.0", application="example-other-app"))
-    refreshed = e.manager.invoke("updater_apps_list", {"refresh": True})
-    assert refreshed["catalog_errors"] == [{"url": first, "error": "catalog_refresh_failed"}]
-    other = next(app for app in refreshed["items"] if app["application_id"] == "example-other-app")
-    assert [r["release"] for r in other["releases"]] == ["1.0.0", "1.1.0"]
-    offline.add(second)
-    e.manager.remove_source(first)
-    assert e.manager.sources() == [second]
-
-
-@pytest.mark.parametrize("token", [None, "", "x" * 40, "bad token"])
-def test_optional_studio_tokens_allow_empty_but_validate_supplied_values(managed, token):
-    e = managed
-    candidate = recipe(application="flamoris-studio")
-    candidate["settings"] = [
-        {"key": key, "label": key, "secret": True, "kind": "url_password"}
-        for key in ["GENERATION_TOKEN", "AGENT_TOKEN"]
-    ]
-    e.catalog["recipes"] = [candidate]
-    e.manager.configure("https://releases.example.invalid/catalog.json")
-    args = Start(
-        application_id="flamoris-studio",
-        release="1.0.0",
-        request_key="optional-tokens",
-        settings={} if token is None else {"GENERATION_TOKEN": token, "AGENT_TOKEN": token},
-    )
-    if token == "bad token":
-        with pytest.raises(UpdateError) as error:
-            e.manager.start("install", args)
-        assert error.value.code == "invalid_input"
-        return
-    job = e.manager.start("install", args)
-    assert job["phase"] == "accepted"
-    stored = loads((e.manager.state / "settings/flamoris-studio/values.json").read_bytes())
-    assert stored == {"GENERATION_TOKEN": token or "", "AGENT_TOKEN": token or ""}
-
-
-@pytest.mark.parametrize("declared_before", [False, True])
-def test_component_version_update_retains_runtime_bindings_and_operator_bytes(
-    managed, declared_before
-):
-    e = managed
-    if declared_before:
-        e.catalog["recipes"][0]["application"]["components"] = {
-            "flamoris-generation-controller": "1.0.0"
-        }
-    e.catalog["recipes"][1]["application"]["components"] = {
-        "flamoris-generation-controller": "1.0.1"
-    }
-    e.manager.configure("https://releases.example.invalid/catalog.json")
-    install(e)
-    e.manager.start_setup(APP)
-    e.manager.complete(APP)
-    old = e.manager.journal.get("managed_app", APP)["profile"]
-    env = e.tmp / "apps" / APP / "config/runtime.env"
-    env.write_bytes(env.read_bytes() + b"OPERATOR_SETTING=retained\\n")
-    retained = env.read_bytes()
-    assert update(e, "1.1.0")["phase"] == "succeeded"
-    new = e.manager.journal.get("managed_app", APP)["profile"]
-    assert new["components"] == {"flamoris-generation-controller": "1.0.1"}
-    assert new["mounts"] == old["mounts"]
-    assert new["environment_file"] == old["environment_file"]
-    assert env.read_bytes() == retained
-
-
-def test_component_upgrade_does_not_permit_mount_changes(managed):
-    e = managed
-    e.catalog["recipes"][1]["application"]["components"] = {
-        "flamoris-generation-controller": "1.0.1"
-    }
-    e.catalog["recipes"][1]["application"]["mounts"][0]["target"] = "/other"
-    e.manager.configure("https://releases.example.invalid/catalog.json")
-    install(e)
-    e.manager.start_setup(APP)
-    e.manager.complete(APP)
-    calls = len(e.calls)
-    result = update(e, "1.1.0")
-    assert result["error"] == "invalid_profile"
-    assert e.manager.journal.get("managed_app", APP)["release"] == "1.0.0"
-    assert not any(call[1] in {"stop", "rename", "run", "create"} for call in e.calls[calls:])

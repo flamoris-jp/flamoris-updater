@@ -75,3 +75,4 @@ def create_mcp(coordinator, origin):
             await manager.handle_request(scope, receive, send)
 
     return Endpoint(), manager
+

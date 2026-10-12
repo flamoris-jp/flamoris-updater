@@ -1,0 +1,22 @@
+name: Temporary formatting evidence
+on: pull_request
+permissions:
+  contents: read
+jobs:
+  format:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install --constraint requirements-runtime.lock -e '.[dev]'
+      - run: ruff check --fix src tests scripts
+      - run: ruff format src tests scripts
+      - run: |
+          python - <<'PY'
+          import json, pathlib, subprocess
+          names = subprocess.check_output(['git','diff','--name-only']).decode().splitlines()
+          print('FORMAT_RESULT=' + json.dumps({p:pathlib.Path(p).read_text() for p in names}))
+          PY
+      - run: sudo "$(command -v python)" -m pytest -q tests/test_managed.py tests/test_outputs.py
