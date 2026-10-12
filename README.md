@@ -13,6 +13,8 @@
 
 ## Install and update
 
+各アプリの入力値と、導入後のサービス・接続設定は[共通設定ガイド](docs/APPLICATION_SETUP.md)から確認できます。tokenやDB接続値の用途・取得元・空欄で生成される値・相手と同じ値を使う項目を分けて案内しています。
+
 AIと利用者向けに、[Updater自身の初回インストール](docs/DISTRIBUTION.md)と[Updater自身のアップデート](docs/SELF_UPDATE.md)を分けて案内しています。導入済み環境ではbootstrapを再実行せず、既存画面・CLIから自己更新します。
 
 Linux/systemd、Python 3.12とレビュー済みのUpdaterパッケージが必要です。
