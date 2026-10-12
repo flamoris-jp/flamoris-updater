@@ -1,0 +1,18 @@
+{
+  "format_version": 1,
+  "application_id": "flamoris-updater",
+  "release": "1.0.10",
+  "entries": [
+    {
+      "category": "fix",
+      "summary": "Allow checked embedded component versions to change during managed Docker updates while preserving runtime bindings",
+      "affected": [
+        "updates",
+        "catalogs"
+      ],
+      "breaking": false
+    }
+  ],
+  "restart_required": true,
+  "recovery_conditions": "Preserve settings, data and Jobs; unknown outcomes must be reconciled before retry."
+}

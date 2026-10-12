@@ -25,13 +25,13 @@
 - 後でDockerアプリを導入する場合はDocker、Agent／Studioを導入する場合は到達可能なPostgreSQLを別途用意します。Updaterだけのbootstrapに、それらのアプリ設定は不要です。
 
 まず[公開Release](https://github.com/flamoris-jp/flamoris-updater/releases)で導入する版と対応CPUのNative archiveを確認します。
-以下は**公開済み1.0.9を固定して導入する例**です。将来の版では、そのReleaseの配布物・手順を確認して選定版を変更します。
+以下は**公開済み1.0.10を固定して導入する例**です。将来の版では、そのReleaseの配布物・手順を確認して選定版を変更します。
 wheelやソースを本番でビルドする手順ではありません。
 
-1.0.9 Release添付の `INSTALL-v1.0.9.md` には旧1.0.8の固定例が残っています。1.0.9の初回導入には、本書の `release=1.0.9` と1.0.9 Releaseの対応CPU archiveを使います。導入済み環境は自己更新手順へ進みます。
+1.0.10 Release添付の `INSTALL-v1.0.10.md` には旧1.0.8の固定例が残っています。1.0.10の初回導入には、本書の `release=1.0.10` と1.0.10 Releaseの対応CPU archiveを使います。導入済み環境は自己更新手順へ進みます。
 
 事前に作業ディレクトリ、未使用の本体配置先、アプリ配置先、公開URLが必要かを確認します。
-以下の /opt/flamoris-updater/1.0.9 は検証済み配布物の展開先です。ソースリポジトリを/optへcloneしません。
+以下の /opt/flamoris-updater/1.0.10 は検証済み配布物の展開先です。ソースリポジトリを/optへcloneしません。
 
 ## 2. 配布物を取得・検証する
 
@@ -39,7 +39,7 @@ wheelやソースを本番でビルドする手順ではありません。
 
 ```bash
 set -euo pipefail
-release=1.0.9
+release=1.0.10
 case "$(uname -m)" in
   x86_64) platform=linux-amd64 ;;
   aarch64) platform=linux-arm64 ;;
@@ -121,7 +121,7 @@ Updater自身はproxy・証明書・トンネルを設定しません。
 3. 必要なアプリの配布元カタログを[カタログ一覧](../catalogs/README.md)から登録する。
 4. 画面の更新ボタンで配布元を確認し、表示された現在版・利用可能な版を確認する。
 
-**1.0.9ではカタログの自動登録・初回表示時の外部再取得は未実装です。**
+**1.0.10ではカタログの自動登録・初回表示時の外部再取得は未実装です。**
 登録URLは保存されますが、初回表示は保存済み情報で、更新ボタンが登録済みURLを再取得します。
 自動確認・表示は[#37](https://github.com/flamoris-jp/flamoris-updater/issues/37)で追跡します。
 

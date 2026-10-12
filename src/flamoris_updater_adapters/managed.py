@@ -881,7 +881,7 @@ class Manager:
                     old = decode(type(app), dumps(installed["profile"]))
                     # Mutable paths/security/mounts/units remain exactly the recorded installation.
                     if isinstance(app, DockerApplication):
-                        changed = {"release", "image_id", "image_archive", "database"}
+                        changed = {"release", "image_id", "image_archive", "database", "components"}
                         if app.model_dump(exclude=changed | {"files"}) != old.model_dump(
                             exclude=changed | {"files"}
                         ):
