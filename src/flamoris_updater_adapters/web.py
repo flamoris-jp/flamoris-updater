@@ -80,8 +80,19 @@ def create_app(coordinator, origin, run_worker=True, *, base_path=""):
     mcp, manager = create_mcp(coordinator, origin)
 
     async def index(request):
+        boundary = await asyncio.to_thread(
+            coordinator.managed_invoke, "local", "updater_history_begin", {}
+        )
         return HTMLResponse(
-            (static / "managed.html").read_text().replace("__UPDATER_BASE_PATH__", base_path)
+            (static / "managed.html")
+            .read_text()
+            .replace("__UPDATER_BASE_PATH__", base_path)
+            .replace("__HISTORY_BOUNDARY__", str(boundary["after_sequence"]))
+        )
+
+    async def jobs(request):
+        return HTMLResponse(
+            (static / "jobs.html").read_text().replace("__UPDATER_BASE_PATH__", base_path)
         )
 
     async def invoke(request):
@@ -135,6 +146,7 @@ def create_app(coordinator, origin, run_worker=True, *, base_path=""):
     app = Starlette(
         routes=[
             Route("/", index),
+            Route("/jobs", jobs),
             Route("/health", health),
             Route("/api/v1/tools/{name}", invoke, methods=["POST"]),
             Mount("/static", StaticFiles(directory=static)),

@@ -1,0 +1,29 @@
+{
+  "format_version": 1,
+  "application_id": "flamoris-updater",
+  "release": "1.0.13",
+  "entries": [
+    {
+      "category": "feature",
+      "summary": "Collapse catalog management and refresh verified release origins once per opening",
+      "affected": [
+        "web",
+        "catalogs"
+      ],
+      "breaking": false
+    },
+    {
+      "category": "feature",
+      "summary": "Show Jobs from this opening and search durable history by application and creation period",
+      "affected": [
+        "web",
+        "mcp",
+        "cli",
+        "history"
+      ],
+      "breaking": false
+    }
+  ],
+  "restart_required": true,
+  "recovery_conditions": "Existing v1 supervisor/journal remain compatible. Unknown Job outcomes are retained and never replayed. Explicit catalog removals remain suppressed until manual re-registration."
+}
