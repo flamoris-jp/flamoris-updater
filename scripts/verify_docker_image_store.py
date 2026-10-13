@@ -127,6 +127,73 @@ def main():
             print(
                 "Published Generation 1.0.4: configure/disable, UID write, SGID and private settings preservation verified"
             )
+            manager.configure(
+                "https://github.com/flamoris-jp/flamoris-generation-mcp/releases/download/v1.0.6/catalog.json"
+            )
+            upgrade = manager.start(
+                "update",
+                Start(
+                    application_id="flamoris-generation-mcp",
+                    release="1.0.6",
+                    request_key="reference-version-ci",
+                ),
+            )
+            manager.run_job(upgrade["job_id"])
+            assert manager.journal.get("managed_job", upgrade["job_id"])["phase"] == "succeeded"
+            inputs = root / "comfy-input"
+            inputs.mkdir()
+            os.chown(inputs, 10001, 1001)
+            os.chmod(inputs, 0o2755)
+            configured = manager.invoke(
+                "updater_outputs_configure",
+                {
+                    "application_id": "flamoris-generation-mcp",
+                    "request_key": "reference-directory-ci",
+                    "directories": {"comfyui": str(inputs)},
+                },
+            )
+            manager.run_job(configured["job_id"])
+            result = manager.journal.get("managed_job", configured["job_id"])
+            assert result["phase"] == "succeeded", result.get("failure")
+            run(
+                [
+                    "/usr/bin/docker",
+                    "exec",
+                    "flamoris-generation-mcp",
+                    "python",
+                    "-c",
+                    "import os,pathlib; p=pathlib.Path('/data/comfyui-input/test.txt'); "
+                    "p.write_text('reference-input'); "
+                    "assert os.environ['FLAMORIS_COMFYUI_INPUT_ROOT']=='/data/comfyui-input'",
+                ]
+            )
+            assert (inputs / "test.txt").read_text() == "reference-input"
+            assert env.read_bytes() == before
+            disabled = manager.invoke(
+                "updater_outputs_configure",
+                {
+                    "application_id": "flamoris-generation-mcp",
+                    "request_key": "disable-reference-ci",
+                    "directories": {"comfyui": ""},
+                },
+            )
+            manager.run_job(disabled["job_id"])
+            result = manager.journal.get("managed_job", disabled["job_id"])
+            assert result["phase"] == "succeeded", result.get("failure")
+            run(
+                [
+                    "/usr/bin/docker",
+                    "exec",
+                    "flamoris-generation-mcp",
+                    "python",
+                    "-c",
+                    "import os; assert os.environ.get('FLAMORIS_COMFYUI_INPUT_ROOT') is None",
+                ]
+            )
+            assert (inputs / "test.txt").read_text() == "reference-input"
+            assert (media / "test.txt").read_text() == "operator-copy"
+            assert env.read_bytes() == before
+            print("Published Generation 1.0.6: shared input bind/write/disable verified")
         finally:
             names = run(["/usr/bin/docker", "container", "ls", "--all", "--format", "{{.Names}}"])
             if "flamoris-generation-mcp" in names.decode().splitlines():

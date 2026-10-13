@@ -192,6 +192,7 @@ class DockerApplication(Application):
     ports: list[Port] = Field(default_factory=list, max_length=16)
     mounts: list[Mount] = Field(default_factory=list, max_length=64)
     output_directories: dict[Literal["yue2"], str] = Field(default_factory=dict, max_length=1)
+    input_directories: dict[Literal["comfyui"], str] = Field(default_factory=dict, max_length=1)
     hostname: Name | None = None
     components: dict[ComponentId, ComponentVersion] | None = Field(
         default=None, min_length=1, max_length=16
@@ -211,6 +212,19 @@ class DockerApplication(Application):
                 for m in self.mounts
             ):
                 raise ValueError("Media binding overlaps a retained mount")
+        if self.input_directories:
+            from .outputs import INPUT_TARGET, directory_syntax, supported_inputs
+
+            if not supported_inputs(self):
+                raise ValueError("Image has no supported shared reference input binding")
+            for source in self.input_directories.values():
+                directory_syntax(source)
+            if any(
+                Path(m.target).is_relative_to(INPUT_TARGET)
+                or Path(INPUT_TARGET).is_relative_to(m.target)
+                for m in self.mounts
+            ):
+                raise ValueError("Shared input binding overlaps a retained mount")
         if self.components is not None:
             for release in self.components.values():
                 version(release)
@@ -781,22 +795,7 @@ class Installer:
                     {"file": f.path, "digest": f.digest},
                 )
         if db.studio_migration_environment:
-            self.command(
-                [
-                    "/usr/bin/docker",
-                    "run",
-                    "--rm",
-                    "--network",
-                    "host",
-                    "--env-file",
-                    db.studio_migration_environment.path,
-                    app.image_id,
-                    "alembic",
-                    "upgrade",
-                    "head",
-                ],
-                timeout=300,
-            )
+            self._database_migrate(app)
         with self.connect(db, db.name) as conn:
             schemas = (
                 ["public"]
@@ -836,6 +835,31 @@ class Installer:
                             sql.Identifier(db.runtime_role),
                         )
                     )
+
+    def _database_migrate(self, app):
+        """Dispatch the Studio image's declared Alembic command; Studio owns its schema."""
+        if app.application_id != "flamoris-studio" or not app.database:
+            return
+        source = app.database.studio_migration_environment
+        if source is None:
+            raise UpdateError("invalid_profile", "Studio migration environment is required")
+        source.verify()
+        self.command(
+            [
+                "/usr/bin/docker",
+                "run",
+                "--rm",
+                "--network",
+                "host",
+                "--env-file",
+                source.path,
+                app.image_id,
+                "alembic",
+                "upgrade",
+                "head",
+            ],
+            timeout=300,
+        )
 
     def _files(self, app):
         from .diagnostics import effect
@@ -1020,6 +1044,16 @@ class Installer:
                 if source:
                     argv += ["--mount", f"type=bind,src={source},dst={TARGET}"]
                 argv += ["--env", VARIABLE + "=" + (TARGET if source else "")]
+            if app.input_directories:
+                from .outputs import INPUT_TARGET, INPUT_VARIABLE, check_directory
+
+                source = app.input_directories["comfyui"]
+                check_directory(
+                    source, [d.path for d in app.directories] + [self.cfg.state_directory]
+                )
+                if source:
+                    argv += ["--mount", f"type=bind,src={source},dst={INPUT_TARGET}"]
+                argv += ["--env", INPUT_VARIABLE + "=" + INPUT_TARGET if source else INPUT_VARIABLE]
             if app.application_id == "flamoris-mcp-hub":
                 env = environment(protected_read(app.environment_file, private=True))
                 port = env.get("FLAMORIS_MCP_HUB_PORT", "8765")
@@ -1103,6 +1137,40 @@ class Installer:
                 ):
                     raise UpdateError(
                         "outcome_unknown", "Configured output binding was not applied"
+                    )
+            if app.input_directories:
+                from .outputs import INPUT_TARGET, INPUT_VARIABLE
+
+                source = app.input_directories["comfyui"]
+                mounts = [
+                    m for m in observed.get("Mounts", []) if m.get("Destination") == INPUT_TARGET
+                ]
+                if (
+                    (
+                        source
+                        and (
+                            len(mounts) != 1
+                            or mounts[0].get("Type") != "bind"
+                            or mounts[0].get("Source") != source
+                            or mounts[0].get("RW") is not True
+                        )
+                    )
+                    or (not source and mounts)
+                    or (
+                        source
+                        and INPUT_VARIABLE + "=" + INPUT_TARGET
+                        not in (observed.get("Config", {}).get("Env") or [])
+                    )
+                    or (
+                        not source
+                        and any(
+                            value.startswith(INPUT_VARIABLE + "=")
+                            for value in observed.get("Config", {}).get("Env") or []
+                        )
+                    )
+                ):
+                    raise UpdateError(
+                        "outcome_unknown", "Configured shared input binding was not applied"
                     )
         else:
             for u in app.units:

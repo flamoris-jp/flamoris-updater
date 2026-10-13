@@ -24,6 +24,7 @@ let hostname = "node-a";
 let phase = "awaiting_setup";
 let outputInstalled = false;
 let outputDirectory = "";
+let inputDirectory = "";
 let selfPhase = null;
 let version = "1.0.8";
 const runtime = "/var/lib/flamoris-updater/releases/" + "a".repeat(64);
@@ -49,7 +50,7 @@ await context.route("https://updater.example.invalid/**", async route => {
   if (name === "health") return json({hostname, version, runtime_root:runtime + "/site-packages"});
   if (name === "updater_apps_list") return json({root:"/srv/flamoris/apps", catalog_errors:[], items:[
     {application_id:appID, installation:{release:"1.0.0", phase}, releases:[]},
-    ...(outputInstalled ? [{application_id:"flamoris-generation-mcp", installation:{release:"1.0.4", phase:"succeeded", profile:{components:{"flamoris-generation-controller":"1.0.1"}, output_directories:{yue2:outputDirectory}}}, releases:[]}] : []),
+    ...(outputInstalled ? [{application_id:"flamoris-generation-mcp", installation:{release:"1.0.4", phase:"succeeded", profile:{components:{"flamoris-generation-controller":"1.0.3"}, output_directories:{yue2:outputDirectory}, input_directories:{comfyui:inputDirectory}}}, releases:[]}] : []),
     {application_id:generationID, installation:null, releases:[{release:"1.0.2", compatible_from:[], settings:[{key:"CONTROLLER_TOKEN", label:"Controllerトークン", secret:true, default:"", required:false, generate:true}]}]}
   ]});
   if (name === "updater_managed_history") return json({items:selfPhase ? [{application_id:"flamoris-updater", release:"1.0.9", job_id:"job-" + "b".repeat(32), action:"self_update", phase:selfPhase}] : []});
@@ -65,7 +66,8 @@ await context.route("https://updater.example.invalid/**", async route => {
     return json({application_id:appID, phase});
   }
   if (name === "updater_outputs_configure") {
-    outputDirectory = input.directories.yue2;
+    if (Object.hasOwn(input.directories, "yue2")) outputDirectory = input.directories.yue2;
+    if (Object.hasOwn(input.directories, "comfyui")) inputDirectory = input.directories.comfyui;
     return json({job_id:"job-" + "c".repeat(32), phase:"accepted"});
   }
   if (name === "updater_self_update") {
@@ -90,6 +92,15 @@ try {
   assert.equal(outputCall.input.application_id, "flamoris-generation-mcp");
   assert.deepEqual(outputCall.input.directories, {yue2:"/srv/media/music"});
   assert.ok(outputCall.input.request_key);
+  const sharedInput = page.locator("input[name='comfyui_input_directory']");
+  await sharedInput.fill("/srv/media/comfy-input");
+  await page.waitForTimeout(3200);
+  assert.equal(await sharedInput.inputValue(), "/srv/media/comfy-input");
+  await page.getByRole("button", {name:"共有フォルダを保存", exact:true}).click();
+  await page.waitForFunction(() => document.getElementById("notice").textContent.includes("共有フォルダの接続を受け付けました"));
+  const inputCall = calls.find(c => c.name === "updater_outputs_configure" && Object.hasOwn(c.input.directories, "comfyui"));
+  assert.deepEqual(inputCall.input.directories, {comfyui:"/srv/media/comfy-input"});
+  assert.equal(outputDirectory, "/srv/media/music");
   outputInstalled = false;
   for (const prefix of ["", "/updater", "/tools/updater"]) {
     await page.goto("https://updater.example.invalid" + prefix + "/");
@@ -200,4 +211,3 @@ try {
   await context.close();
   await browser.close();
 }
-

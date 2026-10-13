@@ -267,18 +267,29 @@ def managed(tmp_path, monkeypatch):
                 containers[app.container_name] = {
                     "Image": app.image_id,
                     "State": {"Running": argv[1] == "run"},
-                    "Config": {"Env": [argv[i + 1] for i, a in enumerate(argv) if a == "--env"]},
+                    "Config": {
+                        "Env": [
+                            argv[i + 1]
+                            for i, a in enumerate(argv)
+                            if a == "--env" and "=" in argv[i + 1]
+                        ]
+                    },
                     "Mounts": [
                         {
                             "Type": "bind",
                             "Source": source,
-                            "Destination": "/data/music-output",
+                            "Destination": destination,
                             "RW": True,
                         }
-                        for source in [
-                            argv[i + 1].split(",src=", 1)[1].split(",dst=", 1)[0]
+                        for source, destination in [
+                            (
+                                argv[i + 1].split(",src=", 1)[1].split(",dst=", 1)[0],
+                                argv[i + 1].split(",dst=", 1)[1],
+                            )
                             for i, a in enumerate(argv)
-                            if a == "--mount" and argv[i + 1].endswith("dst=/data/music-output")
+                            if a == "--mount"
+                            and argv[i + 1].split(",dst=", 1)[1]
+                            in {"/data/music-output", "/data/comfyui-input"}
                         ]
                     ],
                 }

@@ -23,12 +23,14 @@ from flamoris_update_core.wire import decode, digest, dumps, version
 GENERATION = "flamoris-generation-mcp"
 TARGET = "/data/music-output"
 VARIABLE = "FLAMORIS_YUE2_OUTPUT_ROOT"
+INPUT_TARGET = "/data/comfyui-input"
+INPUT_VARIABLE = "FLAMORIS_COMFYUI_INPUT_ROOT"
 
 
 class ConfigureOutputs(Model):
     application_id: ID
     request_key: str = Field(min_length=1, max_length=128)
-    directories: dict[Literal["yue2"], str] = Field(min_length=1, max_length=1)
+    directories: dict[Literal["yue2", "comfyui"], str] = Field(min_length=1, max_length=2)
 
 
 def directory_syntax(value):
@@ -112,7 +114,14 @@ def candidate_profile(profile, directories):
 
     values = {
         **profile,
-        "output_directories": {**profile.get("output_directories", {}), **directories},
+        "output_directories": {
+            **profile.get("output_directories", {}),
+            **{k: v for k, v in directories.items() if k == "yue2"},
+        },
+        "input_directories": {
+            **profile.get("input_directories", {}),
+            **{k: v for k, v in directories.items() if k == "comfyui"},
+        },
     }
     return decode(DockerApplication, dumps(values))
 
@@ -123,12 +132,20 @@ def supported(app):
     ) >= version("1.0.1")
 
 
+def supported_inputs(app):
+    return app.application_id == GENERATION and version(
+        (app.components or {}).get("flamoris-generation-controller", "0.0.0")
+    ) >= version("1.0.3")
+
+
 def check_sources(manager, app):
-    protected = [manager.root, manager.state]
+    protected = [manager.root, manager.state, *(m.source for m in app.mounts)]
     if manager.self_configuration:
         protected.append(manager.self_configuration.state_directory)
-    for source in app.output_directories.values():
-        check_directory(source, protected)
+    sources = [*app.output_directories.values(), *app.input_directories.values()]
+    for index, source in enumerate(sources):
+        others = [value for i, value in enumerate(sources) if i != index and value]
+        check_directory(source, [*protected, *others])
 
 
 def idle(manager, app):
@@ -157,7 +174,7 @@ def idle(manager, app):
 
         health = loads(raw, 262144)
         if health.get("busy") is not False or health.get("active_job_id") is not None:
-            raise UpdateError("busy", "Finish generation before changing its output directory")
+            raise UpdateError("busy", "Finish generation before changing its media binding")
     except httpx.HTTPError:
         raise UpdateError("outcome_unknown", "Controller idle state unavailable") from None
 
