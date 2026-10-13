@@ -22,9 +22,17 @@ def test_studio_migration_verifies_private_input_and_dispatches_exact_image():
     assert calls[0] == "verify"
     assert calls[1] == (
         [
-            "/usr/bin/docker", "run", "--rm", "--network", "host",
-            "--env-file", "/private/migration.env", app.image_id,
-            "alembic", "upgrade", "head",
+            "/usr/bin/docker",
+            "run",
+            "--rm",
+            "--network",
+            "host",
+            "--env-file",
+            "/private/migration.env",
+            app.image_id,
+            "alembic",
+            "upgrade",
+            "head",
         ],
         {"timeout": 300},
     )
