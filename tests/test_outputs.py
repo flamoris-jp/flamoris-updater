@@ -17,10 +17,10 @@ managed = managed_fixture
 pytestmark = pytest.mark.skipif(os.geteuid() != 0, reason="Root filesystem CI")
 
 
-def setup(e, monkeypatch):
+def setup(e, monkeypatch, controller="1.0.1"):
     for recipe in e.catalog["recipes"]:
         recipe["application"]["mounts"][0]["target"] = "/data/private"
-        recipe["application"]["components"] = {"flamoris-generation-controller": "1.0.1"}
+        recipe["application"]["components"] = {"flamoris-generation-controller": controller}
     e.manager.configure("https://releases.example.invalid/catalog.json")
     installed = install(e)
     e.manager.start_setup(APP)
@@ -207,3 +207,90 @@ def test_idle_http_has_bounded_body_and_no_redirect(managed, monkeypatch):
     )
     with pytest.raises(UpdateError):
         idle(e.manager, app)
+
+
+def test_shared_input_retains_media_settings_across_update(managed, monkeypatch):
+    from flamoris_updater_adapters.managed import Manager, Start
+
+    e = managed
+    _, media, env = setup(e, monkeypatch, controller="1.0.3")
+    reference = e.tmp / "comfy-input"
+    reference.mkdir()
+    (reference / "original.png").write_bytes(b"original")
+    before = env.read_bytes()
+    job = e.manager.invoke(
+        "updater_outputs_configure",
+        {
+            "application_id": APP,
+            "request_key": "shared-reference",
+            "directories": {"comfyui": str(reference), "yue2": str(media)},
+        },
+    )
+    e.manager.run_job(job["job_id"])
+    outcome = e.manager.journal.get("managed_job", job["job_id"])
+    assert outcome["phase"] == "succeeded", outcome.get("error")
+    current = e.manager.journal.get("managed_app", APP)["profile"]
+    assert current["input_directories"] == {"comfyui": str(reference)}
+    assert current["output_directories"] == {"yue2": str(media)}
+    assert any("FLAMORIS_COMFYUI_INPUT_ROOT=/data/comfyui-input" in c for c in e.calls)
+    e.manager = Manager(
+        e.manager.state, e.manager.root, installer=e.manager.installer, client=e.manager.client
+    )
+    upgrade = e.manager.start(
+        "update", Start(application_id=APP, release="1.1.0", request_key="reference-update")
+    )
+    e.manager.run_job(upgrade["job_id"])
+    assert e.manager.journal.get("managed_job", upgrade["job_id"])["phase"] == "succeeded"
+    assert e.manager.journal.get("managed_app", APP)["profile"]["input_directories"] == {
+        "comfyui": str(reference)
+    }
+    disabled = e.manager.invoke(
+        "updater_outputs_configure",
+        {
+            "application_id": APP,
+            "request_key": "disable-reference",
+            "directories": {"comfyui": ""},
+        },
+    )
+    e.manager.run_job(disabled["job_id"])
+    assert e.manager.journal.get("managed_job", disabled["job_id"])["phase"] == "succeeded"
+    assert e.manager.journal.get("managed_app", APP)["profile"]["output_directories"] == {
+        "yue2": str(media)
+    }
+    assert (reference / "original.png").read_bytes() == b"original"
+    assert env.read_bytes() == before
+
+
+@pytest.mark.parametrize("controller", ["1.0.1", "1.0.2"])
+def test_reference_binding_rejects_older_controller_before_effect(
+    managed, monkeypatch, controller
+):
+    e = managed
+    _, media, _ = setup(e, monkeypatch, controller=controller)
+    calls = len(e.calls)
+    with pytest.raises((UpdateError, ValueError)):
+        e.manager.invoke(
+            "updater_outputs_configure",
+            {
+                "application_id": APP,
+                "request_key": "old-controller",
+                "directories": {"comfyui": str(media)},
+            },
+        )
+    assert len(e.calls) == calls
+
+
+def test_shared_input_cannot_overlap_media_or_model_storage(managed, monkeypatch):
+    e = managed
+    _, media, _ = setup(e, monkeypatch, controller="1.0.3")
+    calls = len(e.calls)
+    with pytest.raises(UpdateError):
+        e.manager.invoke(
+            "updater_outputs_configure",
+            {
+                "application_id": APP,
+                "request_key": "overlap-reference",
+                "directories": {"comfyui": str(media), "yue2": str(media)},
+            },
+        )
+    assert len(e.calls) == calls

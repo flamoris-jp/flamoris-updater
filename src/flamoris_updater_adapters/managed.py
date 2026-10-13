@@ -96,7 +96,7 @@ class Recipe(Model):
 
     @model_validator(mode="after")
     def identity(self):
-        if self.application.get("output_directories"):
+        if self.application.get("output_directories") or self.application.get("input_directories"):
             raise ValueError("Media directories belong to the operator, not release recipes")
         if self.application_id == SELF or version(self.release) < version(
             VERSIONS.get(self.application_id, "0.0.0")
@@ -163,7 +163,7 @@ class CatalogSource(Model):
 MANAGED_TOOLS = {
     "updater_outputs_configure": (
         ConfigureOutputs,
-        "Configure an existing YuE2 media directory, preserving it across updates",
+        "Configure known Generation media and shared-input directories across updates",
         "execute",
     ),
     "updater_catalogs_list": (Model, "Registered repository catalogs", "read"),
@@ -905,6 +905,7 @@ class Manager:
                             "database",
                             "components",
                             "output_directories",
+                            "input_directories",
                         }
                         if app.model_dump(exclude=changed | {"files"}) != old.model_dump(
                             exclude=changed | {"files"}
@@ -921,6 +922,7 @@ class Manager:
                                     "files": [f.model_dump() for f in old.files],
                                     "database": old.database.model_dump() if old.database else None,
                                     "output_directories": old.output_directories,
+                                    "input_directories": old.input_directories,
                                 }
                             ),
                         )

@@ -144,6 +144,26 @@ function renderApplication(app) {
       }, "受付中…");
     });
   }
+  if (installed?.phase === "succeeded" && app.application_id === "flamoris-generation-mcp" && installed.profile?.components?.["flamoris-generation-controller"] && !newer("1.0.3", installed.profile.components["flamoris-generation-controller"])) {
+    const inputForm = element("form", undefined, card);
+    const label = element("label", "参照画像の共有フォルダ", inputForm);
+    const input = element("input", undefined, label);
+    input.name = "comfyui_input_directory";
+    input.type = "text";
+    input.maxLength = 4096;
+    input.value = installed.profile.input_directories?.comfyui || "";
+    input.placeholder = "ComfyUIで設定済みの入力フォルダの絶対パス";
+    element("small", "ComfyUIと同じ既存フォルダを指定してください。空欄で接続を解除します。画像は削除しません。", label).className = "hint";
+    const save = element("button", "共有フォルダを保存", inputForm);
+    save.type = "submit";
+    inputForm.addEventListener("submit", event => {
+      event.preventDefault();
+      runAction(save, async () => {
+        const result = await tool("updater_outputs_configure", {application_id:app.application_id, request_key:crypto.randomUUID(), directories:{comfyui:input.value}});
+        showNotice("共有フォルダの接続を受け付けました。ジョブ: " + result.job_id);
+      }, "受付中…");
+    });
+  }
   const choices = app.releases.filter(r => !installed || (newer(r.release, installed.release) && r.compatible_from.includes(installed.release)));
   if (!choices.length) {
     element("p", installed ? "現在利用できる互換更新はありません。" : "インストール可能なリリースがありません。", card);
@@ -306,4 +326,3 @@ async function poll(releases = false) {
 $("refresh").addEventListener("click", () => poll(true));
 poll();
 setInterval(() => poll(), 3000);
-

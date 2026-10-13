@@ -143,7 +143,7 @@ jobs:
       - run: python -m build --wheel
       - run: |
           python -m pip download --only-binary=:all: --constraint requirements-runtime.lock --dest dist/wheels dist/*.whl
-      - run: python scripts/build_bundle.py --wheelhouse dist/wheels --output dist/native --platform '${{ matrix.platform }}' --version 1.0.11 --python-executable /usr/bin/python3.12
+      - run: python scripts/build_bundle.py --wheelhouse dist/wheels --output dist/native --platform '${{ matrix.platform }}' --version 1.0.12 --python-executable /usr/bin/python3.12
       - run: python -m pip install dist/*.whl
       - name: Verify bundle and identity as user and root
         run: |
@@ -154,3 +154,59 @@ jobs:
           name: native-${{ matrix.runner }}
           path: dist/native/
 
+
+  publish:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [operator-ui, docker-image-stores, initial-install, verify, native-bundle]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/download-artifact@v4
+        with:
+          name: source-wheel-and-schemas
+          path: candidate/source
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: native-*
+          path: candidate/native
+      - run: python -m pip install --constraint requirements-runtime.lock .
+      - name: Assemble exact CI-verified distribution
+        run: |
+          python - <<'PY'
+          import os, shutil, tomllib
+          from pathlib import Path
+          from scripts.package_distribution import assemble
+          root = Path.cwd()
+          release = tomllib.loads((root / "pyproject.toml").read_text())["project"]["version"]
+          incoming = root / "candidate" / "inputs"
+          incoming.mkdir()
+          for item in (root / "candidate" / "source").rglob("*"):
+              if item.is_file() and item.suffix in {".whl", ".gz"}:
+                  shutil.copyfile(item, incoming / item.name)
+          schema = root / "candidate" / "source" / "schemas"
+          shutil.make_archive(str(incoming / ("flamoris-updater-" + release + "-schemas")), "zip", schema)
+          for summary in (root / "candidate" / "native").rglob("bundle-digests.json"):
+              import json
+              identity = json.loads(summary.read_bytes())
+              platform = identity["platform"].replace("/", "-")
+              shutil.copyfile(summary, incoming / ("bundle-digests-" + platform + ".json"))
+              shutil.copyfile(summary.parent / identity["artifact"], incoming / identity["artifact"])
+          assemble(incoming, root / "distribution", release, os.environ["GITHUB_SHA"], root,
+                   compatible_from=[f"1.0.{n}" for n in range(3, 12)])
+          PY
+      - name: Publish immutable release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version=$(python -c 'import tomllib; print(tomllib.load(open("pyproject.toml","rb"))["project"]["version"])')
+          if gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/v$version" > /dev/null 2>&1; then
+            echo 'Release tag already exists; refusing to replace it'
+            exit 1
+          fi
+          gh release create "v$version" distribution/* --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "FLAMORIS Updater v$version" --notes-file "release-notes/$version.md" --latest

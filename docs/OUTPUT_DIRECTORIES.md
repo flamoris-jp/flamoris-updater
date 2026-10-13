@@ -62,3 +62,10 @@ for publication naming and deletion behavior.
 Public defaults contain no private host path. The example above is illustrative;
 deployment-specific paths and acceptance records belong in private operations
 documentation.
+
+
+## Shared reference input (1.0.12)
+
+The Generation card also shows **参照画像の共有フォルダ** for Controller 1.0.3 or newer. Select the exact existing ComfyUI input directory. The same bounded Job accepts `directories: {"comfyui": "/absolute/existing/input"}`; the operation name remains `updater_outputs_configure` for compatibility. It records `input_directories.comfyui`, a writable bind to `/data/comfyui-input` and an explicit `FLAMORIS_COMFYUI_INPUT_ROOT` startup override. Compatible updates retain the choice. No additional host mount unit, symlink, model installation or relocation is used.
+
+The path must be separate from models, private app state and human output directories. Runtime UID/GID 10001 needs read/write/traverse access. ComfyUI must read the Controller's confined `flamoris-inputs` copies using the existing directory permissions/group or ACL. Updater does not change these permissions or prove ComfyUI model/node compatibility. Existing files are preserved. An empty value disconnects the bind without deleting images. After configuring this field, use Updater 1.0.12 or newer. Actual reference generation is a separate acceptance check.

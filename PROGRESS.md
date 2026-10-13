@@ -1,3 +1,7 @@
+# Shared reference input binding — 2026-10-13
+
+Prepares Updater 1.0.12 for the production reference-image slice. Extends the existing managed configuration Job with a fixed ComfyUI input binding, runtime access and actual Docker mount/environment verification, preservation across compatible updates, and a dedicated Web field. Existing media, models and runtime.env remain unchanged. Source CI and live acceptance remain pending.
+
 # Updater 1.0.11 published and operator acceptance — 2026-10-13
 
 - [PR #45](https://github.com/flamoris-jp/flamoris-updater/pull/45) merged at
@@ -717,5 +721,3 @@ their approved restart policy. Docker bindings now require an explicit
 and post-start attestation rejects drift. Linux verification is **140 passed, 2
 skipped**, with Ruff, format and documentation-link checks successful. PR review
 and CI at the new revision remain pending. No live service or host was changed.
-
-

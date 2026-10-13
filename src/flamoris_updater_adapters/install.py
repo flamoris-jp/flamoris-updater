@@ -192,6 +192,7 @@ class DockerApplication(Application):
     ports: list[Port] = Field(default_factory=list, max_length=16)
     mounts: list[Mount] = Field(default_factory=list, max_length=64)
     output_directories: dict[Literal["yue2"], str] = Field(default_factory=dict, max_length=1)
+    input_directories: dict[Literal["comfyui"], str] = Field(default_factory=dict, max_length=1)
     hostname: Name | None = None
     components: dict[ComponentId, ComponentVersion] | None = Field(
         default=None, min_length=1, max_length=16
@@ -211,6 +212,19 @@ class DockerApplication(Application):
                 for m in self.mounts
             ):
                 raise ValueError("Media binding overlaps a retained mount")
+        if self.input_directories:
+            from .outputs import INPUT_TARGET, directory_syntax, supported_inputs
+
+            if not supported_inputs(self):
+                raise ValueError("Image has no supported shared reference input binding")
+            for source in self.input_directories.values():
+                directory_syntax(source)
+            if any(
+                Path(m.target).is_relative_to(INPUT_TARGET)
+                or Path(INPUT_TARGET).is_relative_to(m.target)
+                for m in self.mounts
+            ):
+                raise ValueError("Shared input binding overlaps a retained mount")
         if self.components is not None:
             for release in self.components.values():
                 version(release)
@@ -525,7 +539,17 @@ class Installer:
         with httpx.Client(trust_env=False, follow_redirects=False, timeout=2) as client:
             while True:
                 try:
-                    if app.application_id == "flamoris-mcp-hub":
+                    if app.input_directories:
+                from .outputs import INPUT_TARGET, INPUT_VARIABLE, check_directory
+
+                source = app.input_directories["comfyui"]
+                check_directory(
+                    source, [d.path for d in app.directories] + [self.cfg.state_directory]
+                )
+                if source:
+                    argv += ["--mount", f"type=bind,src={source},dst={INPUT_TARGET}"]
+                argv += ["--env", INPUT_VARIABLE + "=" + (INPUT_TARGET if source else "")]
+            if app.application_id == "flamoris-mcp-hub":
                         env = environment(protected_read(app.environment_file, private=True))
                         headers = {
                             "Accept": "application/json,text/event-stream",
@@ -1103,6 +1127,30 @@ class Installer:
                 ):
                     raise UpdateError(
                         "outcome_unknown", "Configured output binding was not applied"
+                    )
+            if app.input_directories:
+                from .outputs import INPUT_TARGET, INPUT_VARIABLE
+
+                source = app.input_directories["comfyui"]
+                mounts = [
+                    m for m in observed.get("Mounts", []) if m.get("Destination") == INPUT_TARGET
+                ]
+                if (
+                    (
+                        source
+                        and (
+                            len(mounts) != 1
+                            or mounts[0].get("Type") != "bind"
+                            or mounts[0].get("Source") != source
+                            or mounts[0].get("RW") is not True
+                        )
+                    )
+                    or (not source and mounts)
+                    or INPUT_VARIABLE + "=" + (INPUT_TARGET if source else "")
+                    not in (observed.get("Config", {}).get("Env") or [])
+                ):
+                    raise UpdateError(
+                        "outcome_unknown", "Configured shared input binding was not applied"
                     )
         else:
             for u in app.units:
