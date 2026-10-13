@@ -1,3 +1,27 @@
+# Updater 1.0.13 published and managed rollout — 2026-10-14
+
+- [PR #48](https://github.com/flamoris-jp/flamoris-updater/pull/48) merged at
+  `dd4ddfd5f7418ad3831df50bdde98131531bba0b`, closing Issues #36 and #37.
+- [Merged-source CI](https://github.com/flamoris-jp/flamoris-updater/actions/runs/38420316557)
+  passed all nine verification jobs and immutable publication. The earlier
+  [reviewed-head CI](https://github.com/flamoris-jp/flamoris-updater/actions/runs/38418146047)
+  also passed all nine jobs, including protected operator fixtures in root CI.
+- [v1.0.13](https://github.com/flamoris-jp/flamoris-updater/releases/tag/v1.0.13)
+  is published at the accepted merge, with both native CPU bundles and explicit
+  1.0.3–1.0.12 self-update predecessors. Release metadata reports catalog digest
+  `sha256:1893242e8c66504148b961e2fdea3f4c8373dc8f40a77815af93b1fb0ee5a9a8`.
+- Two managed Linux/amd64 instances self-updated from 1.0.12 to 1.0.13 through
+  their existing supervisors. Both durable Jobs succeeded at `verified`; the
+  recorded runtime matches the published amd64 artifact digest. Old 1.0.12
+  runtime records remain retained. Bootstrap/supervisor were not replaced.
+- Existing application installation records, all previously registered catalogs
+  and previous Job IDs were checked before/after and remain preserved. The
+  official latest catalog was added to each instance for future checks. Server
+  Manager returned healthy without warnings after both updates.
+- Shipped UI browser fixtures passed in CI. This confirms managed runtime
+  deployment, not a production browser walkthrough of catalog discovery/search.
+  Host placement and exact Job IDs remain private operational information.
+
 # Compact operator catalogs and Job Search — 2026-10-13
 
 Implements [#36](https://github.com/flamoris-jp/flamoris-updater/issues/36) and

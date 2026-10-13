@@ -43,7 +43,7 @@ GitHub connection settings remain deferred in
 [Issue #32](https://github.com/flamoris-jp/flamoris-updater/issues/32). No new
 authentication or log-directory provisioning is introduced.
 
-## Compact management and Job Search (1.0.13 source)
+## Compact management and Job Search (published 1.0.13)
 
 Catalog Management is collapsed initially. It preserves every registered URL,
 including old snapshots, with source status and explicit removal. Removal only
@@ -89,5 +89,5 @@ a separately registered latest URL for the same repository. Both are visible
 inside Catalog Management; neither operation deletes app executables or history.
 Published recipes/snapshots are not rewritten for source discovery.
 
-This is source/CI behavior for the next release, separate from production
-installation and browser acceptance.
+This behavior ships in published 1.0.13. Managed runtime rollout is recorded
+in [progress](../PROGRESS.md); production browser acceptance remains separate.
