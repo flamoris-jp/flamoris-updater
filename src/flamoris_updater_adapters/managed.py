@@ -39,6 +39,7 @@ from .diagnostics import (
     save_layout,
 )
 from .diagnostics import effect as recorded_effect
+from .history import History, begin_history, search_history
 from .install import (
     VERSIONS,
     Configuration,
@@ -154,6 +155,7 @@ class Job(Model):
 
 class Refresh(Model):
     refresh: bool = False
+    discover: bool = False
 
 
 class CatalogSource(Model):
@@ -200,7 +202,12 @@ MANAGED_TOOLS = {
     ),
     "updater_previous_delete": (Target, "Delete retained previous executables only", "execute"),
     "updater_managed_job_get": (Job, "Shared durable install/update status", "read"),
-    "updater_managed_history": (Model, "Shared durable job history", "read"),
+    "updater_managed_history": (
+        History,
+        "Paged durable history by app and creation period",
+        "read",
+    ),
+    "updater_history_begin": (Model, "Capture a per-view durable job boundary", "read"),
 }
 
 
@@ -208,6 +215,19 @@ class Manager:
     def __init__(self, state, root, *, installer=Installer, client=None, self_configuration=None):
         self.state, self.root = path(str(state)), path(str(root))
         self.journal = Journal(self.state)
+        # Adapter-local query indexes: existing v1 readers/supervisors need no schema change.
+        with self.journal.connection() as db:
+            db.execute(
+                "CREATE INDEX IF NOT EXISTS managed_history_created ON records "
+                "(COALESCE(json_extract(payload,'$.created_at'),0) DESC,id DESC) "
+                "WHERE kind='managed_job'"
+            )
+            db.execute(
+                "CREATE INDEX IF NOT EXISTS managed_history_application ON records "
+                "(json_extract(payload,'$.application_id'), "
+                "COALESCE(json_extract(payload,'$.created_at'),0) DESC,id DESC) "
+                "WHERE kind='managed_job'"
+            )
         self.root.mkdir(parents=True, exist_ok=True, mode=0o755)
         self.installer = installer
         self.self_configuration = self_configuration
@@ -249,6 +269,20 @@ class Manager:
                     "manager_source_catalog", digest(source.encode()), candidate.model_dump(), db
                 )
                 self.journal.put("manager_config", "source", {"urls": [*sources, source]}, db)
+                self.journal.put(
+                    "manager_source_status",
+                    digest(source.encode()),
+                    {"checked_at": int(time.time()), "error": None},
+                    db,
+                )
+                removed = self.journal.get("manager_config", "removed_sources", db)
+                if removed and source in removed["urls"]:
+                    self.journal.put(
+                        "manager_config",
+                        "removed_sources",
+                        {"urls": [u for u in removed["urls"] if u != source]},
+                        db,
+                    )
             return {"configured": True}
 
     def sources(self):
@@ -294,6 +328,13 @@ class Manager:
             with self.journal.transaction() as db:
                 self.accept_catalog(catalog, db=db)
                 self.journal.put("manager_config", "source", {"urls": sources}, db)
+                removed = self.journal.get("manager_config", "removed_sources", db) or {"urls": []}
+                self.journal.put(
+                    "manager_config",
+                    "removed_sources",
+                    {"urls": sorted(set([*removed["urls"], source]))},
+                    db,
+                )
             return {"removed": True}
 
     def _download(self, url, limit, destination=None, expected=None):
@@ -319,7 +360,7 @@ class Manager:
             raise UpdateError("artifact_mismatch")
         return b"".join(parts)
 
-    def catalog(self, refresh=False):
+    def catalog(self, refresh=False, skip_sources=()):
         sources = self.sources()
         if not sources:
             return Catalog(catalog_version=1, recipes=[])
@@ -328,6 +369,8 @@ class Manager:
             with exclusive(self.state / "manager.lock"):
                 sources = self.sources()
                 for source in sources:
+                    if source in skip_sources:
+                        continue
                     try:
                         candidate = decode(Catalog, self._download(source, 1024 * 1024))
                         catalog = self._merge_catalogs(sources, {source: candidate})
@@ -339,7 +382,28 @@ class Manager:
                                 candidate.model_dump(),
                                 db,
                             )
-                    except (UpdateError, ValueError):
+                            self.journal.put(
+                                "manager_source_status",
+                                digest(source.encode()),
+                                {"checked_at": int(time.time()), "error": None},
+                                db,
+                            )
+                    except (UpdateError, ValueError) as error:
+                        previous = (
+                            self.journal.get("manager_source_status", digest(source.encode())) or {}
+                        )
+                        with self.journal.transaction() as db:
+                            self.journal.put(
+                                "manager_source_status",
+                                digest(source.encode()),
+                                {
+                                    "checked_at": previous.get("checked_at"),
+                                    "error": error.code
+                                    if isinstance(error, UpdateError)
+                                    else "invalid_catalog",
+                                },
+                                db,
+                            )
                         self.catalog_errors.append(
                             {"url": source, "error": "catalog_refresh_failed"}
                         )
@@ -377,13 +441,19 @@ class Manager:
             raise UpdateError("invalid_input")
         args = decode(MANAGED_TOOLS[name][0], dumps(payload))
         if name == "updater_catalogs_list":
-            return {"items": [{"url": url} for url in self.sources()]}
+            from .catalog_ui import source_items
+
+            return {"items": source_items(self)}
         if name == "updater_catalog_add":
             return self.configure(args.url)
         if name == "updater_catalog_remove":
             return self.remove_source(args.url)
         if name in {"updater_managed_log_get", "updater_managed_layout_get"}:
-            if args.application_id != SELF and args.application_id not in self.application_ids():
+            if (
+                not args.job_id
+                and args.application_id != SELF
+                and args.application_id not in self.application_ids()
+            ):
                 raise UpdateError("invalid_input")
             if args.job_id:
                 job = self.journal.get("managed_job", args.job_id)
@@ -415,13 +485,24 @@ class Manager:
 
             return admit(self, args)
         if name == "updater_apps_list":
-            catalog = self.catalog(refresh=args.refresh)
+            from .catalog_ui import application_checks
+
+            discovery_errors = []
+            discovered = []
+            if args.refresh and args.discover:
+                from .catalog_ui import discover_sources
+
+                discovery_errors, discovered = discover_sources(self)
+            catalog = self.catalog(refresh=args.refresh, skip_sources=discovered)
+            checks = application_checks(self)
             return {
                 "root": str(self.root),
-                "catalog_errors": self.catalog_errors,
+                "catalog_errors": [*self.catalog_errors, *discovery_errors],
+                "catalog_sources": self.invoke("updater_catalogs_list", {})["items"],
                 "items": [
                     {
                         "application_id": a,
+                        "catalog_check": checks.get(a),
                         "installation": self.journal.get("managed_app", a),
                         "releases": [
                             {
@@ -440,15 +521,9 @@ class Manager:
                 ],
             }
         if name == "updater_managed_history":
-            with self.journal.connection() as db:
-                return {
-                    "items": [
-                        loads(row[0])
-                        for row in db.execute(
-                            "SELECT payload FROM records WHERE kind='managed_job' ORDER BY json_extract(payload,'$.created_at') DESC,id DESC LIMIT 100"
-                        )
-                    ]
-                }
+            return search_history(self.journal, args)
+        if name == "updater_history_begin":
+            return begin_history(self.journal)
         if name == "updater_managed_job_get":
             record = self.journal.get("managed_job", args.job_id)
             if not record:

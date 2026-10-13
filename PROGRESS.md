@@ -1,3 +1,30 @@
+# Compact operator catalogs and Job Search — 2026-10-13
+
+Implements [#36](https://github.com/flamoris-jp/flamoris-updater/issues/36) and
+[#37](https://github.com/flamoris-jp/flamoris-updater/issues/37) for 1.0.13:
+collapsed catalog management, descending compatible release selection,
+server-served per-tab insertion boundaries, and a separate read-only paged
+application/creation-period search with durable Job/effect details. Old active
+self-update Jobs remain blockers. Local SQLite indexes preserve v1 journal and
+supervisor compatibility; no existing Job or immutable recipe is rewritten.
+
+Management opening/reload/manual refresh checks recorded installed origins and
+the official Updater source once, with source deduplication, durable failure/
+last-success display, saved snapshots, exact-URL removal suppression and manual
+registration for unknown origins. Normal progress polling does not fetch remote
+catalogs. Settings drafts and explicit operation/replay boundaries remain.
+
+Local verification: 449 Python tests passed; 7 existing integration skips and
+one existing runtime-UID test cannot execute because this container rejects
+chown to UID 10001 (EINVAL). Its full test remains in root CI, without relaxation.
+The relevant 116 tests passed. Browser fixtures pass management/search flows,
+30 collapsed sources/removal, latest release default, view reload boundaries,
+old active/failed jobs, filtered paging/details/invalid periods, HTTP/JSON
+reconnection, no lost-response replay and desktop/mobile overflow checks.
+Local browser uses Chromium 134; CI uses its pinned Chromium fixture. Ruff,
+format, JS syntax and docs links pass. Package/schema builds and GitHub CI are
+being checked. This source checkpoint is not release publication or live rollout.
+
 The same continuation fixes the missing Studio update migration dispatch. Studio retains schema ownership; Updater invokes its declared image command with verified existing private migration settings. Migration/unknown outcomes remain recorded and block replay.
 
 # Shared reference input binding — 2026-10-13

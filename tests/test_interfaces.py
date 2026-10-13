@@ -19,6 +19,8 @@ def fake_coordinator(tmp_path):
         if name not in MANAGED_TOOLS:
             raise UpdateError("invalid_input")
         decode(MANAGED_TOOLS[name][0], dumps(payload))
+        if name == "updater_history_begin":
+            return {"after_sequence": 0, "server_time": 0, "applications": []}
         return {"items": []}
 
     return SimpleNamespace(

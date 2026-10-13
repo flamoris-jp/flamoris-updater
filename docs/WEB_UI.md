@@ -42,3 +42,52 @@ under the bootstrap state directory's `releases`, not necessarily `/opt`.
 GitHub connection settings remain deferred in
 [Issue #32](https://github.com/flamoris-jp/flamoris-updater/issues/32). No new
 authentication or log-directory provisioning is introduced.
+
+## Compact management and Job Search (1.0.13 source)
+
+Catalog Management is collapsed initially. It preserves every registered URL,
+including old snapshots, with source status and explicit removal. Removal only
+drops that source's update candidates; installation/settings/data/history and
+immutable bindings stay retained. Previous executable deletion remains on each
+installed app. Available releases are sorted newest first; installed/older
+versions are excluded from update choices. No cleanup happens from hiding rows.
+
+The server captures an insertion watermark when serving the management HTML.
+Only Jobs inserted after that boundary appear in the current view; old active,
+failed and unsettled Jobs remain accessible from **Job Search** (`/jobs` under
+the public prefix). Every tab/reload has its own boundary. Polling/reconnection
+preserves it; browser/server clock differences and same-second creation do not
+affect membership. Hidden unresolved self-update Jobs still disable update
+controls. Both views page 20 results at a time.
+
+Job Search filters on application (including all apps, Updater, and unassigned
+operations) and half-open creation period. Inputs/display use the browser's
+labeled timezone. Newest-first cursor paging bounds server responses/rendering;
+job links open existing recorded progress and paged effect evidence. Empty,
+invalid-period and connection errors are visible. Search/navigation are read-only
+and never re-execute a Job. Searches do not call external catalog sources.
+
+Opening/reloading management first shows saved information, then performs one
+catalog check, as does Refresh. Progress polling uses retained snapshots only.
+Discovery includes the official Updater latest catalog; installed app origins
+come from an immutable recorded recipe's GitHub payload URLs when all downloads
+belong to the same repository, or an unambiguous matching registered snapshot.
+An app ID is never used to guess a repository. Unsupported/ambiguous origins
+are shown and require manual registration. GitHub origins use that repository's
+`releases/latest/download/catalog.json`; custom HTTPS catalogs retain their
+registered URL. These rules also handle initial installation snapshots.
+
+Sources are deduplicated and downloaded once per requested refresh, including
+newly discovered sources. Each failure preserves its last verified snapshot,
+last-success time and bounded error code while other sources continue. Existing
+private GitHub access is reused; missing access is labeled. Live refresh does
+not replace typed settings drafts or replay lost operations.
+
+An explicit URL removal is durable and suppresses that exact automatic source
+until manual re-registration. Removing an old tagged snapshot does not remove
+a separately registered latest URL for the same repository. Both are visible
+inside Catalog Management; neither operation deletes app executables or history.
+Published recipes/snapshots are not rewritten for source discovery.
+
+This is source/CI behavior for the next release, separate from production
+installation and browser acceptance.

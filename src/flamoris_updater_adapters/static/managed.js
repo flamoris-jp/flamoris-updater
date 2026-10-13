@@ -1,9 +1,16 @@
 "use strict";
 const basePath = document.querySelector('meta[name="updater-base-path"]').content;
+let refreshRequested = false;
 let busy = false, appSnapshot = "", selfSnapshot = "", pendingActions = 0;
 let selfUpdating = false, pageVersion = "", reloadScheduled = false;
 const $ = id => document.getElementById(id);
-const labels = {accepted:"受付済み", intent:"処理中", running:"処理中", awaiting_setup:"初回設定待ち", succeeded:"完了", recovery_required:"処理の確認が必要"};
+const searchView = !!$("history-search");
+const boundaryValue = document.querySelector('meta[name="history-boundary"]')?.content;
+let historyBoundary = /^\d+$/.test(boundaryValue || "") ? Number(boundaryValue) : null;
+let historyCursor = null, historyBack = [], historyQuery = {}, historyBusy = false;
+let detailJob = null, eventAfter = 0, detailRequest = 0, eventsBusy = false;
+
+const labels = {accepted:"受付済み", intent:"処理中", running:"処理中", awaiting_setup:"初回設定待ち", succeeded:"完了", recovery_required:"処理の確認が必要", failed_safe:"失敗（安全に停止）", failed:"失敗"};
 const themes = ["green", "blue", "purple", "amber"];
 let themeKey = "";
 function themeFor(hostname) {
@@ -77,7 +84,7 @@ async function runAction(b, fn, pendingText) {
     b.disabled = selfUpdating && b.parentElement?.id === "self-update";
     b.removeAttribute("aria-busy");
     b.textContent = original;
-    poll();
+    if (!searchView) poll();
   }
 }
 function button(text, parent, fn, pendingText = "処理中…") {
@@ -91,11 +98,139 @@ function newer(candidate, current) {
   for (let i = 0; i < 3; i++) if (a[i] !== b[i]) return a[i] > b[i];
   return false;
 }
+function releaseChoices(releases, installed) {
+  return releases.filter(r => !installed || (newer(r.release, installed.release) && r.compatible_from.includes(installed.release)))
+    .sort((a, b) => newer(a.release, b.release) ? -1 : newer(b.release, a.release) ? 1 : 0);
+}
+function displayTime(seconds) {
+  return Number.isFinite(seconds) ? new Date(seconds * 1000).toLocaleString() : "日時なし";
+}
+const actions = {install:"インストール", update:"更新", self_update:"Updater本体の更新", outputs_configure:"保存先・共有フォルダ設定", configure_outputs:"保存先・共有フォルダ設定"};
+async function loadHistory(report = true) {
+  if (historyBusy) return;
+  historyBusy = true;
+  if (searchView) $("history-search").querySelector("button").disabled = true;
+  try {
+    const args = {limit:20, ...historyQuery};
+    if (!searchView) args.after_sequence = historyBoundary;
+    if (historyCursor) args.cursor = historyCursor;
+    const result = await tool("updater_managed_history", args);
+    if (!searchView) selfUpdating = !!result.active_self_update;
+    $("history").replaceChildren();
+    if (!result.items.length) element("p", searchView ? "条件に一致するジョブはありません。" : "この画面を開いてからのジョブはありません。", $("history"));
+    for (const job of result.items) {
+      const row = element("div", undefined, $("history"));
+      row.className = "history-row";
+      const info = element("div", undefined, row);
+      element("strong", (job.application_id || "アプリ未指定") + " " + (job.release || ""), info);
+      element("p", (actions[job.action] || job.action || "管理操作") + " · " + displayTime(job.created_at) + " · " + (labels[job.phase] || job.phase) + (job.step ? " · " + job.step : "") + (job.cleanup_pending ? " · 旧版の整理待ち" : ""), info);
+      const link = element("a", job.job_id, info);
+      link.href = basePath + "/jobs?job=" + encodeURIComponent(job.job_id);
+      link.className = "job-link";
+      if (searchView) link.addEventListener("click", event => { event.preventDefault(); showJob(job.job_id).catch(showError); });
+    }
+    $("history-pages").replaceChildren();
+    if (historyBack.length) button("前のページ", $("history-pages"), async () => { historyCursor = historyBack.pop(); await loadHistory(); });
+    if (result.next_cursor) button("次のページ", $("history-pages"), async () => { historyBack.push(historyCursor); historyCursor = result.next_cursor; await loadHistory(); });
+    if (searchView) $("search-status").textContent = "新しい順 · " + result.items.length + "件を表示";
+  } catch (error) {
+    if (report) showError(error);
+    else throw error;
+  } finally { historyBusy = false; if (searchView) $("history-search").querySelector("button").disabled = false; }
+}
+async function showJob(identity) {
+  const request = ++detailRequest;
+  const job = await tool("updater_managed_job_get", {job_id:identity});
+  if (request !== detailRequest) return;
+  detailJob = job;
+  eventAfter = 0;
+  $("job-summary").replaceChildren();
+  element("p", job.job_id + " · " + (job.application_id || "アプリ未指定") + " · " + (actions[job.action] || job.action || "管理操作"), $("job-summary"));
+  element("p", displayTime(job.created_at) + " · " + (labels[job.phase] || job.phase) + " · " + (job.step || ""), $("job-summary"));
+  $("job-events").replaceChildren();
+  $("more-events").hidden = true;
+  $("job-detail").hidden = false;
+  if (job.application_id) await loadEvents(true);
+  else element("p", "アプリ未指定の記録です。", $("job-events"));
+  if (request === detailRequest) $("job-detail").scrollIntoView({block:"start"});
+}
+async function loadEvents(initial = false) {
+  if (!detailJob || (eventsBusy && !initial)) return;
+  const request = detailRequest, job = detailJob, after = eventAfter || 0;
+  eventsBusy = true;
+  $("more-events").disabled = true;
+  try {
+    const result = await tool("updater_managed_log_get", {application_id:job.application_id, job_id:job.job_id, after, limit:25});
+    if (request !== detailRequest) return;
+    if (!result.items.length && !after) element("p", "経過の記録はありません。", $("job-events"));
+    for (const event of result.items) {
+      const row = element("p", displayTime(event.time_ms / 1000) + " · " + (event.operation || event.step || "処理") + " · " + (event.outcome || ""), $("job-events"));
+      row.className = "step";
+    }
+    eventAfter = result.next_after;
+    $("more-events").hidden = !result.has_more;
+  } finally { if (request === detailRequest) { eventsBusy = false; $("more-events").disabled = false; } }
+}
+async function initializeSearch() {
+  try {
+    const health = await api("/health");
+    $("hostname").textContent = health.hostname || location.hostname;
+    $("version").textContent = "Updater " + health.version;
+    themeFor(health.hostname || location.hostname);
+    $("connection").textContent = "接続済み";
+    const info = await tool("updater_history_begin");
+    for (const id of info.applications || []) element("option", id, $("history-app")).value = id;
+    $("timezone").textContent = "時刻はこのブラウザーのタイムゾーン（" + Intl.DateTimeFormat().resolvedOptions().timeZone + "）。開始を含み、終了は含みません。";
+    await loadHistory();
+    const job = new URLSearchParams(location.search).get("job");
+    if (job) await showJob(job);
+  } catch (error) { showError(error); }
+}
+if (searchView) {
+  $("history-search").addEventListener("submit", async event => {
+    event.preventDefault();
+    if (historyBusy) return;
+    const query = {};
+    const app = $("history-app").value;
+    if (app === "__unassigned__") query.unassigned = true;
+    else if (app) query.application_id = app;
+    for (const [id, key] of [["history-from", "created_from"], ["history-to", "created_to"]]) {
+      const value = $(id).value;
+      if (value) {
+        const time = Math.floor(new Date(value).getTime() / 1000);
+        if (!Number.isFinite(time) || time < 0) { showError(new Error("有効な日時を入力してください。")); return; }
+        query[key] = time;
+      }
+    }
+    if (query.created_from !== undefined && query.created_to !== undefined && query.created_from >= query.created_to) {
+      showError(new Error("終了日時は開始日時より後にしてください。")); return;
+    }
+    detailRequest++;
+    detailJob = null;
+    eventsBusy = false;
+    $("job-detail").hidden = true;
+    historyQuery = query;
+    historyCursor = null;
+    historyBack = [];
+    $("search-status").textContent = "検索中…";
+    await loadHistory();
+  });
+  $("more-events").addEventListener("click", () => loadEvents().catch(showError));
+}
 function renderApplication(app) {
   const card = element("article", undefined, $("applications"));
   card.className = "card";
   element("h2", app.application_id, card);
   const installed = app.installation;
+  const check = app.catalog_check;
+  if (check) {
+    const message = !check.url ? "配布元を確認できません。カタログ管理から登録してください。"
+      : check.error ? (check.error === "github_access_required" ? "GitHubの読み取りアクセスが必要です。" : "カタログ取得失敗・保存済み情報を表示中")
+      : check.suppressed ? "配布元の自動確認は登録解除されています。"
+      : !check.registered ? "更新確認用の配布元は未登録です。"
+      : check.checked_at ? "カタログ確認済み: " + displayTime(check.checked_at) : "保存済みカタログ・最新確認日時なし";
+    element("p", message, card).className = "hint";
+  }
   element("p", installed ? installed.release + " · " + (labels[installed.phase] || installed.phase) : "未インストール", card);
   if (installed?.previous) {
     element("p", "保持中の旧版: " + installed.previous.release, card);
@@ -164,11 +299,12 @@ function renderApplication(app) {
       }, "受付中…");
     });
   }
-  const choices = app.releases.filter(r => !installed || (newer(r.release, installed.release) && r.compatible_from.includes(installed.release)));
+  const choices = releaseChoices(app.releases, installed);
   if (!choices.length) {
     element("p", installed ? "現在利用できる互換更新はありません。" : "インストール可能なリリースがありません。", card);
     return;
   }
+  if (installed && choices.length > 1) element("p", "最新の互換更新を選択しています。ほかの候補はバージョン欄で確認できます。", card).className = "hint";
   const form = element("form", undefined, card);
   const select = element("select", undefined, form);
   select.setAttribute("aria-label", "導入するバージョン");
@@ -211,7 +347,7 @@ function renderApplication(app) {
   });
 }
 async function refresh(releases = false) {
-  if (busy) return;
+  if (busy) { if (releases) refreshRequested = true; return; }
   busy = true;
   try {
     const health = await api("/health");
@@ -225,8 +361,15 @@ async function refresh(releases = false) {
       setTimeout(() => location.reload(), 1000);
     }
     pageVersion = health.version;
-    const apps = await tool("updater_apps_list", {refresh:releases});
-    if (releases && apps.catalog_errors.length) showError(new Error("カタログを再取得できません: " + apps.catalog_errors.map(item => item.url).join(", ")));
+    if (historyBoundary === null) historyBoundary = (await tool("updater_history_begin")).after_sequence;
+    if (releases) $("release-status").textContent = $("catalog-status").textContent = "カタログを確認中…";
+    const apps = await tool("updater_apps_list", {refresh:releases, discover:releases});
+    const failures = apps.catalog_errors || [];
+    $("catalog-status").textContent = failures.length ? "取得に失敗した配布元があります。保存済み情報を表示中です。" : releases ? "カタログを確認しました。" : "保存済みのカタログを表示しています。";
+    if (releases || failures.length) $("release-status").textContent = failures.length ? "一部のカタログを取得できません。カタログ管理で配布元を確認してください。" : "カタログの確認が完了しました。";
+    if (failures.length) {
+      for (const item of failures) element("p", item.url + " · " + (item.error === "github_access_required" ? "GitHubの読み取りアクセスが必要です。" : "取得失敗・保存済み情報を使用"), $("catalog-status")).className = "hint";
+    }
     // Progress polling must not replace inputs while the operator is typing.
     const snapshot = JSON.stringify(apps.items);
     if (snapshot !== appSnapshot) {
@@ -249,15 +392,7 @@ async function refresh(releases = false) {
       }
       appSnapshot = snapshot;
     }
-    const history = await tool("updater_managed_history");
-    selfUpdating = history.items.some(j => j.action === "self_update" && ["accepted", "running", "intent"].includes(j.phase));
-    $("history").replaceChildren();
-    for (const job of history.items) {
-      const row = element("div", undefined, $("history"));
-      row.className = "history-row";
-      element("span", job.application_id + " " + job.release + " · " + (labels[job.phase] || job.phase) + " · " + (job.step || "") + (job.cleanup_pending ? " · 旧版の整理待ち" : ""), row);
-      element("code", job.job_id, row);
-    }
+    await loadHistory(false);
     const self = await tool("updater_self_status");
     const selfJson = JSON.stringify(self);
     if (selfJson !== selfSnapshot) {
@@ -265,7 +400,7 @@ async function refresh(releases = false) {
       $("self-section").hidden = false;
       const current = self.installation;
       element("p", current ? "現在のバージョン: " + current.release : "自己更新には対応するbootstrapが必要です。", $("self-update"));
-      const choices = self.releases.filter(r => self.supported && current && newer(r.release, current.release) && r.compatible_from.includes(current.release));
+      const choices = self.supported && current ? releaseChoices(self.releases, current) : [];
       if (choices.length) {
         const select = element("select", undefined, $("self-update"));
         select.setAttribute("aria-label", "Updaterの更新バージョン");
@@ -289,21 +424,27 @@ async function refresh(releases = false) {
     $("connection").classList.remove("disconnected");
     const updateButton = $("self-update").querySelector("button");
     if (updateButton) updateButton.disabled = selfUpdating;
-  } finally { busy = false; }
+  } finally { busy = false; if (refreshRequested) { refreshRequested = false; queueMicrotask(() => poll(true)); } }
 }
 async function refreshCatalogs() {
   const catalogs = await tool("updater_catalogs_list");
+  $("catalog-count").textContent = "（" + catalogs.items.length + "件" + (catalogs.items.some(i => i.error) ? "・取得失敗あり" : "") + "）";
   $("catalogs").replaceChildren();
   for (const item of catalogs.items) {
     const row = element("div", undefined, $("catalogs"));
     row.className = "history-row";
-    element("span", item.url, row);
+    const info = element("div", undefined, row);
+    element("span", item.url, info);
+    if (item.applications?.length) element("p", item.applications.join(" · "), info).className = "hint";
+    element("small", item.error ? (item.error === "github_access_required" ? "GitHubの読み取りアクセスが必要です。保存済み情報を表示中" : "取得失敗・保存済み情報を表示中") : item.checked_at ? "確認済み: " + displayTime(item.checked_at) : "保存済み情報・最新確認日時なし", info).className = "hint";
     button("登録解除", row, async () => {
+      if (!confirm("このカタログだけが提供する更新候補は表示されなくなります。アプリ・設定・データ・履歴は残ります。登録を解除しますか？")) return;
       await tool("updater_catalog_remove", {url:item.url});
+      showNotice("カタログの登録を解除しました。アプリと履歴は保持しています。");
     });
   }
 }
-$("catalog-form").addEventListener("submit", event => {
+$("catalog-form")?.addEventListener("submit", event => {
   event.preventDefault();
   const form = event.target;
   const args = Object.fromEntries(new FormData(form));
@@ -323,6 +464,11 @@ async function poll(releases = false) {
     } else showError(error);
   }
 }
-$("refresh").addEventListener("click", () => poll(true));
-poll();
-setInterval(() => poll(), 3000);
+if (searchView) {
+  initializeSearch();
+} else {
+  $("refresh").addEventListener("click", () => poll(true));
+  // Show retained information immediately; one external check per opening, never per progress poll.
+  (async () => { await poll(); await poll(true); })();
+  setInterval(() => poll(), 3000);
+}
