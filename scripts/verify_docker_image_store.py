@@ -182,7 +182,11 @@ def main():
             assert result["phase"] == "succeeded", result.get("failure")
             run(
                 [
-                    "/usr/bin/docker", "exec", "flamoris-generation-mcp", "python", "-c",
+                    "/usr/bin/docker",
+                    "exec",
+                    "flamoris-generation-mcp",
+                    "python",
+                    "-c",
                     "import os; assert os.environ.get('FLAMORIS_COMFYUI_INPUT_ROOT') is None",
                 ]
             )

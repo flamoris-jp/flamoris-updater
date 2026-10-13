@@ -1164,7 +1164,7 @@ class Installer:
                     or (
                         not source
                         and any(
-                            value.partition("=")[0] == INPUT_VARIABLE
+                            value.startswith(INPUT_VARIABLE + "=")
                             for value in observed.get("Config", {}).get("Env") or []
                         )
                     )

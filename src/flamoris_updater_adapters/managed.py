@@ -959,7 +959,8 @@ class Manager:
                     app = app.model_copy(update={"files": retained_files})
                     if app.database and app.database.studio_migration_environment:
                         effect(
-                            "verify_migration_input", app.database.studio_migration_environment.verify
+                            "verify_migration_input",
+                            app.database.studio_migration_environment.verify,
                         )
                     self.save_layout(identity, app, installer)
                     effect("verify_current", lambda: installer._verify_running(old))
