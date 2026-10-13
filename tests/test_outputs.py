@@ -262,9 +262,7 @@ def test_shared_input_retains_media_settings_across_update(managed, monkeypatch)
 
 
 @pytest.mark.parametrize("controller", ["1.0.1", "1.0.2"])
-def test_reference_binding_rejects_older_controller_before_effect(
-    managed, monkeypatch, controller
-):
+def test_reference_binding_rejects_older_controller_before_effect(managed, monkeypatch, controller):
     e = managed
     _, media, _ = setup(e, monkeypatch, controller=controller)
     calls = len(e.calls)
