@@ -22,8 +22,10 @@ The relevant 116 tests passed. Browser fixtures pass management/search flows,
 old active/failed jobs, filtered paging/details/invalid periods, HTTP/JSON
 reconnection, no lost-response replay and desktop/mobile overflow checks.
 Local browser uses Chromium 134; CI uses its pinned Chromium fixture. Ruff,
-format, JS syntax and docs links pass. Package/schema builds and GitHub CI are
-being checked. This source checkpoint is not release publication or live rollout.
+format, JS syntax and docs links pass. Updater/Core wheel and sdist builds and schema export passed. The first CI
+run exposed new Manager fixtures being executed as the ordinary runner user;
+these tests now run in the existing root CI job without weakening protected
+path checks. Final GitHub CI is being checked. This source checkpoint is not release publication or live rollout.
 
 The same continuation fixes the missing Studio update migration dispatch. Studio retains schema ownership; Updater invokes its declared image command with verified existing private migration settings. Migration/unknown outcomes remain recorded and block replay.
 

@@ -1,6 +1,7 @@
 """Catalog discovery reads verified origins without changing immutable recipes or Jobs."""
 
 import copy
+import os
 
 import httpx
 import pytest
@@ -9,6 +10,8 @@ from test_managed import recipe
 from flamoris_update_core.wire import digest, dumps
 from flamoris_updater_adapters.catalog_ui import OFFICIAL, installed_sources
 from flamoris_updater_adapters.managed import Manager
+
+pytestmark = pytest.mark.skipif(os.geteuid() != 0, reason="Protected Manager state runs in root CI")
 
 APP = "flamoris-generation-mcp"
 LATEST = "https://github.com/example/owned-generation/releases/latest/download/catalog.json"

@@ -1,5 +1,6 @@
 """Actual SQLite view boundaries and bounded search; no installer effects."""
 
+import os
 import re
 import threading
 from types import SimpleNamespace
@@ -110,6 +111,7 @@ def test_invalid_query_rejected(data):
         History.model_validate(data)
 
 
+@pytest.mark.skipif(os.geteuid() != 0, reason="Protected Manager state runs in root CI")
 @pytest.mark.parametrize("prefix", ["", "/updater", "/tools/updater"])
 def test_html_captures_boundary_before_js_and_details_survive_source_removal(tmp_path, prefix):
     manager = Manager(tmp_path / "manager", tmp_path / "apps")
