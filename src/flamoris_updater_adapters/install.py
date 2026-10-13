@@ -539,17 +539,7 @@ class Installer:
         with httpx.Client(trust_env=False, follow_redirects=False, timeout=2) as client:
             while True:
                 try:
-                    if app.input_directories:
-                from .outputs import INPUT_TARGET, INPUT_VARIABLE, check_directory
-
-                source = app.input_directories["comfyui"]
-                check_directory(
-                    source, [d.path for d in app.directories] + [self.cfg.state_directory]
-                )
-                if source:
-                    argv += ["--mount", f"type=bind,src={source},dst={INPUT_TARGET}"]
-                argv += ["--env", INPUT_VARIABLE + "=" + (INPUT_TARGET if source else "")]
-            if app.application_id == "flamoris-mcp-hub":
+                    if app.application_id == "flamoris-mcp-hub":
                         env = environment(protected_read(app.environment_file, private=True))
                         headers = {
                             "Accept": "application/json,text/event-stream",
@@ -1044,6 +1034,16 @@ class Installer:
                 if source:
                     argv += ["--mount", f"type=bind,src={source},dst={TARGET}"]
                 argv += ["--env", VARIABLE + "=" + (TARGET if source else "")]
+            if app.input_directories:
+                from .outputs import INPUT_TARGET, INPUT_VARIABLE, check_directory
+
+                source = app.input_directories["comfyui"]
+                check_directory(
+                    source, [d.path for d in app.directories] + [self.cfg.state_directory]
+                )
+                if source:
+                    argv += ["--mount", f"type=bind,src={source},dst={INPUT_TARGET}"]
+                argv += ["--env", INPUT_VARIABLE + "=" + (INPUT_TARGET if source else "")]
             if app.application_id == "flamoris-mcp-hub":
                 env = environment(protected_read(app.environment_file, private=True))
                 port = env.get("FLAMORIS_MCP_HUB_PORT", "8765")
