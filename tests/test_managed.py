@@ -267,7 +267,13 @@ def managed(tmp_path, monkeypatch):
                 containers[app.container_name] = {
                     "Image": app.image_id,
                     "State": {"Running": argv[1] == "run"},
-                    "Config": {"Env": [argv[i + 1] for i, a in enumerate(argv) if a == "--env"]},
+                    "Config": {
+                        "Env": [
+                            argv[i + 1]
+                            for i, a in enumerate(argv)
+                            if a == "--env" and "=" in argv[i + 1]
+                        ]
+                    },
                     "Mounts": [
                         {
                             "Type": "bind",

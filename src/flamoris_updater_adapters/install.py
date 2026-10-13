@@ -794,7 +794,8 @@ class Installer:
                     lambda: conn.execute(protected_read(f.path, limit=16 * 1024**2).decode()),
                     {"file": f.path, "digest": f.digest},
                 )
-        self._database_migrate(app)
+        if db.studio_migration_environment:
+            self._database_migrate(app)
         with self.connect(db, db.name) as conn:
             schemas = (
                 ["public"]
@@ -1052,7 +1053,7 @@ class Installer:
                 )
                 if source:
                     argv += ["--mount", f"type=bind,src={source},dst={INPUT_TARGET}"]
-                argv += ["--env", INPUT_VARIABLE + "=" + (INPUT_TARGET if source else "")]
+                argv += ["--env", INPUT_VARIABLE + "=" + INPUT_TARGET if source else INPUT_VARIABLE]
             if app.application_id == "flamoris-mcp-hub":
                 env = environment(protected_read(app.environment_file, private=True))
                 port = env.get("FLAMORIS_MCP_HUB_PORT", "8765")
@@ -1155,8 +1156,18 @@ class Installer:
                         )
                     )
                     or (not source and mounts)
-                    or INPUT_VARIABLE + "=" + (INPUT_TARGET if source else "")
-                    not in (observed.get("Config", {}).get("Env") or [])
+                    or (
+                        source
+                        and INPUT_VARIABLE + "=" + INPUT_TARGET
+                        not in (observed.get("Config", {}).get("Env") or [])
+                    )
+                    or (
+                        not source
+                        and any(
+                            value.partition("=")[0] == INPUT_VARIABLE
+                            for value in observed.get("Config", {}).get("Env") or []
+                        )
+                    )
                 ):
                     raise UpdateError(
                         "outcome_unknown", "Configured shared input binding was not applied"

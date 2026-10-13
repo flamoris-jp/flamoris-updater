@@ -178,7 +178,14 @@ def main():
                 },
             )
             manager.run_job(disabled["job_id"])
-            assert manager.journal.get("managed_job", disabled["job_id"])["phase"] == "succeeded"
+            result = manager.journal.get("managed_job", disabled["job_id"])
+            assert result["phase"] == "succeeded", result.get("failure")
+            run(
+                [
+                    "/usr/bin/docker", "exec", "flamoris-generation-mcp", "python", "-c",
+                    "import os; assert os.environ.get('FLAMORIS_COMFYUI_INPUT_ROOT') is None",
+                ]
+            )
             assert (inputs / "test.txt").read_text() == "reference-input"
             assert (media / "test.txt").read_text() == "operator-copy"
             assert env.read_bytes() == before
