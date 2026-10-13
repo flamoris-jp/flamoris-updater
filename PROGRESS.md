@@ -1,3 +1,5 @@
+The same continuation fixes the missing Studio update migration dispatch. Studio retains schema ownership; Updater invokes its declared image command with verified existing private migration settings. Migration/unknown outcomes remain recorded and block replay.
+
 # Shared reference input binding — 2026-10-13
 
 Prepares Updater 1.0.12 for the production reference-image slice. Extends the existing managed configuration Job with a fixed ComfyUI input binding, runtime access and actual Docker mount/environment verification, preservation across compatible updates, and a dedicated Web field. Existing media, models and runtime.env remain unchanged. Source CI and live acceptance remain pending.

@@ -957,6 +957,8 @@ class Manager:
                         source.verify()
                         retained_files.append(copied.model_copy(update={"source": source}))
                     app = app.model_copy(update={"files": retained_files})
+                    if app.database and app.database.studio_migration_environment:
+                        effect("verify_migration_input", app.database.studio_migration_environment.verify)
                     self.save_layout(identity, app, installer)
                     effect("verify_current", lambda: installer._verify_running(old))
                     artifact_inputs = (
@@ -975,6 +977,8 @@ class Manager:
                     job["retained_candidate"] = retained
                     event("runtime.retain_previous", "recorded", retained)
                     effect("stop", lambda: self._stop(installer, old, retained))
+                    if app.application_id == "flamoris-studio":
+                        effect("app_database_migrate", lambda: installer._database_migrate(app))
                     effect("switch", lambda: installer._start(app))
                     effect("health", lambda: installer.health(app))
                     effect("verify_running", lambda: installer._verify_running(app))

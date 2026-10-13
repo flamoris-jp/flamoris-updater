@@ -794,23 +794,7 @@ class Installer:
                     lambda: conn.execute(protected_read(f.path, limit=16 * 1024**2).decode()),
                     {"file": f.path, "digest": f.digest},
                 )
-        if db.studio_migration_environment:
-            self.command(
-                [
-                    "/usr/bin/docker",
-                    "run",
-                    "--rm",
-                    "--network",
-                    "host",
-                    "--env-file",
-                    db.studio_migration_environment.path,
-                    app.image_id,
-                    "alembic",
-                    "upgrade",
-                    "head",
-                ],
-                timeout=300,
-            )
+        self._database_migrate(app)
         with self.connect(db, db.name) as conn:
             schemas = (
                 ["public"]
@@ -850,6 +834,31 @@ class Installer:
                             sql.Identifier(db.runtime_role),
                         )
                     )
+
+    def _database_migrate(self, app):
+        """Dispatch the Studio image's declared Alembic command; Studio owns its schema."""
+        if app.application_id != "flamoris-studio" or not app.database:
+            return
+        source = app.database.studio_migration_environment
+        if source is None:
+            raise UpdateError("invalid_profile", "Studio migration environment is required")
+        source.verify()
+        self.command(
+            [
+                "/usr/bin/docker",
+                "run",
+                "--rm",
+                "--network",
+                "host",
+                "--env-file",
+                source.path,
+                app.image_id,
+                "alembic",
+                "upgrade",
+                "head",
+            ],
+            timeout=300,
+        )
 
     def _files(self, app):
         from .diagnostics import effect
