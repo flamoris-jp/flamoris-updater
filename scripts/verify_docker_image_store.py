@@ -66,6 +66,7 @@ def main():
             )
             manager.run_job(upgrade["job_id"])
             outcome = manager.journal.get("managed_job", upgrade["job_id"])
+            assert not outcome.get("cleanup_pending"), outcome.get("cleanup_failure")
             assert outcome["phase"] == "succeeded", {
                 k: outcome.get(k) for k in ("phase", "step", "failure")
             }
@@ -87,6 +88,7 @@ def main():
             )
             manager.run_job(configured["job_id"])
             outcome = manager.journal.get("managed_job", configured["job_id"])
+            assert not outcome.get("cleanup_pending"), outcome.get("cleanup_failure")
             assert outcome["phase"] == "succeeded", {
                 k: outcome.get(k) for k in ("phase", "step", "failure")
             }
@@ -117,10 +119,24 @@ def main():
             )
             manager.run_job(disabled["job_id"])
             outcome = manager.journal.get("managed_job", disabled["job_id"])
+            assert not outcome.get("cleanup_pending"), outcome.get("cleanup_failure")
             assert outcome["phase"] == "succeeded", {
                 k: outcome.get(k) for k in ("phase", "step", "failure")
             }
             manager.delete_previous("flamoris-generation-mcp")
+            reconciled = manager.journal.get("managed_app", "flamoris-generation-mcp")
+            assert not reconciled["older"] and reconciled["previous"] is None
+            names = (
+                run(["/usr/bin/docker", "container", "ls", "--all", "--format", "{{.Names}}"])
+                .decode()
+                .splitlines()
+            )
+            assert [n for n in names if n.startswith("flamoris-generation-mcp")] == [
+                "flamoris-generation-mcp"
+            ]
+            print(
+                "Real Docker shared-image cleanup: current retained, selected stopped containers removed"
+            )
             assert (manager.state / "packages" / upgrade["job_id"]).exists()
             assert (media / "test.txt").read_text() == "operator-copy"
             assert env.read_bytes() == before

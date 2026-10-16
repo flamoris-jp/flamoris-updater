@@ -1,3 +1,25 @@
+# Executable cleanup reconciliation (#50) — 2026-10-16
+
+Prepares 1.0.14. Cleanup validates all selected runtimes before deletion, removes
+all selected stopped containers before checking images, and retains images used
+by current/retained or independently observed containers. Missing targets are
+observed, not guessed from failed commands. Explicit cleanup can reconcile an
+earlier partial execution; failed/unknown application Jobs still block it.
+
+The cleanup command path no longer creates Installer or reads DB/bootstrap secret
+inputs. Active package references (configuration, database, migration, units and
+runtime inputs) stay protected. Typed guard/target decisions and effect failures
+remain secret-free. Successful cleanup commits app pointers and clears related
+successful Jobs' pending flags together without rewriting historical effects.
+
+New fixtures cover shared images, multiple containers, outside references,
+partial failures, missing targets, drift before deletion and private-input
+preservation. Docker CI adds explicit post-configuration cleanup assertions.
+Local verification: 459 tests pass, 7 integration skips and one existing runtime-UID
+case cannot execute here (chown UID 10001 returns EINVAL); it remains enforced
+without relaxation in root CI. Ruff, format, docs links, schema export and
+sdist-to-wheel build pass. CI, publication and real-host cleanup remain pending.
+
 # Updater 1.0.13 published and managed rollout — 2026-10-14
 
 - [PR #48](https://github.com/flamoris-jp/flamoris-updater/pull/48) merged at
