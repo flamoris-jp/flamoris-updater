@@ -8,7 +8,6 @@ import hashlib
 import os
 import platform
 import secrets
-import shutil
 import socket
 import threading
 import time
@@ -48,6 +47,7 @@ from .install import (
     Installer,
     NativeApplication,
     path,
+    run,
 )
 from .journal import Journal, durable_write, exclusive
 from .outputs import ConfigureOutputs
@@ -212,7 +212,16 @@ MANAGED_TOOLS = {
 
 
 class Manager:
-    def __init__(self, state, root, *, installer=Installer, client=None, self_configuration=None):
+    def __init__(
+        self,
+        state,
+        root,
+        *,
+        installer=Installer,
+        client=None,
+        self_configuration=None,
+        cleanup_command=run,
+    ):
         self.state, self.root = path(str(state)), path(str(root))
         self.journal = Journal(self.state)
         # Adapter-local query indexes: existing v1 readers/supervisors need no schema change.
@@ -230,6 +239,9 @@ class Manager:
             )
         self.root.mkdir(parents=True, exist_ok=True, mode=0o755)
         self.installer = installer
+        from .diagnostics import observed
+
+        self.cleanup_command = observed(cleanup_command)
         self.self_configuration = self_configuration
         if (
             self_configuration
@@ -1169,94 +1181,9 @@ class Manager:
                 return {"application_id": application, "phase": "awaiting_setup", "started": True}
 
     def _cleanup(self, installed, previous):
-        current = installed["profile"]
-        entries = [
-            *installed["older"],
-            *([installed["previous"]] if previous and installed["previous"] else []),
-        ]
-        for entry in entries:
-            if entry["kind"] == "native":
-                p = path(entry["path"])
-                expected = self.root / installed["application_id"] / "releases" / entry["release"]
-                if p != expected or str(p) == current.get("venv"):
-                    raise UpdateError("unsafe_storage")
-                if p.exists():
-                    recorded_effect(
-                        "cleanup.runtime",
-                        lambda: shutil.rmtree(p),
-                        {"path": str(p), "release": entry["release"]},
-                    )
-            else:
-                name = entry["container"]
-                if not name.startswith(installed["application_id"] + "-") or name == current.get(
-                    "container_name"
-                ):
-                    raise UpdateError("unsafe_storage")
-                cfg = decode(
-                    Configuration,
-                    dumps(
-                        {
-                            "install_profile_version": 1,
-                            "expected_hostname": socket.gethostname(),
-                            "platform": self.hardware(),
-                            "state_directory": str(self.state / "installer"),
-                            "applications": [current],
-                        }
-                    ),
-                )
-                command = self.installer(cfg).command
-                names = command(
-                    ["/usr/bin/docker", "container", "ls", "--all", "--format", "{{.Names}}"]
-                )
-                if name in names.decode().splitlines():
-                    observed = loads(
-                        command(
-                            [
-                                "/usr/bin/docker",
-                                "container",
-                                "inspect",
-                                "--format",
-                                "{{json .}}",
-                                name,
-                            ]
-                        )
-                    )
-                    if (
-                        observed.get("Image") != entry.get("image_id")
-                        or observed.get("State", {}).get("Running") is not False
-                    ):
-                        raise UpdateError("unsafe_storage")
-                    command(["/usr/bin/docker", "container", "rm", name])
-                if entry.get("image_id") != current.get("image_id"):
-                    # No force/prune: Docker keeps images still used by another container.
-                    command(["/usr/bin/docker", "image", "rm", entry["image_id"]])
-            package_id = entry.get("package_id")
-            if package_id:
-                import re
+        from .cleanup import clean
 
-                if (
-                    not re.fullmatch(r"job-[0-9a-f]{32}", package_id)
-                    or package_id == installed["job_id"]
-                ):
-                    raise UpdateError("unsafe_storage")
-                package = path(str(self.state / "packages" / package_id))
-                database = current.get("database") or {}
-                references = [
-                    value["path"]
-                    for value in database.values()
-                    if isinstance(value, dict) and isinstance(value.get("path"), str)
-                ] + [value["path"] for value in database.get("sql_files", [])]
-                if any(Path(value).is_relative_to(package) for value in references):
-                    # Existing database/migration credentials are active configuration.
-                    continue
-                if package.exists():
-                    recorded_effect(
-                        "cleanup.package", lambda: shutil.rmtree(package), {"path": str(package)}
-                    )
-        installed["older"] = []
-        if previous:
-            installed["previous"] = None
-        self.persist("managed_app", installed["application_id"], installed)
+        clean(self, installed, previous)
 
     def delete_previous(self, application):
         with exclusive(self.state / "manager.lock"):
@@ -1270,7 +1197,15 @@ class Manager:
             if not installed or installed["phase"] != "succeeded":
                 raise UpdateError("busy")
             with recording(self.journal, installed["job_id"], self.secrets(installed["job_id"])):
-                recorded_effect("cleanup.delete_previous", lambda: self._cleanup(installed, True))
+                try:
+                    recorded_effect(
+                        "cleanup.delete_previous", lambda: self._cleanup(installed, True)
+                    )
+                except BaseException as error:
+                    job = self.journal.get("managed_job", installed["job_id"])
+                    job.update(cleanup_pending=True, cleanup_failure=failure(error))
+                    self.persist("managed_job", job["job_id"], job)
+                    raise
                 return {"application_id": application, "deleted_previous": True}
 
     def worker(self):

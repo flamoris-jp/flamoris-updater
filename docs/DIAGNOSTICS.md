@@ -123,3 +123,29 @@ Manual investigation procedure:
 Keep the existing authentication and history stores. Replacing them can invalidate
 MCP keys or erase the evidence needed to determine which effects happened. Service
 restart and self-update compatibility checks do not constitute data restoration.
+
+## Executable cleanup reconciliation (1.0.14)
+
+After a successful update, automatic cleanup retains current plus one previous
+runtime. Explicit `updater_previous_delete` also selects that previous runtime.
+Read the Job/log/layout and independent live observations before repeating an
+older failed cleanup. The explicit action revalidates all target identities and
+stopped state before removal; missing containers/images are recorded as absent.
+All selected containers are removed before images are considered. Images still
+referenced by current, retained or other containers are retained without error.
+A subsequent Docker rejection remains a failure, never a force/prune request.
+
+`cleanup.validate`, `cleanup.current`, `cleanup.guard`, `cleanup.container`,
+`cleanup.image`, `cleanup.package` and `cleanup.reconciled` identify the failed
+check/target or retention reason without raw command/configuration/DB content.
+Cleanup does not instantiate the installer or load initial DB credentials.
+Packages containing active configuration/runtime inputs are retained. Protected
+path checks still apply to every directory selected for deletion. If those checks
+fail, inspect the fixed guard label and private host ownership through an
+independent administrator channel; do not relax permissions or clear journals.
+
+Successful reconciliation updates retained pointers and clears cleanup_pending
+on related succeeded Jobs in one transaction. Original failure events remain.
+If a command or evidence write is interrupted, no automatic cleanup replay occurs;
+the next explicit action observes actual state again. This does not recover failed
+or unknown update/migration Jobs, which continue to block previous deletion.

@@ -1,0 +1,13 @@
+{
+  "format_version": 1,
+  "application_id": "flamoris-updater",
+  "release": "1.0.14",
+  "entries": [{
+    "category": "fix",
+    "summary": "Reconcile shared-image and partial executable cleanup without loading unrelated private inputs",
+    "affected": ["cleanup", "diagnostics", "web", "mcp", "cli"],
+    "breaking": false
+  }],
+  "restart_required": true,
+  "recovery_conditions": "Failed/unknown update Jobs remain blocked. Explicit cleanup rechecks actual targets; no force, prune or automatic replay. Existing supervisor and v1 journals remain compatible."
+}

@@ -228,78 +228,89 @@ def managed(tmp_path, monkeypatch):
     containers = {}
     fail = {"health": False, "stop": False}
 
-    def installer(cfg):
-        app = cfg.applications[0]
+    app = None
 
-        def command(argv, timeout=300):
-            calls.append(argv)
-            if argv[1:3] == ["container", "ls"]:
-                return "\n".join(containers).encode()
-            if argv[1:3] == ["image", "inspect"]:
-                return json.dumps(
-                    [
-                        {
-                            "Id": app.image_id,
-                            "Os": "linux",
-                            "Architecture": "amd64",
-                            "Config": {
-                                "Labels": {
-                                    "org.opencontainers.image.version": app.release,
-                                    "org.opencontainers.image.title": app.application_id,
-                                    "net.flamoris.components": json.dumps(
-                                        app.components
-                                        or {"flamoris-generation-controller": "1.0.0"}
-                                    ),
-                                }
-                            },
-                        }
+    def command(argv, timeout=300):
+        calls.append(argv)
+        if argv[1:3] == ["container", "ls"]:
+            if "--filter" in argv:
+                image = argv[argv.index("--filter") + 1].removeprefix("ancestor=")
+                return "\n".join(n for n, c in containers.items() if c["Image"] == image).encode()
+            return "\n".join(containers).encode()
+        if argv[1:3] == ["image", "ls"]:
+            return "\n".join(r["application"]["image_id"] for r in catalog["recipes"]).encode()
+        if argv[1:3] == ["image", "rm"]:
+            assert not any(c["Image"] == argv[-1] for c in containers.values())
+            if fail.get("image_rm"):
+                raise OSError("PRIVATE RAW DOCKER ERROR")
+        if argv[1:3] == ["image", "inspect"]:
+            return json.dumps(
+                [
+                    {
+                        "Id": app.image_id,
+                        "Os": "linux",
+                        "Architecture": "amd64",
+                        "Config": {
+                            "Labels": {
+                                "org.opencontainers.image.version": app.release,
+                                "org.opencontainers.image.title": app.application_id,
+                                "net.flamoris.components": json.dumps(
+                                    app.components or {"flamoris-generation-controller": "1.0.0"}
+                                ),
+                            }
+                        },
+                    }
+                ]
+            ).encode()
+        if argv[1] == "stop":
+            if fail["stop"]:
+                raise OSError("private diagnostic")
+            containers[argv[-1]]["State"]["Running"] = False
+        if argv[1] == "rename":
+            containers[argv[3]] = containers.pop(argv[2])
+        if argv[1] in {"run", "create"}:
+            if argv[1] == "create":
+                assert "--detach" not in argv
+            containers[app.container_name] = {
+                "Image": app.image_id,
+                "State": {"Running": argv[1] == "run"},
+                "Config": {
+                    "Env": [
+                        argv[i + 1]
+                        for i, a in enumerate(argv)
+                        if a == "--env" and "=" in argv[i + 1]
                     ]
-                ).encode()
-            if argv[1] == "stop":
-                if fail["stop"]:
-                    raise OSError("private diagnostic")
-                containers[argv[-1]]["State"]["Running"] = False
-            if argv[1] == "rename":
-                containers[argv[3]] = containers.pop(argv[2])
-            if argv[1] in {"run", "create"}:
-                if argv[1] == "create":
-                    assert "--detach" not in argv
-                containers[app.container_name] = {
-                    "Image": app.image_id,
-                    "State": {"Running": argv[1] == "run"},
-                    "Config": {
-                        "Env": [
-                            argv[i + 1]
-                            for i, a in enumerate(argv)
-                            if a == "--env" and "=" in argv[i + 1]
-                        ]
-                    },
-                    "Mounts": [
-                        {
-                            "Type": "bind",
-                            "Source": source,
-                            "Destination": destination,
-                            "RW": True,
-                        }
-                        for source, destination in [
-                            (
-                                argv[i + 1].split(",src=", 1)[1].split(",dst=", 1)[0],
-                                argv[i + 1].split(",dst=", 1)[1],
-                            )
-                            for i, a in enumerate(argv)
-                            if a == "--mount"
-                            and argv[i + 1].split(",dst=", 1)[1]
-                            in {"/data/music-output", "/data/comfyui-input"}
-                        ]
-                    ],
-                }
-            if argv[1] == "start":
-                containers[argv[-1]]["State"]["Running"] = True
-            if argv[1:3] == ["container", "inspect"]:
-                return json.dumps(containers[argv[-1]]).encode()
-            if argv[1:3] == ["container", "rm"]:
-                del containers[argv[-1]]
-            return b""
+                },
+                "Mounts": [
+                    {
+                        "Type": "bind",
+                        "Source": source,
+                        "Destination": destination,
+                        "RW": True,
+                    }
+                    for source, destination in [
+                        (
+                            argv[i + 1].split(",src=", 1)[1].split(",dst=", 1)[0],
+                            argv[i + 1].split(",dst=", 1)[1],
+                        )
+                        for i, a in enumerate(argv)
+                        if a == "--mount"
+                        and argv[i + 1].split(",dst=", 1)[1]
+                        in {"/data/music-output", "/data/comfyui-input"}
+                    ]
+                ],
+            }
+        if argv[1] == "start":
+            containers[argv[-1]]["State"]["Running"] = True
+        if argv[1:3] == ["container", "inspect"]:
+            return json.dumps(containers[argv[-1]]).encode()
+        if argv[1:3] == ["container", "rm"]:
+            del containers[argv[-1]]
+        return b""
+
+    def installer(cfg):
+        nonlocal app
+        app = cfg.applications[0]
 
         def health(_):
             if fail["health"]:
@@ -317,7 +328,13 @@ def managed(tmp_path, monkeypatch):
         return httpx.Response(200, content=b"image")
 
     client = httpx.Client(transport=httpx.MockTransport(http))
-    manager = Manager(tmp_path / "manager", tmp_path / "apps", installer=installer, client=client)
+    manager = Manager(
+        tmp_path / "manager",
+        tmp_path / "apps",
+        installer=installer,
+        cleanup_command=command,
+        client=client,
+    )
     return SimpleNamespace(
         manager=manager,
         catalog=catalog,
@@ -1258,3 +1275,155 @@ def test_component_upgrade_does_not_permit_mount_changes(managed):
     assert result["error"] == "invalid_profile"
     assert e.manager.journal.get("managed_app", APP)["release"] == "1.0.0"
     assert not any(call[1] in {"stop", "rename", "run", "create"} for call in e.calls[calls:])
+
+
+def ready_cleanup(e):
+    e.manager.configure("https://releases.example.invalid/catalog.json")
+    install(e)
+    e.manager.start_setup(APP)
+    e.manager.complete(APP)
+
+
+def test_cleanup_shared_image_keeps_previous_then_deletes_each_image_once(managed):
+    e = managed
+    # Two different recorded releases legitimately share one executable image.
+    e.catalog["recipes"][1]["application"]["image_id"] = e.catalog["recipes"][0]["application"][
+        "image_id"
+    ]
+    ready_cleanup(e)
+    update(e, "1.1.0")
+    outcome = update(e, "1.2.0")
+    assert not outcome.get("cleanup_pending")
+    record = e.manager.journal.get("managed_app", APP)
+    shared = record["previous"]["image_id"]
+    assert len(e.containers) == 2 and not record["older"]
+    assert not any(c[1:3] == ["image", "rm"] and c[-1] == shared for c in e.calls)
+    e.manager.delete_previous(APP)
+    assert list(e.containers) == [APP]
+    assert sum(c[1:3] == ["image", "rm"] and c[-1] == shared for c in e.calls) == 1
+
+
+def test_cleanup_all_containers_before_images_and_external_reference_is_kept(managed):
+    e = managed
+    ready_cleanup(e)
+    update(e, "1.1.0")
+    record = e.manager.journal.get("managed_app", APP)
+    older = {**record["previous"], "container": APP + "-abcdef012345"}
+    e.containers[older["container"]] = {"Image": older["image_id"], "State": {"Running": False}}
+    e.containers["external-container"] = {"Image": older["image_id"], "State": {"Running": False}}
+    record["older"].append(older)
+    e.manager.persist("managed_app", APP, record)
+    start = len(e.calls)
+    e.manager.delete_previous(APP)
+    calls = e.calls[start:]
+    assert len([c for c in calls if c[1:3] == ["container", "rm"]]) == 2
+    assert not any(c[1:3] == ["image", "rm"] for c in calls)
+    assert set(e.containers) == {APP, "external-container"}
+
+
+def test_cleanup_reconciles_missing_targets_after_partial_failure_and_clears_jobs(managed):
+    e = managed
+    ready_cleanup(e)
+    job = update(e, "1.1.0")
+    e.fail["image_rm"] = True
+    with pytest.raises(OSError):
+        e.manager.delete_previous(APP)
+    assert list(e.containers) == [APP]
+    assert e.manager.journal.get("managed_job", job["job_id"])["cleanup_pending"]
+    assert e.manager.journal.get("managed_app", APP)["previous"]
+    e.fail["image_rm"] = False
+    e.manager.delete_previous(APP)
+    assert not e.manager.journal.get("managed_app", APP)["previous"]
+    job = e.manager.journal.get("managed_job", job["job_id"])
+    assert job["cleanup_pending"] is False and "cleanup_failure" not in job
+    logs = dumps(read_all_logs(e.manager, job))
+    assert b"PRIVATE RAW DOCKER ERROR" not in logs
+    assert b'"outcome":"absent"' in logs
+    assert b'"operation":"cleanup.reconciled"' in logs
+
+
+@pytest.mark.parametrize("drift", ["current", "target", "image", "identity"])
+def test_cleanup_preflights_all_targets_before_mutation(managed, drift):
+    e = managed
+    ready_cleanup(e)
+    update(e, "1.1.0")
+    record = e.manager.journal.get("managed_app", APP)
+    older = {**record["previous"], "container": APP + "-abcdef012345"}
+    record["older"].append(older)
+    e.containers[older["container"]] = {"Image": older["image_id"], "State": {"Running": False}}
+    if drift == "current":
+        e.containers[APP]["State"]["Running"] = False
+    elif drift == "target":
+        e.containers[record["previous"]["container"]]["State"]["Running"] = True
+    elif drift == "image":
+        e.containers[record["previous"]["container"]]["Image"] = digest(b"drift")
+    else:
+        record["previous"]["container"] = "unmanaged"
+    e.manager.persist("managed_app", APP, record)
+    start = len(e.calls)
+    with pytest.raises(UpdateError) as rejected:
+        e.manager.delete_previous(APP)
+    assert rejected.value.code == "unsafe_storage"
+    assert not any(c[1:3] in [["container", "rm"], ["image", "rm"]] for c in e.calls[start:])
+    assert e.manager.journal.get("managed_app", APP)["previous"]
+
+
+def test_cleanup_does_not_construct_installer_or_read_db_inputs_and_keeps_active_files(managed):
+    e = managed
+    ready_cleanup(e)
+    update(e, "1.1.0")
+    record = e.manager.journal.get("managed_app", APP)
+    package = e.manager.state / "packages" / record["previous"]["package_id"]
+    secret = package / "private-db-input"
+    secret.write_text("must-not-be-read")
+    secret.chmod(0)
+    # Studio's DB profile is the production case. Keep all declared inputs,
+    # including an unavailable initial credential, without trying to load them.
+    record["application_id"] = "flamoris-studio"
+    record["profile"]["application_id"] = "flamoris-studio"
+    record["profile"]["network"] = "bridge"
+    record["profile"]["database"] = {
+        "name": "studio",
+        "owner": "studio_owner",
+        "runtime_role": "studio_app",
+        **{
+            k: {"path": str(secret), "private": True, "digest": digest(b"unused")}
+            for k in (
+                "admin_dsn",
+                "owner_password",
+                "runtime_password",
+                "studio_migration_environment",
+            )
+        },
+    }
+    e.manager.persist("managed_app", "flamoris-studio", record)
+
+    def forbidden(_cfg):
+        pytest.fail("Executable cleanup must not create an Installer or read private inputs")
+
+    e.manager.installer = forbidden
+    e.manager.delete_previous("flamoris-studio")
+    assert package.exists() and secret.stat().st_mode & 0o777 == 0
+    assert list(e.containers) == [APP]
+
+
+def test_cleanup_observes_missing_image_before_reconciling_retained_pointers(managed):
+    e = managed
+    ready_cleanup(e)
+    job = update(e, "1.1.0")
+    record = e.manager.journal.get("managed_app", APP)
+    del e.containers[record["previous"]["container"]]
+    original = e.manager.cleanup_command
+
+    def command(argv, **kwargs):
+        if argv[1:3] == ["image", "ls"]:
+            return b""
+        return original(argv, **kwargs)
+
+    e.manager.cleanup_command = command
+    start = len(e.calls)
+    e.manager.delete_previous(APP)
+    assert not any(c[1:3] == ["image", "rm"] for c in e.calls[start:])
+    assert not e.manager.journal.get("managed_app", APP)["previous"]
+    events = read_all_logs(e.manager, job)
+    assert any(v["operation"] == "cleanup.image" and v["outcome"] == "absent" for v in events)
