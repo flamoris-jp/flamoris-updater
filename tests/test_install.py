@@ -101,6 +101,67 @@ def test_empty_install_succeeds_without_owner_endpoint_or_backup(installation):
     assert e.value.code == "already_installed"
 
 
+def test_selected_drm_device_is_narrow_and_verified(installation, monkeypatch):
+    import flamoris_updater_adapters.install as module
+
+    cfg, installer, calls, _ = installation
+    node = "/dev/dri/renderD128"
+    devices = [{"PathOnHost": node, "PathInContainer": node, "CgroupPermissions": "rw"}]
+    monkeypatch.setattr(
+        module, "drm_binding", lambda selected: (devices, ["989"]) if selected == node else ([], [])
+    )
+    app = cfg.applications[0].model_copy(update={"drm_render_node": node})
+    installer._start(app)
+    argv = calls[-1]
+    assert argv[argv.index("--device") + 1] == node + ":" + node + ":rw"
+    assert argv[argv.index("--group-add") + 1] == "989"
+    assert "--privileged" not in argv and argv[argv.index("--cap-drop") + 1] == "ALL"
+    observed = {
+        "Image": app.image_id,
+        "State": {"Running": True},
+        "HostConfig": {"Devices": devices, "GroupAdd": ["989"], "Privileged": False},
+    }
+    installer.command = lambda _argv: json.dumps(observed).encode()
+    installer._verify_running(app)
+    observed["HostConfig"]["GroupAdd"] = ["0"]
+    with pytest.raises(UpdateError):
+        installer._verify_running(app)
+
+
+@pytest.mark.parametrize(
+    "mode,major,minor,gid,accepted",
+    [
+        (0o20660, 226, 128, 989, True),
+        (0o100660, 226, 128, 989, False),
+        (0o120777, 226, 128, 989, False),
+        (0o20660, 1, 128, 989, False),
+        (0o20660, 226, 129, 989, False),
+        (0o20600, 226, 128, 989, False),
+        (0o20660, 226, 128, 0, False),
+    ],
+)
+def test_drm_node_checks_kernel_identity_and_group(monkeypatch, mode, major, minor, gid, accepted):
+    import os
+    from types import SimpleNamespace
+
+    import flamoris_updater_adapters.install as module
+
+    def metadata(p):
+        if str(p) in {"/dev", "/dev/dri"}:
+            return SimpleNamespace(st_mode=0o40755, st_uid=0)
+        return SimpleNamespace(st_mode=mode, st_uid=0, st_gid=gid, st_rdev=os.makedev(major, minor))
+
+    monkeypatch.setattr(module.Path, "lstat", metadata)
+    if accepted:
+        devices, groups = module.drm_binding("/dev/dri/renderD128")
+        assert devices[0]["CgroupPermissions"] == "rw" and groups == ["989"]
+    else:
+        with pytest.raises(UpdateError):
+            module.drm_binding("/dev/dri/renderD128")
+    with pytest.raises(UpdateError):
+        module.drm_binding("/dev/nvidia0")
+
+
 @pytest.mark.parametrize(
     "declared, observed, accepted",
     [

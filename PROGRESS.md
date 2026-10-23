@@ -1,3 +1,20 @@
+# DRM render-node access for Kachinco CLI — 2026-10-23 (source only)
+
+- Added optional typed `drm_render_node` to managed Docker profiles. Only one
+  root-owned DRM render character device (major 226, matching render minor) can
+  be passed read/write to the existing non-root container with its observed
+  non-root device group. No privileged mode, arbitrary devices or host chmod.
+- Preflight/start validate the actual node; runtime verification rejects device,
+  supplementary group, device request or privileged-mode drift. Empty preserves
+  CPU deployment and existing profiles/settings retain their defaults.
+- Added injected-device and Docker-command tests. Hardware/driver support remains
+  application-owned probing and separate physical acceptance. No publication,
+  Updater self-update or live device/service change has occurred.
+- Local install/managed coverage: 94 passed, 2 integration skips. One offline
+  native-venv integration case also fails on unchanged main in this workspace;
+  it remains a CI gate. Ruff, formatting and schema export pass. No physical GPU
+  device or Docker GPU test was available here.
+
 # Executable cleanup reconciliation (#50) — 2026-10-16
 
 Prepares 1.0.14. Cleanup validates all selected runtimes before deletion, removes

@@ -47,6 +47,10 @@ Generated recipes describe actual app environment fields, new database initializ
 
 ## Recipe contract
 
+Optional managed Docker GPU access is confined to one typed
+[`drm_render_node`](DRM_RENDER_DEVICE.md). It requires an Updater release containing
+that capability; application catalog changes alone cannot enable it on older builds.
+
 `managed.Catalog` / `Recipe` and exported `InstallCatalog.schema.json` are authoritative. A recipe binds app ID, release/platform, downloads (HTTPS URL plus SHA-256), settings (key/label/type/default/secret), generated literal configuration inputs and a typed Native/Docker application. Published `(app, release, platform)` content is immutable even if temporarily withdrawn. Jobs persist the selected recipe digest. HTTPS provides server trust; no independent private CA or per-owner client certificates are provisioned. Use a release source trusted to distribute executable code.
 
 Settings are single-line bounded values; optional `generate` creates private URL-safe credentials. Types include text, port, name and URL-safe password. Templates use `${root}` (this app's namespace), `${package}` (protected Job cache), `${release}` and declared setting names. Only generated settings can use the `generated` digest marker. A numeric port may use `{"setting_int":"PORT"}`. Native program paths must be `${root}/releases/${release}`. Write/copy destinations remain inside the app namespace; traversal/symlinks are refused. Root/data/config namespaces and installer history remain separate. Docker uses the fixed local daemon, non-root runtime, fixed mounts/ports and no privilege/capabilities/anonymous volumes.
