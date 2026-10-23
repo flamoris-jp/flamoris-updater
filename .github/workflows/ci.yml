@@ -143,7 +143,9 @@ jobs:
       - run: python -m build --wheel
       - run: |
           python -m pip download --only-binary=:all: --constraint requirements-runtime.lock --dest dist/wheels dist/*.whl
-      - run: python scripts/build_bundle.py --wheelhouse dist/wheels --output dist/native --platform '${{ matrix.platform }}' --version 1.0.14 --python-executable /usr/bin/python3.12
+      - run: |
+          version=$(python -c 'import tomllib; print(tomllib.load(open("pyproject.toml","rb"))["project"]["version"])')
+          python scripts/build_bundle.py --wheelhouse dist/wheels --output dist/native --platform '${{ matrix.platform }}' --version "$version" --python-executable /usr/bin/python3.12
       - run: python -m pip install dist/*.whl
       - name: Verify bundle and identity as user and root
         run: |
@@ -198,7 +200,7 @@ jobs:
               shutil.copyfile(summary, incoming / ("bundle-digests-" + platform + ".json"))
               shutil.copyfile(summary.parent / identity["artifact"], incoming / identity["artifact"])
           assemble(incoming, root / "distribution", release, os.environ["GITHUB_SHA"], root,
-                   compatible_from=[f"1.0.{n}" for n in range(3, 14)])
+                   compatible_from=[f"1.0.{n}" for n in range(3, 15)])
           PY
       - name: Publish immutable release
         env:
