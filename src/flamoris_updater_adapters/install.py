@@ -194,6 +194,9 @@ class DockerApplication(Application):
     output_directories: dict[Literal["yue2"], str] = Field(default_factory=dict, max_length=1)
     input_directories: dict[Literal["comfyui"], str] = Field(default_factory=dict, max_length=1)
     hostname: Name | None = None
+    drm_render_node: str = Field(
+        default="", pattern=r"^(|/dev/dri/renderD[0-9]{3})$", max_length=64
+    )
     components: dict[ComponentId, ComponentVersion] | None = Field(
         default=None, min_length=1, max_length=16
     )
@@ -296,6 +299,36 @@ def verify_components(app: DockerApplication, labels: dict):
         raise UpdateError("artifact_mismatch", "Invalid embedded component metadata") from None
     if actual != expected:
         raise UpdateError("artifact_mismatch", "Embedded components do not match the catalog")
+
+
+def drm_binding(node):
+    """Only a selected kernel DRM render device; no display/control/arbitrary device."""
+    if not node:
+        return [], []
+    if not re.fullmatch(r"/dev/dri/renderD[0-9]{3}", node):
+        raise UpdateError("invalid_profile", "Select one DRM render node")
+    try:
+        for parent in [Path("/dev"), Path("/dev/dri")]:
+            info = parent.lstat()
+            if not stat.S_ISDIR(info.st_mode) or info.st_uid != 0 or info.st_mode & 0o022:
+                raise UpdateError("unsafe_storage", "Unsafe DRM device directory")
+        info = Path(node).lstat()
+    except OSError:
+        raise UpdateError("invalid_profile", "Selected DRM render node is unavailable") from None
+    if (
+        not stat.S_ISCHR(info.st_mode)
+        or info.st_uid != 0
+        or os.major(info.st_rdev) != 226
+        or not 128 <= os.minor(info.st_rdev) <= 255
+        or os.minor(info.st_rdev) != int(node.rsplit("renderD", 1)[1])
+        or info.st_gid == 0
+        or info.st_mode & 0o060 != 0o060
+    ):
+        raise UpdateError(
+            "invalid_profile", "DRM render device must grant read/write to a non-root render group"
+        )
+    devices = [{"PathOnHost": node, "PathInContainer": node, "CgroupPermissions": "rw"}]
+    return devices, [str(info.st_gid)]
 
 
 class Unit(Model):
@@ -600,6 +633,7 @@ class Installer:
             for d in app.directories:
                 absent(d.path)
             if isinstance(app, DockerApplication):
+                drm_binding(app.drm_render_node)
                 names = self.command(
                     ["/usr/bin/docker", "container", "ls", "--all", "--format", "{{.Names}}"]
                 )
@@ -1026,6 +1060,11 @@ class Installer:
             ]
             if app.hostname:
                 argv += ["--hostname", app.hostname]
+            devices, groups = drm_binding(app.drm_render_node)
+            for device in devices:
+                argv += ["--device", device["PathOnHost"] + ":" + device["PathInContainer"] + ":rw"]
+            for group in groups:
+                argv += ["--group-add", group]
             for port in app.ports:
                 argv += ["--publish", f"127.0.0.1:{port.host}:{port.container}"]
             for m in app.mounts:
@@ -1116,6 +1155,15 @@ class Installer:
                 or observed.get("State", {}).get("Running") is not True
             ):
                 raise UpdateError("outcome_unknown")
+            devices, groups = drm_binding(app.drm_render_node)
+            host = observed.get("HostConfig", {})
+            if (
+                (host.get("Devices") or []) != devices
+                or (host.get("GroupAdd") or []) != groups
+                or host.get("DeviceRequests")
+                or host.get("Privileged", False)
+            ):
+                raise UpdateError("outcome_unknown", "Selected DRM device binding was not applied")
             if app.output_directories:
                 from .outputs import TARGET, VARIABLE
 
