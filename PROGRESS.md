@@ -1,3 +1,14 @@
+# Release 1.0.15 preparation — 2026-10-23
+
+- Assign the merged DRM support a new immutable release instead of republishing
+  existing v1.0.14. Native bundle CI reads the package version; the self-update
+  catalog includes the installed 1.0.14 predecessor along with 1.0.3–1.0.13.
+- Add release notes and refresh distribution contracts for 1.0.15. No journal,
+  supervisor, application setting or data migration is introduced. Publication
+  and real-host self-update remain separate acceptance steps.
+- Local distribution/self-update verification: 41 passed; Ruff, documentation
+  links, release identity/compatibility and workflow Bash/YAML checks pass.
+
 # DRM render-node access for Kachinco CLI — 2026-10-23 (source only)
 
 - Added optional typed `drm_render_node` to managed Docker profiles. Only one

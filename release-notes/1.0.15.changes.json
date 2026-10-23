@@ -1,0 +1,18 @@
+{
+  "format_version": 1,
+  "application_id": "flamoris-updater",
+  "release": "1.0.15",
+  "entries": [{
+    "category": "feature",
+    "summary": "Pass one validated DRM render node and its non-root group to a managed Docker application",
+    "affected": ["install", "docker", "web", "mcp", "cli"],
+    "breaking": false
+  }, {
+    "category": "fix",
+    "summary": "Bind native bundle builds to the package version and publish DRM support under a new immutable release",
+    "affected": ["distribution", "self-update"],
+    "breaking": false
+  }],
+  "restart_required": true,
+  "recovery_conditions": "Existing supervisor and v1 journals remain compatible. Failed/unknown Jobs remain blocked and are never automatically replayed. Preserve application settings, media and selected devices."
+}
