@@ -16,11 +16,11 @@ agree on a route. This document does not assume reporting is enabled or invent
 contact addresses. Provide a minimal reproduction, affected version/phase,
 impact and sanitized evidence.
 
-## Simple bootstrap and managed operation
+## Current bootstrap and managed operation
 
-Release recipes come from an explicitly configured direct HTTPS source with
-system trust. Digests/indexes, exact release/platform bindings, budgets, protected
-paths and immutable release mappings constrain executable staging. Initial
+Release recipes come from explicitly configured repository catalog HTTPS sources
+with system trust. Digests/indexes, exact release/platform bindings, budgets,
+protected paths and immutable release mappings constrain executable staging. Initial
 GitHub distribution downloads use trusted HTTPS and published SHA-256 checksums;
 this distribution is not an independently signed Core catalog.
 
@@ -29,19 +29,37 @@ confined to the selected initial origin. An exact GitHub Release download URL
 may additionally reach `release-assets.githubusercontent.com` over default-port
 HTTPS. Each hop is checked before sending; URL credentials, HTTP downgrade,
 fragments, traversal, unrelated hosts and ambient authentication/cookies are
-refused. Final response and expanded-content budgets, SHA-256/index checks and
-immutable recipe bindings still apply. The advanced signed/coordinator/registry
-fetcher remains strict and does not follow redirects. Published v1.0.1 does not
-contain this correction; the pinned supervisor needs explicit administrator
-maintenance, outside ordinary Web/manager self-update, to use the new downloader.
+refused on the anonymous public path. Final response and expanded-content
+budgets, SHA-256/index checks and immutable recipe bindings still apply. The advanced signed/coordinator/registry
+fetcher remains strict and does not follow redirects.
 
-Web runs unprivileged on loopback. Exact Host/Origin, CSP, Argon2 passwords,
-CSRF/session protection and login/request limits apply. Public access needs an
-external HTTPS proxy/tunnel. The root manager admits only the Web service's OS
-UID through a peer-checked Unix socket. There is no client CA or mTLS setup.
-CLI/MCP accept typed operations, not arbitrary shell commands or destinations.
-Persistent integration keys store only hashes, carry scoped read/execute authority
-without operator grants, and invalidate on owner changes/disablement or revocation.
+Private GitHub Releases use a separate bounded API path after an initial GitHub
+404. Existing operator-owned GitHub credentials are sent only to exact
+`https://api.github.com` Release endpoints; metadata redirects are rejected and
+asset storage requests carry no Authorization or Cookies. Updater does not
+provision or persist those credentials. GitHub repository permissions and
+application-owned service credentials remain separate from Updater access.
+See [private repository access](docs/GITHUB_RELEASES.md).
+
+Downloader behavior belongs to the installed component: ordinary self-update
+replaces Web/manager, not the independently pinned supervisor. Older supervisors
+do not acquire newer downloader support through a Web/manager update; replacing
+one is explicit administrator maintenance. See [self-update](docs/SELF_UPDATE.md).
+
+The current ordinary Web/CLI/MCP flow has no Updater administrator account,
+setup code, password login, session cookie, Bearer token or persistent integration
+key. Anyone able to reach the configured endpoint can perform its operations;
+access routing is owned by the deployment's external connection/proxy/tunnel.
+Exact Host and supplied Origin checks are request boundaries, not user
+authentication. This matches [README](README.md) and [transport](docs/TRANSPORT.md).
+
+Web runs unprivileged on loopback. CSP, JSON/input validation, streaming byte
+limits, fixed typed operations and confined installation paths remain enforced.
+Public access uses an externally configured HTTPS proxy/tunnel. The root manager
+admits only the Web service's OS UID through a peer-checked Unix socket; Web
+verifies the manager's root UID. These are local execution permissions, not
+end-user accounts. There is no client CA or mTLS setup. CLI/MCP do not accept
+arbitrary shell commands or destinations.
 
 Intent and outcomes persist before/after effects. Unknown work stops without
 replay, rollback or data restoration. Configuration/data/DBs and external runtime
