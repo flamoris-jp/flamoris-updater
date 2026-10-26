@@ -1,3 +1,18 @@
+# Security documentation alignment — 2026-10-26
+
+- Correct SECURITY.md to describe the existing ordinary Web/CLI/MCP flow:
+  no Updater accounts, login/session, Bearer tokens or persistent integration keys.
+  Endpoint reachability grants operations; external connection/proxy/tunnel
+  routing owns access. OS peer separation and typed bounded operations remain.
+- Document the separate existing private GitHub Release credential path and
+  component-specific pinned-supervisor downloader boundary. No accepted policy,
+  runtime, API, schema, release or deployment behavior changes.
+- Verification: compared README, RUNNING, TRANSPORT and GITHUB_RELEASES with the
+  current Web/bootstrap/setup and GitHub downloader source and existing Web path
+  tests. Changed root-document local links verified against the repository tree.
+  No runtime tests or live infrastructure checks were executed for this
+  documentation-only correction.
+
 # Release 1.0.15 preparation — 2026-10-23
 
 - Assign the merged DRM support a new immutable release instead of republishing
