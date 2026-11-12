@@ -200,7 +200,7 @@ jobs:
               shutil.copyfile(summary, incoming / ("bundle-digests-" + platform + ".json"))
               shutil.copyfile(summary.parent / identity["artifact"], incoming / identity["artifact"])
           assemble(incoming, root / "distribution", release, os.environ["GITHUB_SHA"], root,
-                   compatible_from=[f"1.0.{n}" for n in range(3, 15)])
+                   compatible_from=[f"1.0.{n}" for n in range(3, 16)])
           PY
       - name: Publish immutable release
         env:

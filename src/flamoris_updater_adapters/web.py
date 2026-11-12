@@ -17,6 +17,7 @@ from flamoris_update_core.wire import dumps, loads
 from .journal import exclusive
 from .mcp import create_mcp
 from .self_update import runtime_identity
+from .transfers import TRANSFER_TOOLS
 from .webpaths import Prefix
 from .webpaths import base_path as checked_base_path
 
@@ -121,7 +122,12 @@ def create_app(coordinator, origin, run_worker=True, *, base_path=""):
                 error.public(), status_code=413 if error.code == "quota_exceeded" else 409
             )
         return JSONResponse(
-            {"error": "outcome_unknown", "message": "Inspect the persisted Job before continuing"},
+            {
+                "error": "outcome_unknown",
+                "message": "Inspect the transfer receipt before continuing"
+                if request.path_params.get("name") in TRANSFER_TOOLS
+                else "Inspect the persisted Job before continuing",
+            },
             status_code=500,
         )
 

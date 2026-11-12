@@ -1427,3 +1427,46 @@ def test_cleanup_observes_missing_image_before_reconciling_retained_pointers(man
     assert not e.manager.journal.get("managed_app", APP)["previous"]
     events = read_all_logs(e.manager, job)
     assert any(v["operation"] == "cleanup.image" and v["outcome"] == "absent" for v in events)
+
+
+def test_installation_support_stays_in_manager_staging_without_execution(tmp_path):
+    import base64
+    from uuid import uuid4
+
+    from flamoris_update_core.wire import digest
+
+    def unexpected_request(request):
+        raise AssertionError("File staging must not download or execute anything")
+
+    with httpx.Client(transport=httpx.MockTransport(unexpected_request)) as client:
+        manager = Manager(tmp_path / "manager", tmp_path / "apps", client=client)
+        content = b"#!/bin/sh\nexit 99\n"
+        identity = str(uuid4())
+        manager.invoke(
+            "updater_transfer_begin",
+            {
+                "transfer_id": identity,
+                "application_id": "example-app",
+                "file_name": "setup.sh",
+                "size_bytes": len(content),
+                "sha256": digest(content),
+            },
+        )
+        manager.invoke(
+            "updater_transfer_write",
+            {
+                "transfer_id": identity,
+                "offset": 0,
+                "data_base64": base64.b64encode(content).decode(),
+                "chunk_sha256": digest(content),
+            },
+        )
+        assert (
+            manager.invoke("updater_transfer_finish", {"transfer_id": identity})["phase"] == "ready"
+        )
+        payload = manager.state / "transfers" / identity / "payload"
+        assert payload.read_bytes() == content
+        assert payload.stat().st_mode & 0o777 == 0o400
+        assert not list(manager.root.iterdir())
+        assert manager.journal.list("managed_job") == []
+        assert manager.journal.list("managed_app") == []

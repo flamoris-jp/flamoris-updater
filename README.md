@@ -41,6 +41,13 @@ PrivateなGitHub Releaseにも対応しています。既存のGitHub CLI認証�
 
 **Source status:** この構成のソース実装とテスト結果は[PROGRESS.md](PROGRESS.md)に記載しています。[管理画面の改善](docs/WEB_UI.md)と出力先設定を含むv1.0.13と1.0.3〜1.0.12からの自己更新カタログ、各アプリのリポジトリ所有の配布物・カタログは公開済みです。[カタログ一覧と初回設定](catalogs/README.md)を参照してください。公開の確認と実機反映は別です。
 
+## Installation-support files
+
+インストール補助ファイルを、[専用の転送MCP/API](docs/FILE_TRANSFERS.md)で分割送受信できます。
+保存先は管理サービスの状態領域内に固定し、容量・SHA-256・再送を検証します。
+アップロードしたファイルの実行・展開・インストールや、既存設定の直接編集は行いません。
+MCP・HTTP・CLIの共通実装です。公開済み版への反映と実機確認は別途必要です。
+
 ## Development
 
 ```bash
