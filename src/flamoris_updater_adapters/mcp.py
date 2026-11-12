@@ -8,6 +8,7 @@ from flamoris_update_core.wire import dumps
 
 from .managed import MANAGED_TOOLS
 from .self_update import runtime_identity
+from .transfers import TRANSFER_TOOLS
 
 
 def create_mcp(coordinator, origin):
@@ -23,7 +24,7 @@ def create_mcp(coordinator, origin):
                 annotations=ToolAnnotations(
                     readOnlyHint=kind == "read",
                     destructiveHint=kind == "execute",
-                    idempotentHint=kind in {"read", "plan", "execute", "cancel", "verify"},
+                    idempotentHint=kind in {"read", "plan", "execute", "cancel", "verify", "stage"},
                     openWorldHint=False,
                 ),
             )
@@ -49,7 +50,9 @@ def create_mcp(coordinator, origin):
         except Exception:
             result = {
                 "error": "outcome_unknown",
-                "message": "Inspect the durable Job before continuing",
+                "message": "Inspect the transfer receipt before continuing"
+                if name in TRANSFER_TOOLS
+                else "Inspect the durable Job before continuing",
             }
             return CallToolResult(
                 content=[TextContent(type="text", text=dumps(result).decode())],

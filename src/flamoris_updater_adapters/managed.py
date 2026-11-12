@@ -52,6 +52,7 @@ from .install import (
 from .journal import Journal, durable_write, exclusive
 from .outputs import ConfigureOutputs
 from .self_update import SELF, SelfRelease, SelfStart
+from .transfers import TRANSFER_TOOLS, Transfers
 
 MANAGED_TARGETS = [*VERSIONS, SELF]
 
@@ -163,6 +164,7 @@ class CatalogSource(Model):
 
 
 MANAGED_TOOLS = {
+    **TRANSFER_TOOLS,
     "updater_outputs_configure": (
         ConfigureOutputs,
         "Configure known Generation media and shared-input directories across updates",
@@ -474,12 +476,14 @@ class Manager:
             if name == "updater_managed_log_get":
                 return {"job": job, **Log(self.journal, args.job_id).page(args.after, args.limit)}
             return self.layout(args.application_id, args.job_id)
-        if MANAGED_TOOLS[name][2] == "execute" and name != "updater_self_update":
+        if MANAGED_TOOLS[name][2] in {"execute", "stage"} and name != "updater_self_update":
             with self.journal.connection() as db:
                 if db.execute(
                     "SELECT 1 FROM records WHERE kind='managed_job' AND json_extract(payload,'$.action')='self_update' AND json_extract(payload,'$.phase') IN ('accepted','running','intent','recovery_required') LIMIT 1"
                 ).fetchone():
                     raise UpdateError("busy")
+        if name in TRANSFER_TOOLS:
+            return Transfers(self.journal).invoke(name, args)
         if name == "updater_self_status":
             return {
                 "installation": self.journal.get("self_installation", "current"),

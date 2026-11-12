@@ -1,3 +1,26 @@
+# Installation-support file transfers — 2026-11-12 (source / 1.0.16 candidate)
+
+- Implements Issue #55: seven shared MCP/HTTP/CLI tools reserve, append, verify,
+  inspect, read and explicitly release installation-support uploads. The only
+  storage root is `<helper_state_directory>/transfers/`; filenames are metadata,
+  never caller-selected paths. Production file operations remain separate.
+- Bind UUID/application/name/size/SHA-256 immutably. Persist chunk intent before
+  effects, verify an interrupted prefix and resume only its exact pending chunk.
+  Verify the whole file before reads; sealed-file fingerprint changes fail.
+  Release removes only the known payload/empty UUID directory and keeps a receipt.
+- Enforce private directories/files, descriptor-relative no-follow access,
+  link/special-file rejection, 128 KiB chunks, 1 GiB/file, 4 GiB and 128 active
+  reservations, plus a 256 MiB disk reserve. Existing self-update blockers apply
+  to mutations. No execution, extraction, installation/config copy, new auth,
+  per-user isolation, auto-expiry or automatic cleanup is introduced.
+- Candidate 1.0.16 includes release notes and 1.0.3–1.0.15 self-update predecessors;
+  Core/supervisor/bootstrap and v1 journal schemas remain unchanged.
+- Local full suite: 334 passed, 176 skipped (root, Docker and PostgreSQL cases
+  require the existing CI environments). Transfer/adapter, crash recovery,
+  containment, quota and real manager-boundary fixtures are included; the latter
+  runs in root CI. Ruff, format, docs, schema export and both package builds pass.
+  GitHub CI remains pending. No release publication or live-host changes occurred.
+
 # Security documentation alignment — 2026-10-26
 
 - Correct SECURITY.md to describe the existing ordinary Web/CLI/MCP flow:

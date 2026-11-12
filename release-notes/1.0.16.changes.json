@@ -1,0 +1,20 @@
+{
+  "format_version": 1,
+  "application_id": "flamoris-updater",
+  "release": "1.0.16",
+  "entries": [
+    {
+      "category": "feature",
+      "summary": "Stage, resume, verify, read and explicitly release bounded installation-support files through MCP, HTTP and CLI",
+      "affected": [
+        "mcp",
+        "web",
+        "cli",
+        "installation-transfers"
+      ],
+      "breaking": false
+    }
+  ],
+  "restart_required": true,
+  "recovery_conditions": "Existing supervisor and v1 journals remain compatible. Inspect durable transfer receipts after interruptions and retry only identical bound requests. Uploaded bytes never execute or become installation sources. Preserve all application settings, data and existing failed/unknown Job blockers."
+}

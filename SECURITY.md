@@ -73,6 +73,22 @@ secret settings. Private diagnostic mirrors support human inspection during
 Updater downtime; Updater MCP itself is unavailable when Web/manager is stopped.
 Server Manager remains the live infrastructure observation authority.
 
+## Installation-support transfer boundary
+
+The [bounded transfer tools](docs/FILE_TRANSFERS.md) accept opaque bytes into one
+manager-owned staging root, with UUID-bound metadata, declared quotas, ordered
+128 KiB chunks and full SHA-256 verification before readback. They never execute
+or extract bytes, select a destination, bypass release recipes, or read existing
+configuration/credentials. Symlinks/hardlinks/special files and changed sealed
+payloads are rejected. Release removes only its own staged payload; receipts
+remain. Active/unresolved self-updates block transfer mutations.
+
+The ordinary endpoint's existing reachability/access policy applies to every
+staged copy. Transfer IDs are not secret tokens and there is no per-user isolation.
+Do not use staging for production secrets or credential-bearing configuration.
+No new authentication flow or general privileged filesystem API is introduced.
+OS-peer separation, the fixed staging root and manager-private file modes remain.
+
 ## Separate advanced integration
 
 The explicit signed Core/coordinator/Owner route retains exact-byte Ed25519

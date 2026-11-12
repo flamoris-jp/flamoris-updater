@@ -1,11 +1,18 @@
 # Managed Web, MCP and command API
 
-Bootstrap mode exposes seventeen typed tools through credential-free `/mcp` (Streamable HTTP) and `/api/v1/tools/{name}`. With `--base-path /updater`, these endpoints become `/updater/mcp` and
+Bootstrap mode exposes twenty-four typed tools through credential-free `/mcp` (Streamable HTTP) and `/api/v1/tools/{name}`. With `--base-path /updater`, these endpoints become `/updater/mcp` and
 `/updater/api/v1/tools/{name}`. Preserve the configured public path at the proxy;
-Host/Origin remain the pure public origin. Web/CLI/MCP call the same facade and root manager. CLI convenience commands construct the same requests; no caller-selected shell/path/source code is accepted.
+Host/Origin remain the pure public origin. Web/CLI/MCP call the same facade and root manager. CLI convenience commands construct the same requests; no caller-selected shell, execution source or server destination is accepted. Opaque installation-support bytes may be staged through the bounded transfer tools below.
 
 | Tool | Arguments/purpose |
 | --- | --- |
+| `updater_transfers_list` | Optional `cursor`, `limit`; fixed staging root, limits, reserved usage and paged transfer receipts |
+| `updater_transfer_begin` | Canonical UUID `transfer_id`, `application_id`, `file_name`, `size_bytes`, `sha256`; immutable reservation |
+| `updater_transfer_write` | `transfer_id`, `offset`, `data_base64`, `chunk_sha256`; next chunk, at most 128 KiB decoded |
+| `updater_transfer_finish` | `transfer_id`; verify full length/digest and seal, without installation/execution |
+| `updater_transfer_get` | `transfer_id`; durable transfer phase and received/pending chunk state |
+| `updater_transfer_read` | `transfer_id`, optional `offset`, `length`; verified bytes and per-chunk/whole-file digests |
+| `updater_transfer_release` | `transfer_id`, original `sha256`; release only the staged copy, retaining its ID binding |
 | `updater_catalogs_list` | Registered catalog URLs, apps, last checked time and bounded error code |
 | `updater_catalog_add` | `url`; register one repository catalog |
 | `updater_catalog_remove` | `url`; remove source, retaining installations |
@@ -29,6 +36,11 @@ No login, Bearer token, setup code or integration key is used. Web/CLI/MCP opera
 Install Jobs end at `awaiting_setup`; after app setup/start, verify to become `succeeded`. Updates progress through recorded download/stage/stop/switch/health/runtime checks. Lost or partial effects become `recovery_required` and are never blindly replayed or followed by old-version cleanup. Reusing a request key returns the same Job; changed arguments conflict. Job results never contain settings/password values.
 
 Internal Core/Owner signed-plan integration models remain separate from the normal endpoint. The MCP catalog advertises only managed tools; callers cannot submit old grants/plans or arbitrary shell commands.
+
+The seven [installation-support transfer tools](FILE_TRANSFERS.md) use one fixed
+root under the manager's private state. Uploaded files remain inert; this does
+not expose installed application/configuration files or add a shell. Endpoint
+reachability also grants access to these staged copies; IDs are not credentials.
 
 
 Creation-period filters use UTC Unix seconds; the Web form labels the browser's local
